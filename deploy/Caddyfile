@@ -1,0 +1,8 @@
+{$SITE_ADDRESS} {
+	# A certificate from Caddy's local CA, for a NAS without a public domain.
+	# Remove this line to get a public certificate for a real domain name.
+	tls internal
+
+	encode zstd gzip
+	reverse_proxy app:8080
+}

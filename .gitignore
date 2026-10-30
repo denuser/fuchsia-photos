@@ -1,0 +1,11 @@
+node_modules/
+frontend/dist/
+
+backend/internal/web/dist/*
+!backend/internal/web/dist/.gitkeep
+
+deploy/.env
+deploy/data/
+.bench/
+
+.DS_Store
