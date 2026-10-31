@@ -8,6 +8,20 @@ import (
 	"time"
 )
 
+type Album struct {
+	ID           int64
+	OwnerID      int64
+	Name         string
+	CoverPhotoID *int64
+	CreatedAt    time.Time
+}
+
+type AlbumPhoto struct {
+	AlbumID int64
+	PhotoID int64
+	AddedAt time.Time
+}
+
 type Photo struct {
 	ID            int64
 	OwnerID       int64
@@ -29,11 +43,23 @@ type Photo struct {
 	UpdatedAt     time.Time
 }
 
+type PhotoTag struct {
+	TagID   int64
+	PhotoID int64
+}
+
 type Session struct {
 	TokenHash []byte
 	UserID    int64
 	CreatedAt time.Time
 	ExpiresAt time.Time
+}
+
+type Tag struct {
+	ID        int64
+	OwnerID   int64
+	Name      string
+	CreatedAt time.Time
 }
 
 type User struct {

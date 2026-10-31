@@ -9,11 +9,22 @@ const title = computed(() => {
   const finished = uploads.done + uploads.failures.length
   return uploads.running ? `Uploading ${finished} of ${uploads.total}` : `Uploaded ${uploads.done} of ${uploads.total}`
 })
+
+const subtitle = computed(() => {
+  const parts = []
+  if (uploads.duplicates) {
+    parts.push(`${uploads.duplicates} already in your library`)
+  }
+  if (uploads.restored) {
+    parts.push(`${uploads.restored} restored from the trash`)
+  }
+  return parts.join(', ') || undefined
+})
 </script>
 
 <template>
   <v-card v-if="uploads.visible" class="upload-panel" elevation="8" width="360">
-    <v-card-item :title="title" :subtitle="uploads.duplicates ? `${uploads.duplicates} already in your library` : undefined">
+    <v-card-item :title="title" :subtitle="subtitle">
       <template #append>
         <v-btn v-if="!uploads.running" icon="mdi-close" size="small" variant="text" aria-label="Close" @click="uploads.dismiss()" />
       </template>

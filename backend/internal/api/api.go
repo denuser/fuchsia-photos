@@ -5,10 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
@@ -54,9 +58,30 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/photos", s.authenticated(s.listPhotos))
 	mux.HandleFunc("POST /api/v1/photos", s.authenticated(s.uploadPhoto))
 	mux.HandleFunc("GET /api/v1/photos/events", s.authenticated(s.photoEvents))
+	mux.HandleFunc("GET /api/v1/photos/trash", s.authenticated(s.listTrash))
+	mux.HandleFunc("POST /api/v1/photos/trash", s.authenticated(s.trashPhotos))
+	mux.HandleFunc("POST /api/v1/photos/trash/empty", s.authenticated(s.emptyTrash))
+	mux.HandleFunc("POST /api/v1/photos/restore", s.authenticated(s.restorePhotos))
+	mux.HandleFunc("POST /api/v1/photos/purge", s.authenticated(s.purgePhotos))
+	mux.HandleFunc("POST /api/v1/photos/tags", s.authenticated(s.changePhotoTags))
 	mux.HandleFunc("GET /api/v1/photos/{id}", s.authenticated(s.getPhoto))
+	mux.HandleFunc("GET /api/v1/photos/{id}/tags", s.authenticated(s.getPhotoTags))
 	mux.HandleFunc("GET /api/v1/photos/{id}/previews/{kind}", s.authenticated(s.getPreview))
 	mux.HandleFunc("GET /api/v1/photos/{id}/original", s.authenticated(s.getOriginal))
+
+	mux.HandleFunc("GET /api/v1/albums", s.authenticated(s.listAlbums))
+	mux.HandleFunc("POST /api/v1/albums", s.authenticated(s.createAlbum))
+	mux.HandleFunc("GET /api/v1/albums/{id}", s.authenticated(s.getAlbum))
+	mux.HandleFunc("PATCH /api/v1/albums/{id}", s.authenticated(s.renameAlbum))
+	mux.HandleFunc("DELETE /api/v1/albums/{id}", s.authenticated(s.deleteAlbum))
+	mux.HandleFunc("PUT /api/v1/albums/{id}/cover", s.authenticated(s.setAlbumCover))
+	mux.HandleFunc("POST /api/v1/albums/{id}/photos", s.authenticated(s.addAlbumPhotos))
+	mux.HandleFunc("POST /api/v1/albums/{id}/photos/remove", s.authenticated(s.removeAlbumPhotos))
+
+	mux.HandleFunc("GET /api/v1/tags", s.authenticated(s.listTags))
+	mux.HandleFunc("POST /api/v1/tags", s.authenticated(s.createTag))
+	mux.HandleFunc("PATCH /api/v1/tags/{id}", s.authenticated(s.renameTag))
+	mux.HandleFunc("DELETE /api/v1/tags/{id}", s.authenticated(s.deleteTag))
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
@@ -105,6 +130,22 @@ func readJSON(w http.ResponseWriter, r *http.Request, into any) bool {
 		return false
 	}
 	return true
+}
+
+// readName reads a required display name, such as that of an album or a tag.
+func readName(w http.ResponseWriter, r *http.Request, maxRunes int) (string, bool) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if !readJSON(w, r, &req) {
+		return "", false
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" || utf8.RuneCountInString(name) > maxRunes || strings.ContainsFunc(name, unicode.IsControl) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("a name is 1 to %d characters, without control characters", maxRunes))
+		return "", false
+	}
+	return name, true
 }
 
 func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {

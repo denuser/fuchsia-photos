@@ -145,6 +145,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/photos/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current user's photos in the trash, most recently deleted first */
+        get: operations["listTrash"];
+        put?: never;
+        /**
+         * Move photos to the trash
+         * @description Photos stay in the trash until the owner restores or purges them. Photos of other users are ignored.
+         */
+        post: operations["trashPhotos"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/trash/empty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Permanently delete every photo in the current user's trash */
+        post: operations["emptyTrash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take photos out of the trash */
+        post: operations["restorePhotos"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Permanently delete photos from the trash, with their files
+         * @description Photos outside the trash and photos of other users are ignored.
+         */
+        post: operations["purgePhotos"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add tags to photos and remove tags from them
+         * @description Photos and tags of other users are ignored.
+         */
+        post: operations["changePhotoTags"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/photos/events": {
         parameters: {
             query?: never;
@@ -154,7 +249,7 @@ export interface paths {
         };
         /**
          * Stream changes to the current user's photos
-         * @description Server-sent events named `photos`, each holding a PhotoEvent as JSON.
+         * @description Server-sent events named `photos`, each holding a PhotoEvent as JSON. Changed photos include those moved to the trash, which have `deletedAt` set.
          */
         get: operations["photoEvents"];
         put?: never;
@@ -174,6 +269,23 @@ export interface paths {
         };
         /** Get a photo the current user may see */
         get: operations["getPhoto"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/{id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current user's own tags on a photo */
+        get: operations["getPhotoTags"];
         put?: never;
         post?: never;
         delete?: never;
@@ -214,6 +326,143 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/albums": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current user's albums */
+        get: operations["listAlbums"];
+        put?: never;
+        /** Create an album */
+        post: operations["createAlbum"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/albums/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** Get an album */
+        get: operations["getAlbum"];
+        put?: never;
+        post?: never;
+        /** Delete an album and keep its photos */
+        delete: operations["deleteAlbum"];
+        options?: never;
+        head?: never;
+        /** Rename an album */
+        patch: operations["renameAlbum"];
+        trace?: never;
+    };
+    "/albums/{id}/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose the cover of an album
+         * @description The photo must be in the album and not in the trash. With null, the newest photo becomes the cover again.
+         */
+        put: operations["setAlbumCover"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/albums/{id}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add photos to an album
+         * @description Photos of other users and photos in the trash are ignored.
+         */
+        post: operations["addAlbumPhotos"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/albums/{id}/photos/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove photos from an album and keep them in the library */
+        post: operations["removeAlbumPhotos"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current user's tags */
+        get: operations["listTags"];
+        put?: never;
+        /**
+         * Create a tag, or find the existing one with this name
+         * @description Names are compared without regard to case.
+         */
+        post: operations["createTag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a tag and keep its photos */
+        delete: operations["deleteTag"];
+        options?: never;
+        head?: never;
+        /** Rename a tag */
+        patch: operations["renameTag"];
         trace?: never;
     };
 }
@@ -257,10 +506,55 @@ export interface components {
             sortAt: string;
             /** Format: date-time */
             createdAt: string;
+            /**
+             * Format: date-time
+             * @description When the photo was moved to the trash
+             */
+            deletedAt: string | null;
         };
+        PhotoPage: {
+            items: components["schemas"]["Photo"][];
+            nextCursor: string | null;
+        };
+        PhotoIds: number[];
         UploadResult: {
             photo: components["schemas"]["Photo"];
             duplicate: boolean;
+            /** @description The user had this photo in the trash, and it has been restored */
+            restored: boolean;
+        };
+        Album: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /**
+             * Format: int64
+             * @description Photos of the album outside the trash
+             */
+            photoCount: number;
+            /**
+             * Format: int64
+             * @description The chosen cover, or else the newest processed photo
+             */
+            coverPhotoId: number | null;
+            coverChosen: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TagRef: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+        };
+        Tag: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /**
+             * Format: int64
+             * @description Photos with this tag outside the trash
+             */
+            photoCount: number;
         };
         PhotoEvent: {
             pending: number;
@@ -282,7 +576,22 @@ export interface components {
     parameters: {
         Id: number;
     };
-    requestBodies: never;
+    requestBodies: {
+        PhotoIds: {
+            content: {
+                "application/json": {
+                    ids: components["schemas"]["PhotoIds"];
+                };
+            };
+        };
+        Name: {
+            content: {
+                "application/json": {
+                    name: string;
+                };
+            };
+        };
+    };
     headers: never;
     pathItems: never;
 }
@@ -502,6 +811,14 @@ export interface operations {
             query?: {
                 limit?: number;
                 cursor?: string;
+                /** @description Only photos sorted at or after this time */
+                from?: string;
+                /** @description Only photos sorted before this time */
+                to?: string;
+                /** @description Only photos with at least one of these tags */
+                tag?: number[];
+                /** @description Only photos of this album */
+                album?: number;
             };
             header?: never;
             path?: never;
@@ -515,13 +832,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items: components["schemas"]["Photo"][];
-                        nextCursor: string | null;
-                    };
+                    "application/json": components["schemas"]["PhotoPage"];
                 };
             };
             400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     uploadPhoto: {
@@ -563,6 +878,132 @@ export interface operations {
             415: components["responses"]["Error"];
         };
     };
+    listTrash: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of photos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoPage"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    trashPhotos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["PhotoIds"];
+        responses: {
+            /** @description The photos are in the trash */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    emptyTrash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The trash is empty */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    restorePhotos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["PhotoIds"];
+        responses: {
+            /** @description The photos are restored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    purgePhotos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["PhotoIds"];
+        responses: {
+            /** @description The photos are deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    changePhotoTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    ids: components["schemas"]["PhotoIds"];
+                    add?: number[];
+                    remove?: number[];
+                };
+            };
+        };
+        responses: {
+            /** @description The tags are changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
     photoEvents: {
         parameters: {
             query?: never;
@@ -601,6 +1042,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Photo"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    getPhotoTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagRef"][];
                 };
             };
             404: components["responses"]["Error"];
@@ -651,6 +1115,285 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+        };
+    };
+    listAlbums: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The albums, by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Album"][];
+                };
+            };
+        };
+    };
+    createAlbum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Name"];
+        responses: {
+            /** @description The new album */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Album"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getAlbum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The album */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Album"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteAlbum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The album is deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    renameAlbum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Name"];
+        responses: {
+            /** @description The changed album */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Album"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    setAlbumCover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    photoId: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The changed album */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Album"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    addAlbumPhotos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["PhotoIds"];
+        responses: {
+            /** @description The photos are in the album */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    removeAlbumPhotos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["PhotoIds"];
+        responses: {
+            /** @description The photos are out of the album */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tags, by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"][];
+                };
+            };
+        };
+    };
+    createTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Name"];
+        responses: {
+            /** @description The user already had this tag */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagRef"];
+                };
+            };
+            /** @description The new tag */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagRef"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    deleteTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tag is deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    renameTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Name"];
+        responses: {
+            /** @description The changed tag */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagRef"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
 }

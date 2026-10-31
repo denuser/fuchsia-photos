@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -45,6 +46,8 @@ type Result struct {
 	Photo store.Photo
 	// Duplicate means the owner already had this photo and nothing was added.
 	Duplicate bool
+	// Restored means the duplicate was in the trash and has been taken out of it.
+	Restored bool
 }
 
 // Ingest stores the photo read from r and queues its processing.
@@ -65,34 +68,65 @@ func (s *Service) Ingest(ctx context.Context, ownerID int64, r io.Reader, name s
 	}
 	defer os.Remove(tmp) // Fails harmlessly once the file has been moved.
 
-	queries := store.New(s.Pool)
-	existing, err := queries.GetPhotoByHash(ctx, store.GetPhotoByHashParams{OwnerID: ownerID, Sha256: sum})
-	if err == nil {
-		return Result{Photo: existing, Duplicate: true}, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return Result{}, fmt.Errorf("look up photo: %w", err)
-	}
-
-	path := s.Layout.Original(ownerID, sum, mime)
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		return Result{}, fmt.Errorf("create photo folder: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		return Result{}, fmt.Errorf("move photo into place: %w", err)
-	}
-
-	photo, inserted, err := s.record(ctx, store.InsertPhotoParams{
+	return s.store(ctx, tmp, store.InsertPhotoParams{
 		OwnerID:      ownerID,
 		Sha256:       sum,
 		Mime:         mime,
 		Size:         size,
 		OriginalName: cleanName(name),
 	}, priority)
+}
+
+// Purge permanently deletes a photo from the owner's trash, with its files. It
+// does nothing if the photo is not in the trash. Once started, it ignores
+// cancellation, so that a closed page cannot separate a record from its files.
+func (s *Service) Purge(ctx context.Context, ownerID, photoID int64) error {
+	ctx = context.WithoutCancel(ctx)
+	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
-		return Result{}, err
+		return fmt.Errorf("begin transaction: %w", err)
 	}
-	return Result{Photo: photo, Duplicate: !inserted}, nil
+	defer tx.Rollback(ctx)
+
+	queries := store.New(tx)
+	sum, err := queries.GetTrashedPhotoHash(ctx, store.GetTrashedPhotoHashParams{ID: photoID, OwnerID: ownerID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("look up photo: %w", err)
+	}
+	if err := queries.LockPhotoFile(ctx, store.LockPhotoFileParams{OwnerID: ownerID, Sha256: sum}); err != nil {
+		return fmt.Errorf("lock photo: %w", err)
+	}
+	photo, err := queries.PurgePhoto(ctx, store.PurgePhotoParams{ID: photoID, OwnerID: ownerID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil // Restored or purged while waiting for the lock.
+	}
+	if err != nil {
+		return fmt.Errorf("delete photo: %w", err)
+	}
+
+	// The record goes only if the file does. A commit that fails after this leaves
+	// the photo in the trash without its original, and purging it again finishes the job.
+	err = os.Remove(s.Layout.Original(photo.OwnerID, photo.Sha256, photo.Mime))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove original: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	if photo.PreviewFormat != nil {
+		for _, kind := range []string{storage.PreviewGrid, storage.PreviewViewer} {
+			err := os.Remove(s.Layout.Preview(photo.ID, kind, *photo.PreviewFormat))
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				// A stray preview is harmless: photo ids are never reused.
+				slog.Warn("remove preview", "photo", photo.ID, "error", err)
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Service) writeTemp(r io.Reader) (path string, sum []byte, size int64, err error) {
@@ -121,37 +155,66 @@ func (s *Service) writeTemp(r io.Reader) (path string, sum []byte, size int64, e
 	return tmp.Name(), hash.Sum(nil), size, nil
 }
 
-// record creates the photo and its job in one transaction, so neither can exist
-// without the other.
-func (s *Service) record(ctx context.Context, params store.InsertPhotoParams, priority int) (store.Photo, bool, error) {
+// store moves the temporary file into the library and creates the photo and its
+// job in one transaction, so neither the record nor the job can exist alone. An
+// original left behind by a failure here is harmless, and the next upload reuses it.
+func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhotoParams, priority int) (Result, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
-		return store.Photo{}, false, fmt.Errorf("begin transaction: %w", err)
+		return Result{}, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	queries := store.New(tx)
-	photo, err := queries.InsertPhoto(ctx, params)
-	if errors.Is(err, pgx.ErrNoRows) {
-		// A concurrent upload of the same photo won the race.
-		photo, err = queries.GetPhotoByHash(ctx, store.GetPhotoByHashParams{OwnerID: params.OwnerID, Sha256: params.Sha256})
-		if err != nil {
-			return store.Photo{}, false, fmt.Errorf("look up photo: %w", err)
-		}
-		return photo, false, nil
-	}
+	err = queries.LockPhotoFile(ctx, store.LockPhotoFileParams{OwnerID: params.OwnerID, Sha256: params.Sha256})
 	if err != nil {
-		return store.Photo{}, false, fmt.Errorf("insert photo: %w", err)
+		return Result{}, fmt.Errorf("lock photo: %w", err)
 	}
 
+	existing, err := queries.GetPhotoByHash(ctx, store.GetPhotoByHashParams{OwnerID: params.OwnerID, Sha256: params.Sha256})
+	if err == nil {
+		return s.duplicate(ctx, tx, queries, existing)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return Result{}, fmt.Errorf("look up photo: %w", err)
+	}
+
+	path := s.Layout.Original(params.OwnerID, params.Sha256, params.Mime)
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return Result{}, fmt.Errorf("create photo folder: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return Result{}, fmt.Errorf("move photo into place: %w", err)
+	}
+
+	photo, err := queries.InsertPhoto(ctx, params)
+	if err != nil {
+		return Result{}, fmt.Errorf("insert photo: %w", err)
+	}
 	_, err = s.Jobs.InsertTx(ctx, tx, jobs.ProcessPhotoArgs{PhotoID: photo.ID}, &river.InsertOpts{Priority: priority})
 	if err != nil {
-		return store.Photo{}, false, fmt.Errorf("queue photo: %w", err)
+		return Result{}, fmt.Errorf("queue photo: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return store.Photo{}, false, fmt.Errorf("commit: %w", err)
+		return Result{}, fmt.Errorf("commit: %w", err)
 	}
-	return photo, true, nil
+	return Result{Photo: photo}, nil
+}
+
+// duplicate handles a file the owner already has. Uploading a photo from the
+// trash again means the owner wants it back.
+func (s *Service) duplicate(ctx context.Context, tx pgx.Tx, queries *store.Queries, photo store.Photo) (Result, error) {
+	if photo.DeletedAt == nil {
+		return Result{Photo: photo, Duplicate: true}, nil
+	}
+	restored, err := queries.RestorePhoto(ctx, photo.ID)
+	if err != nil {
+		return Result{}, fmt.Errorf("restore photo: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Result{}, fmt.Errorf("commit: %w", err)
+	}
+	return Result{Photo: restored, Duplicate: true, Restored: true}, nil
 }
 
 // detectMIME identifies a file by its content, not by its name.

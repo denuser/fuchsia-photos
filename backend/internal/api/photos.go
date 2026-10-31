@@ -23,6 +23,7 @@ const (
 	maxUploadBytes   = 512 << 20
 	defaultPageSize  = 200
 	maxPageSize      = 500
+	maxBulkPhotos    = 500
 	previewCacheRule = "private, max-age=31536000, immutable"
 )
 
@@ -40,6 +41,7 @@ type photoJSON struct {
 	TakenAt   *time.Time `json:"takenAt"`
 	SortAt    time.Time  `json:"sortAt"`
 	CreatedAt time.Time  `json:"createdAt"`
+	DeletedAt *time.Time `json:"deletedAt"`
 }
 
 func toPhotoJSON(p store.Photo) photoJSON {
@@ -55,6 +57,7 @@ func toPhotoJSON(p store.Photo) photoJSON {
 		TakenAt:   p.TakenAt,
 		SortAt:    p.SortAt,
 		CreatedAt: p.CreatedAt,
+		DeletedAt: p.DeletedAt,
 	}
 }
 
@@ -67,23 +70,41 @@ func toPhotosJSON(photos []store.Photo) []photoJSON {
 }
 
 func (s *server) listPhotos(w http.ResponseWriter, r *http.Request) {
-	params := store.ListTimelineParams{OwnerID: currentUser(r).ID, MaxRows: defaultPageSize}
+	params := store.ListTimelineParams{OwnerID: currentUser(r).ID}
+	query := r.URL.Query()
 
-	if limit := r.URL.Query().Get("limit"); limit != "" {
-		n, err := strconv.Atoi(limit)
-		if err != nil || n < 1 || n > maxPageSize {
-			writeError(w, http.StatusBadRequest, "invalid limit")
-			return
-		}
-		params.MaxRows = int32(n)
+	maxRows, ok := pageSize(w, r)
+	if !ok {
+		return
 	}
-	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
-		sortAt, id, err := parseCursor(cursor)
+	params.MaxRows = maxRows
+	if params.AfterSortAt, params.AfterID, ok = pageCursor(w, r); !ok {
+		return
+	}
+	if params.FromTime, ok = timeParam(w, r, "from"); !ok {
+		return
+	}
+	if params.ToTime, ok = timeParam(w, r, "to"); !ok {
+		return
+	}
+	for _, text := range query["tag"] {
+		id, err := strconv.ParseInt(text, 10, 64)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid cursor")
+			writeError(w, http.StatusBadRequest, "invalid tag")
 			return
 		}
-		params.AfterSortAt, params.AfterID = &sortAt, &id
+		params.TagIds = append(params.TagIds, id)
+	}
+	if text := query.Get("album"); text != "" {
+		id, err := strconv.ParseInt(text, 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid album")
+			return
+		}
+		if _, ok := s.ownAlbum(w, r, id); !ok {
+			return
+		}
+		params.AlbumID = &id
 	}
 
 	photos, err := s.Queries.ListTimeline(r.Context(), params)
@@ -94,10 +115,172 @@ func (s *server) listPhotos(w http.ResponseWriter, r *http.Request) {
 	var next *string
 	if len(photos) == int(params.MaxRows) {
 		last := photos[len(photos)-1]
-		cursor := fmt.Sprintf("%d_%d", last.SortAt.UnixMicro(), last.ID)
-		next = &cursor
+		next = cursorFor(last.SortAt, last.ID)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": toPhotosJSON(photos), "nextCursor": next})
+}
+
+func (s *server) listTrash(w http.ResponseWriter, r *http.Request) {
+	maxRows, ok := pageSize(w, r)
+	if !ok {
+		return
+	}
+	afterDeletedAt, afterID, ok := pageCursor(w, r)
+	if !ok {
+		return
+	}
+	photos, err := s.Queries.ListTrash(r.Context(), store.ListTrashParams{
+		OwnerID:        currentUser(r).ID,
+		AfterDeletedAt: afterDeletedAt,
+		AfterID:        afterID,
+		MaxRows:        maxRows,
+	})
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	var next *string
+	if len(photos) == int(maxRows) {
+		last := photos[len(photos)-1]
+		next = cursorFor(*last.DeletedAt, last.ID)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": toPhotosJSON(photos), "nextCursor": next})
+}
+
+func pageSize(w http.ResponseWriter, r *http.Request) (int32, bool) {
+	limit := r.URL.Query().Get("limit")
+	if limit == "" {
+		return defaultPageSize, true
+	}
+	n, err := strconv.Atoi(limit)
+	if err != nil || n < 1 || n > maxPageSize {
+		writeError(w, http.StatusBadRequest, "invalid limit")
+		return 0, false
+	}
+	return int32(n), true
+}
+
+func pageCursor(w http.ResponseWriter, r *http.Request) (*time.Time, *int64, bool) {
+	cursor := r.URL.Query().Get("cursor")
+	if cursor == "" {
+		return nil, nil, true
+	}
+	at, id, err := parseCursor(cursor)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid cursor")
+		return nil, nil, false
+	}
+	return &at, &id, true
+}
+
+func cursorFor(at time.Time, id int64) *string {
+	cursor := fmt.Sprintf("%d_%d", at.UnixMicro(), id)
+	return &cursor
+}
+
+func timeParam(w http.ResponseWriter, r *http.Request, name string) (*time.Time, bool) {
+	text := r.URL.Query().Get(name)
+	if text == "" {
+		return nil, true
+	}
+	at, err := time.Parse(time.RFC3339, text)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid "+name)
+		return nil, false
+	}
+	return &at, true
+}
+
+// readIDs reads the photos a bulk action applies to. Actions touch only the
+// current user's photos, so ids of other users' photos are ignored.
+func readIDs(w http.ResponseWriter, r *http.Request) ([]int64, bool) {
+	var req struct {
+		IDs []int64 `json:"ids"`
+	}
+	if !readJSON(w, r, &req) {
+		return nil, false
+	}
+	if !validBulkIDs(w, req.IDs) {
+		return nil, false
+	}
+	return req.IDs, true
+}
+
+func validBulkIDs(w http.ResponseWriter, ids []int64) bool {
+	if len(ids) == 0 || len(ids) > maxBulkPhotos {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("a bulk action takes 1 to %d photos", maxBulkPhotos))
+		return false
+	}
+	return true
+}
+
+func (s *server) trashPhotos(w http.ResponseWriter, r *http.Request) {
+	ids, ok := readIDs(w, r)
+	if !ok {
+		return
+	}
+	if err := s.Queries.TrashPhotos(r.Context(), store.TrashPhotosParams{OwnerID: currentUser(r).ID, Ids: ids}); err != nil {
+		internalError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *server) restorePhotos(w http.ResponseWriter, r *http.Request) {
+	ids, ok := readIDs(w, r)
+	if !ok {
+		return
+	}
+	if err := s.Queries.RestorePhotos(r.Context(), store.RestorePhotosParams{OwnerID: currentUser(r).ID, Ids: ids}); err != nil {
+		internalError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *server) purgePhotos(w http.ResponseWriter, r *http.Request) {
+	ids, ok := readIDs(w, r)
+	if !ok {
+		return
+	}
+	if err := s.purge(r, ids); err != nil {
+		internalError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *server) emptyTrash(w http.ResponseWriter, r *http.Request) {
+	owner := currentUser(r).ID
+	for {
+		ids, err := s.Queries.ListTrashedPhotoIDs(r.Context(), store.ListTrashedPhotoIDsParams{OwnerID: owner, MaxRows: maxBulkPhotos})
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+		if len(ids) == 0 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if err := s.purge(r, ids); err != nil {
+			internalError(w, r, err)
+			return
+		}
+	}
+}
+
+// purge stops between photos when the client goes away. What it has not reached
+// stays in the trash.
+func (s *server) purge(r *http.Request, ids []int64) error {
+	for _, id := range ids {
+		if err := r.Context().Err(); err != nil {
+			return err
+		}
+		if err := s.Ingest.Purge(r.Context(), currentUser(r).ID, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func parseCursor(cursor string) (time.Time, int64, error) {
@@ -146,7 +329,7 @@ func (s *server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		if res.Duplicate {
 			status = http.StatusOK
 		}
-		writeJSON(w, status, map[string]any{"photo": toPhotoJSON(res.Photo), "duplicate": res.Duplicate})
+		writeJSON(w, status, map[string]any{"photo": toPhotoJSON(res.Photo), "duplicate": res.Duplicate, "restored": res.Restored})
 		return
 	}
 }

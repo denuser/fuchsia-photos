@@ -72,8 +72,17 @@ window.addEventListener('beforeunload', (event) => {
       </v-menu>
     </v-app-bar>
 
+    <v-navigation-drawer v-if="auth.user" permanent rail>
+      <v-list nav density="compact">
+        <v-list-item to="/" exact prepend-icon="mdi-image-multiple-outline" title="Photos" aria-label="Photos" />
+        <v-list-item to="/albums" prepend-icon="mdi-image-album" title="Albums" aria-label="Albums" />
+        <v-list-item to="/tags" prepend-icon="mdi-tag-multiple-outline" title="Tags" aria-label="Tags" />
+        <v-list-item to="/trash" prepend-icon="mdi-trash-can-outline" title="Trash" aria-label="Trash" />
+      </v-list>
+    </v-navigation-drawer>
+
     <v-main>
-      <router-view />
+      <router-view :key="$route.path" />
     </v-main>
 
     <UploadPanel v-if="auth.user" />

@@ -2,7 +2,7 @@
 
 A self-hosted application for organizing photos, designed to run on a home NAS (Intel N150, 4 cores, 16 GB DDR5).
 
-**Status:** stage 1. Login, user management, upload, processing and the timeline work. The stage 0 benchmark on the NAS is still to be run, so the preview format and worker count are provisional defaults. This document records the decisions made so far and the roadmap.
+**Status:** stage 2. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions and the trash work. The stage 0 benchmark on the NAS is still to be run, so the preview format and worker count are provisional defaults. This document records the decisions made so far and the roadmap.
 
 ## Features
 
@@ -31,7 +31,10 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | Photo metadata | exiftool through go-exiftool | Handles HEIC and camera-specific tags. One long-running process avoids starting Perl for every photo |
 | Folder scan | Copy files into the library, leave the source folder untouched | One ingest path for all sources |
 | Sharing | Photos and albums, with all users or by login | Sharing an album makes all of its photos visible to the recipient |
-| Tags | Personal to each user | Other users' tag names stay private |
+| Tags | Personal to each user. A search with several tags finds photos with any of them | Other users' tag names stay private |
+| Album covers | The newest processed photo, unless the owner chooses one | Works without effort, and can still be set by hand |
+| Trash | Photos stay until the owner restores or permanently deletes them, with no automatic expiry | Nothing is lost by waiting. Emptying the trash is the way to free disk space |
+| Uploading a photo that is in the trash | Restores it, with its albums and tags | Uploading it again shows that the owner wants it back |
 | TLS and HTTP/2 | Caddy in front of the application | The grid loads hundreds of previews, and HTTP/1.1 allows few connections. WebDAV Basic Auth requires TLS |
 
 The main hardware constraints are CPU time for decoding photos and, probably, HDD throughput. Memory is not scarce.
@@ -46,6 +49,7 @@ All sources (browser, folder scan, WebDAV) go through a single `Ingest(file, own
 4. In one transaction, create the photo record and a `process_photo` River job.
 5. A worker reads EXIF, applies auto-rotation and sRGB conversion, generates a grid preview (~400 px) and a viewer preview (~2048 px) on the SSD. Until a preview loads, the grid shows a neutral tile. WebP or JPEG is chosen from benchmarks, with WebP as the default until then. AVIF is ruled out because of its encoding cost.
 6. A periodic job removes abandoned uploads and expired sessions. It leaves originals without a database record alone: after restoring an older database backup, those are the photos uploaded since that backup. A stray original is harmless, and uploading the same photo again reuses it.
+7. Permanently deleting a photo from the trash removes its record, original and previews. A database lock on the owner and hash keeps this from colliding with an upload of the same file.
 
 Queue behavior:
 
@@ -99,9 +103,9 @@ Previews contain no EXIF, so GPS data does not leak through sharing.
   - [x] Choose the libvips binding
   - [ ] Benchmark on the real NAS: JPEG and HEIC, HDD and SSD, WebP and JPEG, 2 or 3 workers
 - [x] **Stage 1: core.** Login, user management, roles. Browser upload (3–4 files in parallel, retrying failed files). Ingest, queue, previews, virtual-scrolling timeline, viewer, processing progress.
-- [ ] **Stage 2: organization.** Albums, tags, search by date and tag, bulk actions, trash with soft delete.
+- [x] **Stage 2: organization.** Albums, tags, search by date and tag, bulk actions, trash with soft delete.
 - [ ] **Stage 3: sharing.** Visibility for all users, sharing photos and albums by login, a "Shared with me" section, the admin view of everything. Test suite for the permission predicate.
-- [ ] **Stage 4: folder scan.** Admin only: fixed root, owner selection, safe re-runs thanks to hashing. Skips files still being copied (size and mtime unchanged for N seconds). Report in `import_runs`.
+- [ ] **Stage 4: folder scan.** Admin only: fixed root, owner selection, safe re-runs thanks to hashing. Skips files still being copied (size and mtime unchanged for N seconds). Report in `import_runs`. A re-run must not restore photos the owner moved to the trash, unlike a browser upload.
 - [ ] **Stage 5: operations.** Nightly `pg_dump`, backup and tested restore instructions, logs and queue metrics.
 - [ ] **Stage 6: WebDAV (hypothesis, starts as a spike).** Per-user upload folder, separate app password, files go through ingest. Tested with real mobile clients such as PhotoSync and FolderSync. If they work poorly, the feature is dropped and the outcome recorded here.
 - [ ] **Stage 7: ML (later).** An `embed_photo` job sends a preview to an external server. The NAS stays the source of truth, and a FAISS index can be rebuilt. Search results are filtered by the permission predicate. The protocol (gRPC or HTTP) and the choice of FAISS or `pgvector` are decided at this stage.

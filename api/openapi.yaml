@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Fuchsia Photos API
-  version: 0.2.0
+  version: 0.3.0
 servers:
   - url: /api/v1
 paths:
@@ -189,22 +189,42 @@ paths:
           in: query
           schema:
             type: string
+        - name: from
+          in: query
+          description: Only photos sorted at or after this time
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Only photos sorted before this time
+          schema:
+            type: string
+            format: date-time
+        - name: tag
+          in: query
+          description: Only photos with at least one of these tags
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - name: album
+          in: query
+          description: Only photos of this album
+          schema:
+            type: integer
+            format: int64
       responses:
         "200":
           description: One page of photos
           content:
             application/json:
               schema:
-                type: object
-                required: [items, nextCursor]
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Photo"
-                  nextCursor:
-                    type: [string, "null"]
+                $ref: "#/components/schemas/PhotoPage"
         "400":
+          $ref: "#/components/responses/Error"
+        "404":
           $ref: "#/components/responses/Error"
     post:
       operationId: uploadPhoto
@@ -239,11 +259,107 @@ paths:
           $ref: "#/components/responses/Error"
         "415":
           $ref: "#/components/responses/Error"
+  /photos/trash:
+    get:
+      operationId: listTrash
+      summary: List the current user's photos in the trash, most recently deleted first
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 200
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: One page of photos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotoPage"
+        "400":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: trashPhotos
+      summary: Move photos to the trash
+      description: Photos stay in the trash until the owner restores or purges them. Photos of other users are ignored.
+      requestBody:
+        $ref: "#/components/requestBodies/PhotoIds"
+      responses:
+        "204":
+          description: The photos are in the trash
+        "400":
+          $ref: "#/components/responses/Error"
+  /photos/trash/empty:
+    post:
+      operationId: emptyTrash
+      summary: Permanently delete every photo in the current user's trash
+      responses:
+        "204":
+          description: The trash is empty
+  /photos/restore:
+    post:
+      operationId: restorePhotos
+      summary: Take photos out of the trash
+      requestBody:
+        $ref: "#/components/requestBodies/PhotoIds"
+      responses:
+        "204":
+          description: The photos are restored
+        "400":
+          $ref: "#/components/responses/Error"
+  /photos/purge:
+    post:
+      operationId: purgePhotos
+      summary: Permanently delete photos from the trash, with their files
+      description: Photos outside the trash and photos of other users are ignored.
+      requestBody:
+        $ref: "#/components/requestBodies/PhotoIds"
+      responses:
+        "204":
+          description: The photos are deleted
+        "400":
+          $ref: "#/components/responses/Error"
+  /photos/tags:
+    post:
+      operationId: changePhotoTags
+      summary: Add tags to photos and remove tags from them
+      description: Photos and tags of other users are ignored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  $ref: "#/components/schemas/PhotoIds"
+                add:
+                  type: array
+                  items:
+                    type: integer
+                    format: int64
+                remove:
+                  type: array
+                  items:
+                    type: integer
+                    format: int64
+      responses:
+        "204":
+          description: The tags are changed
+        "400":
+          $ref: "#/components/responses/Error"
   /photos/events:
     get:
       operationId: photoEvents
       summary: Stream changes to the current user's photos
-      description: Server-sent events named `photos`, each holding a PhotoEvent as JSON.
+      description: Server-sent events named `photos`, each holding a PhotoEvent as JSON. Changed photos include those moved to the trash, which have `deletedAt` set.
       responses:
         "200":
           description: The event stream
@@ -264,6 +380,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Photo"
+        "404":
+          $ref: "#/components/responses/Error"
+  /photos/{id}/tags:
+    get:
+      operationId: getPhotoTags
+      summary: List the current user's own tags on a photo
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TagRef"
         "404":
           $ref: "#/components/responses/Error"
   /photos/{id}/previews/{kind}:
@@ -304,6 +437,193 @@ paths:
                 format: binary
         "404":
           $ref: "#/components/responses/Error"
+  /albums:
+    get:
+      operationId: listAlbums
+      summary: List the current user's albums
+      responses:
+        "200":
+          description: The albums, by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Album"
+    post:
+      operationId: createAlbum
+      summary: Create an album
+      requestBody:
+        $ref: "#/components/requestBodies/Name"
+      responses:
+        "201":
+          description: The new album
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Album"
+        "400":
+          $ref: "#/components/responses/Error"
+  /albums/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getAlbum
+      summary: Get an album
+      responses:
+        "200":
+          description: The album
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Album"
+        "404":
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: renameAlbum
+      summary: Rename an album
+      requestBody:
+        $ref: "#/components/requestBodies/Name"
+      responses:
+        "200":
+          description: The changed album
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Album"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteAlbum
+      summary: Delete an album and keep its photos
+      responses:
+        "204":
+          description: The album is deleted
+        "404":
+          $ref: "#/components/responses/Error"
+  /albums/{id}/cover:
+    put:
+      operationId: setAlbumCover
+      summary: Choose the cover of an album
+      description: The photo must be in the album and not in the trash. With null, the newest photo becomes the cover again.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [photoId]
+              properties:
+                photoId:
+                  type: [integer, "null"]
+                  format: int64
+      responses:
+        "200":
+          description: The changed album
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Album"
+        "404":
+          $ref: "#/components/responses/Error"
+  /albums/{id}/photos:
+    post:
+      operationId: addAlbumPhotos
+      summary: Add photos to an album
+      description: Photos of other users and photos in the trash are ignored.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        $ref: "#/components/requestBodies/PhotoIds"
+      responses:
+        "204":
+          description: The photos are in the album
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /albums/{id}/photos/remove:
+    post:
+      operationId: removeAlbumPhotos
+      summary: Remove photos from an album and keep them in the library
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        $ref: "#/components/requestBodies/PhotoIds"
+      responses:
+        "204":
+          description: The photos are out of the album
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /tags:
+    get:
+      operationId: listTags
+      summary: List the current user's tags
+      responses:
+        "200":
+          description: The tags, by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tag"
+    post:
+      operationId: createTag
+      summary: Create a tag, or find the existing one with this name
+      description: Names are compared without regard to case.
+      requestBody:
+        $ref: "#/components/requestBodies/Name"
+      responses:
+        "200":
+          description: The user already had this tag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagRef"
+        "201":
+          description: The new tag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagRef"
+        "400":
+          $ref: "#/components/responses/Error"
+  /tags/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: renameTag
+      summary: Rename a tag
+      requestBody:
+        $ref: "#/components/requestBodies/Name"
+      responses:
+        "200":
+          description: The changed tag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagRef"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteTag
+      summary: Delete a tag and keep its photos
+      responses:
+        "204":
+          description: The tag is deleted
+        "404":
+          $ref: "#/components/responses/Error"
 security:
   - session: []
 components:
@@ -320,6 +640,27 @@ components:
       schema:
         type: integer
         format: int64
+  requestBodies:
+    PhotoIds:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ids]
+            properties:
+              ids:
+                $ref: "#/components/schemas/PhotoIds"
+    Name:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name:
+                type: string
   responses:
     Error:
       description: The request failed
@@ -362,7 +703,7 @@ components:
           format: date-time
     Photo:
       type: object
-      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt]
+      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt]
       properties:
         id:
           type: integer
@@ -393,14 +734,82 @@ components:
         createdAt:
           type: string
           format: date-time
+        deletedAt:
+          description: When the photo was moved to the trash
+          type: [string, "null"]
+          format: date-time
+    PhotoPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Photo"
+        nextCursor:
+          type: [string, "null"]
+    PhotoIds:
+      type: array
+      minItems: 1
+      maxItems: 500
+      items:
+        type: integer
+        format: int64
     UploadResult:
       type: object
-      required: [photo, duplicate]
+      required: [photo, duplicate, restored]
       properties:
         photo:
           $ref: "#/components/schemas/Photo"
         duplicate:
           type: boolean
+        restored:
+          description: The user had this photo in the trash, and it has been restored
+          type: boolean
+    Album:
+      type: object
+      required: [id, name, photoCount, coverPhotoId, coverChosen, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        photoCount:
+          description: Photos of the album outside the trash
+          type: integer
+          format: int64
+        coverPhotoId:
+          description: The chosen cover, or else the newest processed photo
+          type: [integer, "null"]
+          format: int64
+        coverChosen:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    TagRef:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+    Tag:
+      type: object
+      required: [id, name, photoCount]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        photoCount:
+          description: Photos with this tag outside the trash
+          type: integer
+          format: int64
     PhotoEvent:
       type: object
       required: [pending, failed, photos]

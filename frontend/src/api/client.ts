@@ -2,9 +2,12 @@ import createClient from 'openapi-fetch'
 
 import type { components, paths } from './schema'
 
+export type Album = components['schemas']['Album']
 export type Photo = components['schemas']['Photo']
 export type PhotoEvent = components['schemas']['PhotoEvent']
 export type Role = components['schemas']['Role']
+export type Tag = components['schemas']['Tag']
+export type TagRef = components['schemas']['TagRef']
 export type UploadResult = components['schemas']['UploadResult']
 export type User = components['schemas']['User']
 

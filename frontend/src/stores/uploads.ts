@@ -21,6 +21,7 @@ export const useUploadsStore = defineStore('uploads', () => {
   const total = ref(0)
   const done = ref(0)
   const duplicates = ref(0)
+  const restored = ref(0)
   const failures = shallowRef<FailedUpload[]>([])
   const active = ref(0)
 
@@ -35,6 +36,7 @@ export const useUploadsStore = defineStore('uploads', () => {
       total.value = 0
       done.value = 0
       duplicates.value = 0
+      restored.value = 0
       failures.value = []
     }
     total.value += files.length
@@ -57,7 +59,9 @@ export const useUploadsStore = defineStore('uploads', () => {
       try {
         const result = await send(file)
         usePhotosStore().merge([result.photo])
-        if (result.duplicate) {
+        if (result.restored) {
+          restored.value++
+        } else if (result.duplicate) {
           duplicates.value++
         }
         done.value++
@@ -120,5 +124,5 @@ export const useUploadsStore = defineStore('uploads', () => {
     }
   }
 
-  return { total, done, duplicates, failures, running, visible, progress, add, retryFailed, dismiss }
+  return { total, done, duplicates, restored, failures, running, visible, progress, add, retryFailed, dismiss }
 })

@@ -240,3 +240,66 @@ func TestIngest(t *testing.T) {
 		t.Errorf("%d temporary files were left behind", len(temp))
 	}
 }
+
+// A photo moved to the trash before processing still gets its previews, so that
+// restoring it does not leave it pending forever.
+func TestTrashedPhotoIsStillProcessed(t *testing.T) {
+	e := setup(t)
+	data, err := os.ReadFile(filepath.Join("..", "media", "testdata", "landscape.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.ingest.Ingest(context.Background(), e.owner, bytes.NewReader(data), "landscape.jpg", ingest.PriorityInteractive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = e.queries.TrashPhotos(context.Background(), store.TrashPhotosParams{OwnerID: e.owner, Ids: []int64{res.Photo.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if photo := waitForStatus(t, e, res.Photo.ID, "ready"); photo.DeletedAt == nil {
+		t.Error("processing took the photo out of the trash")
+	}
+}
+
+// An upload racing with a purge of the same file must not end with a record
+// whose original is gone.
+func TestPurgeAndUploadOfTheSameFile(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	data, err := os.ReadFile(filepath.Join("..", "media", "testdata", "landscape.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	upload := func() (store.Photo, error) {
+		res, err := e.ingest.Ingest(ctx, e.owner, bytes.NewReader(data), "landscape.jpg", ingest.PriorityInteractive)
+		return res.Photo, err
+	}
+	for range 20 {
+		photo, err := upload()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := e.queries.TrashPhotos(ctx, store.TrashPhotosParams{OwnerID: e.owner, Ids: []int64{photo.ID}}); err != nil {
+			t.Fatal(err)
+		}
+
+		purged := make(chan error, 1)
+		go func() { purged <- e.ingest.Purge(ctx, e.owner, photo.ID) }()
+		current, err := upload()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := <-purged; err != nil {
+			t.Fatal(err)
+		}
+
+		// If the purge went second, the restored photo was out of its reach.
+		if _, err := os.Stat(e.layout.Original(current.OwnerID, current.Sha256, current.Mime)); err != nil {
+			t.Fatalf("photo %d has no original: %v", current.ID, err)
+		}
+		if _, err := e.queries.GetPhoto(ctx, current.ID); err != nil {
+			t.Fatalf("photo %d has no record: %v", current.ID, err)
+		}
+	}
+}

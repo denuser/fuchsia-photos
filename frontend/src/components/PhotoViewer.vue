@@ -3,8 +3,9 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 
 import { originalUrl, previewUrl, type Photo } from '../api/client'
 
-const props = defineProps<{ photos: Photo[]; photo: Photo }>()
-const emit = defineEmits<{ close: []; navigate: [photo: Photo] }>()
+// paused leaves the keyboard to a dialog opened over the viewer.
+const props = defineProps<{ photos: Photo[]; photo: Photo; editable: boolean; paused: boolean }>()
+const emit = defineEmits<{ close: []; navigate: [photo: Photo]; trash: [photo: Photo]; tags: [photo: Photo] }>()
 
 const ready = computed(() => props.photos.filter((p) => p.status === 'ready'))
 const index = computed(() => ready.value.findIndex((p) => p.id === props.photo.id))
@@ -32,6 +33,9 @@ watch(
 )
 
 function onKey(event: KeyboardEvent) {
+  if (props.paused) {
+    return
+  }
   if (event.key === 'Escape') {
     emit('close')
   } else if (event.key === 'ArrowLeft' && previous.value) {
@@ -54,6 +58,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <div class="name">{{ photo.name }}</div>
         <div class="details">{{ details }}</div>
       </div>
+      <template v-if="editable">
+        <v-btn icon="mdi-tag-outline" variant="text" aria-label="Tags" @click="emit('tags', photo)" />
+        <v-btn icon="mdi-trash-can-outline" variant="text" aria-label="Move to trash" @click="emit('trash', photo)" />
+      </template>
       <v-btn :href="originalUrl(photo.id)" icon="mdi-download" variant="text" aria-label="Download the original" />
       <v-btn icon="mdi-close" variant="text" aria-label="Close" @click="emit('close')" />
     </div>

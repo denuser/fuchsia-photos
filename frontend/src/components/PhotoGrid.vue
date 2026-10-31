@@ -4,8 +4,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { previewUrl, type Photo } from '../api/client'
 import { justify, visibleRows } from '../lib/justify'
 
-const props = defineProps<{ photos: Photo[]; hasMore: boolean }>()
-const emit = defineEmits<{ open: [photo: Photo]; 'load-more': [] }>()
+const props = defineProps<{ photos: Photo[]; hasMore: boolean; selected: ReadonlySet<number> }>()
+const emit = defineEmits<{ open: [photo: Photo]; 'load-more': []; toggle: [photo: Photo, range: boolean] }>()
 
 const TARGET_HEIGHT = 200
 const GAP = 4
@@ -27,6 +27,16 @@ const layout = computed(() =>
     GAP,
   ),
 )
+
+const selecting = computed(() => props.selected.size > 0)
+
+function onTileClick(photo: Photo, event: MouseEvent) {
+  if (selecting.value) {
+    emit('toggle', photo, event.shiftKey)
+  } else {
+    emit('open', photo)
+  }
+}
 
 const tiles = computed(() => {
   const { rows } = layout.value
@@ -69,24 +79,39 @@ onBeforeUnmount(() => resizeObserver.disconnect())
 <template>
   <div ref="scroller" class="scroller" @scroll.passive="onScroll">
     <div class="canvas" :style="{ height: `${layout.height + PADDING * 2}px` }">
-      <button
+      <div
         v-for="{ photo, style } in tiles"
         :key="photo.id"
-        type="button"
         class="tile"
+        :class="{ selected: selected.has(photo.id), selecting }"
         :style="style"
-        :disabled="photo.status !== 'ready'"
-        :aria-label="photo.name"
-        @click="emit('open', photo)"
       >
-        <img v-if="photo.status === 'ready'" :src="previewUrl(photo.id, 'grid')" :alt="photo.name" decoding="async" />
-        <v-progress-circular v-else-if="photo.status === 'pending'" indeterminate size="24" width="2" />
-        <v-tooltip v-else :text="`${photo.name} could not be processed`" location="top">
-          <template #activator="{ props: tooltip }">
-            <v-icon v-bind="tooltip" icon="mdi-image-broken-variant" />
-          </template>
-        </v-tooltip>
-      </button>
+        <button
+          type="button"
+          class="open"
+          :disabled="photo.status !== 'ready' && !selecting"
+          :aria-label="photo.name"
+          @click="onTileClick(photo, $event)"
+        >
+          <img v-if="photo.status === 'ready'" :src="previewUrl(photo.id, 'grid')" :alt="photo.name" decoding="async" />
+          <v-progress-circular v-else-if="photo.status === 'pending'" indeterminate size="24" width="2" />
+          <v-tooltip v-else :text="`${photo.name} could not be processed`" location="top">
+            <template #activator="{ props: tooltip }">
+              <v-icon v-bind="tooltip" icon="mdi-image-broken-variant" />
+            </template>
+          </v-tooltip>
+        </button>
+        <button
+          type="button"
+          class="check"
+          role="checkbox"
+          :aria-checked="selected.has(photo.id)"
+          :aria-label="`Select ${photo.name}`"
+          @click="emit('toggle', photo, $event.shiftKey)"
+        >
+          <v-icon :icon="selected.has(photo.id) ? 'mdi-check-circle' : 'mdi-circle-outline'" size="22" />
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -106,29 +131,76 @@ onBeforeUnmount(() => resizeObserver.disconnect())
   position: absolute;
   top: 0;
   left: 0;
+  overflow: hidden;
+  background: rgba(128, 128, 128, 0.18);
+}
+
+.open {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  height: 100%;
   padding: 0;
   border: 0;
-  overflow: hidden;
-  background: rgba(128, 128, 128, 0.18);
+  background: none;
   cursor: pointer;
 }
 
-.tile:disabled {
+.open:disabled {
   cursor: default;
 }
 
-.tile:focus-visible {
+.open:focus-visible,
+.check:focus-visible {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: -2px;
 }
 
-.tile img {
+.open img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.1s;
+}
+
+.check {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  display: flex;
+  padding: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.tile:hover .check,
+.check:focus-visible,
+.selecting .check {
+  opacity: 1;
+}
+
+.selected .check {
+  background: #fff;
+  color: rgb(var(--v-theme-primary));
+}
+
+.selected .open img {
+  transform: scale(0.92);
+}
+
+.selected {
+  background: rgba(var(--v-theme-primary), 0.2);
+}
+
+@media (hover: none) {
+  .check {
+    opacity: 1;
+  }
 }
 </style>

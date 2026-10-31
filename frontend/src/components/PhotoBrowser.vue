@@ -1,0 +1,209 @@
+<script setup lang="ts">
+import { computed, onMounted, ref, shallowRef } from 'vue'
+
+import type { Photo } from '../api/client'
+import { usePhotosStore } from '../stores/photos'
+import AddToAlbumDialog from './AddToAlbumDialog.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
+import PhotoGrid from './PhotoGrid.vue'
+import PhotoViewer from './PhotoViewer.vue'
+import TagDialog from './TagDialog.vue'
+
+// The grid, the viewer and the bulk actions shared by the timeline, albums and
+// the trash. A library list edits photos, the trash restores or purges them.
+const props = defineProps<{ mode: 'library' | 'trash' }>()
+const emit = defineEmits<{ tagged: [] }>()
+
+const photos = usePhotosStore()
+
+const opened = shallowRef<Photo | null>(null)
+const selected = shallowRef<ReadonlySet<number>>(new Set())
+const anchor = ref<number | null>(null)
+const busy = ref(false)
+const notice = ref('')
+const noticeOpen = ref(false)
+
+const tagDialog = ref(false)
+const albumDialog = ref(false)
+const purgeDialog = ref(false)
+const viewerTargets = ref<number[]>([])
+
+const selectedIds = computed(() => [...selected.value])
+// The tag dialog serves both the selection and the photo in the viewer.
+const tagTargets = computed(() => (viewerTargets.value.length > 0 ? viewerTargets.value : selectedIds.value))
+const dialogOpen = computed(() => tagDialog.value || albumDialog.value || purgeDialog.value)
+
+onMounted(() => photos.connect())
+
+function clearSelection() {
+  selected.value = new Set()
+  anchor.value = null
+}
+
+// With range, selects everything between the last toggled photo and this one.
+function toggle(photo: Photo, range: boolean) {
+  const next = new Set(selected.value)
+  const list = photos.photos
+  const from = anchor.value === null ? -1 : list.findIndex((p) => p.id === anchor.value)
+  if (range && from >= 0) {
+    const to = list.findIndex((p) => p.id === photo.id)
+    for (const p of list.slice(Math.min(from, to), Math.max(from, to) + 1)) {
+      next.add(p.id)
+    }
+  } else if (next.has(photo.id)) {
+    next.delete(photo.id)
+  } else {
+    next.add(photo.id)
+  }
+  anchor.value = photo.id
+  selected.value = next
+}
+
+function say(message: string) {
+  notice.value = message
+  noticeOpen.value = true
+}
+
+// Runs an action on the selection and reports what happened.
+async function run(action: () => Promise<void>, done: string) {
+  busy.value = true
+  try {
+    await action()
+    clearSelection()
+    say(done)
+  } catch (failure) {
+    say((failure as Error).message)
+  } finally {
+    busy.value = false
+  }
+}
+
+function count(n: number) {
+  return n === 1 ? '1 photo' : `${n} photos`
+}
+
+function trashSelected() {
+  const ids = selectedIds.value
+  void run(() => photos.trash(ids), `${count(ids.length)} moved to the trash`)
+}
+
+function restoreSelected() {
+  const ids = selectedIds.value
+  void run(() => photos.restore(ids), `${count(ids.length)} restored`)
+}
+
+function purgeSelected() {
+  const ids = selectedIds.value
+  void run(() => photos.purge(ids), `${count(ids.length)} deleted`)
+}
+
+function openSelectionTags() {
+  viewerTargets.value = []
+  tagDialog.value = true
+}
+
+function openViewerTags(photo: Photo) {
+  viewerTargets.value = [photo.id]
+  tagDialog.value = true
+}
+
+function onTagged() {
+  if (viewerTargets.value.length === 0) {
+    clearSelection()
+  }
+  say('Tags saved')
+  emit('tagged')
+}
+
+function onAddedToAlbum(album: string) {
+  const n = selected.value.size
+  clearSelection()
+  say(`${count(n)} added to ${album}`)
+}
+
+// Stays in the viewer on a neighbouring photo, if there is one.
+async function trashOpened(photo: Photo) {
+  const ready = photos.photos.filter((p) => p.status === 'ready')
+  const index = ready.findIndex((p) => p.id === photo.id)
+  const neighbour = ready[index + 1] ?? ready[index - 1] ?? null
+  try {
+    await photos.trash([photo.id])
+    opened.value = neighbour
+    say('1 photo moved to the trash')
+  } catch (failure) {
+    say((failure as Error).message)
+  }
+}
+
+defineExpose({ clearSelection, say })
+</script>
+
+<template>
+  <div class="browser">
+    <v-toolbar v-if="selected.size > 0" density="compact" color="surface-variant" class="flex-grow-0">
+      <v-btn icon="mdi-close" aria-label="Clear the selection" @click="clearSelection" />
+      <v-toolbar-title>{{ selected.size }} selected</v-toolbar-title>
+      <slot name="selection-actions" :ids="selectedIds" :run="run" />
+      <template v-if="props.mode === 'library'">
+        <v-btn prepend-icon="mdi-image-album" text="Add to album" :disabled="busy" @click="albumDialog = true" />
+        <v-btn prepend-icon="mdi-tag-outline" text="Tags" :disabled="busy" @click="openSelectionTags" />
+        <v-btn prepend-icon="mdi-trash-can-outline" text="Move to trash" :loading="busy" @click="trashSelected" />
+      </template>
+      <template v-else>
+        <v-btn prepend-icon="mdi-restore" text="Restore" :loading="busy" @click="restoreSelected" />
+        <v-btn prepend-icon="mdi-delete-forever" text="Delete" color="error" :disabled="busy" @click="purgeDialog = true" />
+      </template>
+    </v-toolbar>
+    <slot v-else name="toolbar" />
+
+    <div class="content">
+      <slot v-if="photos.loadedOnce && photos.photos.length === 0" name="empty" />
+      <PhotoGrid
+        v-else
+        :photos="photos.photos"
+        :has-more="photos.hasMore"
+        :selected="selected"
+        @open="opened = $event"
+        @toggle="toggle"
+        @load-more="photos.loadMore()"
+      />
+    </div>
+
+    <PhotoViewer
+      v-if="opened"
+      :photos="photos.photos"
+      :photo="opened"
+      :editable="props.mode === 'library'"
+      :paused="dialogOpen"
+      @close="opened = null"
+      @navigate="opened = $event"
+      @trash="trashOpened"
+      @tags="openViewerTags"
+    />
+
+    <TagDialog v-model="tagDialog" :photo-ids="tagTargets" @done="onTagged" />
+    <AddToAlbumDialog v-model="albumDialog" :photo-ids="selectedIds" @done="onAddedToAlbum" />
+    <ConfirmDialog
+      v-model="purgeDialog"
+      title="Delete permanently?"
+      :text="`${count(selected.size)} and the original files will be deleted. This cannot be undone.`"
+      action="Delete"
+      @confirm="purgeSelected"
+    />
+    <v-snackbar v-model="noticeOpen" :text="notice" location="bottom left" />
+  </div>
+</template>
+
+<style scoped>
+.browser {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--v-layout-top, 0px));
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+}
+</style>
