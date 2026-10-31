@@ -28,6 +28,8 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://photos:${POSTGRES_PASSWORD}@postgres:5432/photos
+      WORKERS: ${WORKERS:-2}
+      PREVIEW_FORMAT: ${PREVIEW_FORMAT:-webp}
     volumes:
       - ${LIBRARY_DIR:-./data/library}:/data/library
       - ${CACHE_DIR:-./data/cache}:/data/cache

@@ -2,7 +2,7 @@
 
 A self-hosted application for organizing photos, designed to run on a home NAS (Intel N150, 4 cores, 16 GB DDR5).
 
-**Status:** stage 0. The project skeleton runs, but the application has no features yet. This document records the decisions made so far and the roadmap.
+**Status:** stage 1. Login, user management, upload, processing and the timeline work. The stage 0 benchmark on the NAS is still to be run, so the preview format and worker count are provisional defaults. This document records the decisions made so far and the roadmap.
 
 ## Features
 
@@ -27,7 +27,8 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | Database | PostgreSQL | Relations and permissions, JSONB for EXIF, search, `pgvector` as a fallback. Keep it on an SSD if the NAS has one |
 | Job queue | River (on PostgreSQL), no Redis | A photo and its job are written in one transaction, and there is one service less to run. No official BullMQ client for Go was found |
 | API | REST with OpenAPI, SSE for progress | Works well with browsers, files and caching. A monolith needs no internal RPC. gRPC is only reconsidered when an ML service appears |
-| Image processing | libvips through govips, exiftool for metadata | libvips is fast and memory-efficient. govips has a long history, a large community, and is not tied to one libvips version |
+| Image processing | libvips through govips | libvips is fast and memory-efficient. govips has a long history, a large community, and is not tied to one libvips version |
+| Photo metadata | exiftool through go-exiftool | Handles HEIC and camera-specific tags. One long-running process avoids starting Perl for every photo |
 | Folder scan | Copy files into the library, leave the source folder untouched | One ingest path for all sources |
 | Sharing | Photos and albums, with all users or by login | Sharing an album makes all of its photos visible to the recipient |
 | Tags | Personal to each user | Other users' tag names stay private |
@@ -43,8 +44,8 @@ All sources (browser, folder scan, WebDAV) go through a single `Ingest(file, own
 2. Check for duplicates with `UNIQUE (owner_id, sha256)`. Deduplication is per user only.
 3. Atomically rename the file to `originals/{owner_id}/{sha[:2]}/{sha}.{ext}`. Originals are never modified.
 4. In one transaction, create the photo record and a `process_photo` River job.
-5. A worker reads EXIF, applies auto-rotation and sRGB conversion, generates a grid preview (~400 px) and a viewer preview (~2048 px) on the SSD, and fills in a placeholder. WebP or JPEG is chosen from benchmarks. AVIF is ruled out because of its encoding cost.
-6. A periodic job removes files that have no database record.
+5. A worker reads EXIF, applies auto-rotation and sRGB conversion, generates a grid preview (~400 px) and a viewer preview (~2048 px) on the SSD. Until a preview loads, the grid shows a neutral tile. WebP or JPEG is chosen from benchmarks, with WebP as the default until then. AVIF is ruled out because of its encoding cost.
+6. A periodic job removes abandoned uploads and expired sessions. It leaves originals without a database record alone: after restoring an older database backup, those are the photos uploaded since that backup. A stray original is harmless, and uploading the same photo again reuses it.
 
 Queue behavior:
 
@@ -97,7 +98,7 @@ Previews contain no EXIF, so GPS data does not leak through sharing.
   - [x] Monorepo structure, compose, migrations, CI
   - [x] Choose the libvips binding
   - [ ] Benchmark on the real NAS: JPEG and HEIC, HDD and SSD, WebP and JPEG, 2 or 3 workers
-- [ ] **Stage 1: core.** Login, user management, roles. Browser upload (3–4 files in parallel, retrying failed files). Ingest, queue, previews, virtual-scrolling timeline, viewer, processing progress.
+- [x] **Stage 1: core.** Login, user management, roles. Browser upload (3–4 files in parallel, retrying failed files). Ingest, queue, previews, virtual-scrolling timeline, viewer, processing progress.
 - [ ] **Stage 2: organization.** Albums, tags, search by date and tag, bulk actions, trash with soft delete.
 - [ ] **Stage 3: sharing.** Visibility for all users, sharing photos and albums by login, a "Shared with me" section, the admin view of everything. Test suite for the permission predicate.
 - [ ] **Stage 4: folder scan.** Admin only: fixed root, owner selection, safe re-runs thanks to hashing. Skips files still being copied (size and mtime unchanged for N seconds). Report in `import_runs`.

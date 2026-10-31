@@ -18,16 +18,28 @@ Edit `deploy/.env`:
 | `CACHE_DIR` | `./data/cache` | Previews. Use an SSD if the NAS has one |
 | `LIBRARY_DIR` | `./data/library` | Original photos |
 | `IMPORT_DIR` | `./data/import` | Folder scanned for imports, mounted read-only |
+| `WORKERS` | `2` | Photos processed at once. Keep at least one core free for the UI |
+| `PREVIEW_FORMAT` | `webp` | Format of new previews: `webp` or `jpeg` |
 | `HTTP_PORT` | `80` | HTTP port on the host |
 | `HTTPS_PORT` | `443` | HTTPS port on the host |
 
-Relative paths are relative to the `deploy` folder. The application runs as UID 1000, so it needs write access to `LIBRARY_DIR` and `CACHE_DIR`.
+Relative paths are relative to the `deploy` folder.
 
-Then start everything:
+The application runs as UID 1000, and Docker creates missing folders as root, so create them first and hand them over:
+
+```sh
+mkdir -p /path/to/library /path/to/cache
+sudo chown 1000:1000 /path/to/library /path/to/cache
+```
+
+Then start everything and create the first administrator. Other users are managed in the web interface.
 
 ```sh
 docker compose -f deploy/compose.yaml up -d --build
+docker compose -f deploy/compose.yaml exec app fuchsia-photos create-admin admin
 ```
+
+The last command waits for a password. Type it and press Enter. The password is visible while you type.
 
 Without a public domain, Caddy issues a certificate from its local CA, and browsers show a warning until that CA is trusted. To use a public certificate for a real domain, remove the `tls internal` line from `deploy/Caddyfile`.
 
@@ -43,6 +55,8 @@ Without a public domain, Caddy issues a certificate from its local CA, and brows
 | Open psql | `docker compose -f deploy/compose.yaml exec postgres psql -U photos photos` |
 
 Migrations are also applied automatically each time the application starts.
+
+Processing continues after a restart. A job that was running during a clean stop runs again shortly after the next start. A job that was running during a crash or power loss resumes after about 3 minutes.
 
 Backups are not set up yet. They are planned for stage 5.
 

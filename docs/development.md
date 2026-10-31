@@ -5,8 +5,31 @@
 - Docker
 - Go 1.27
 - Node.js 24 and pnpm 12
+- libvips, pkg-config and exiftool: `brew install vips pkg-config exiftool`
 
-libvips is not needed on the host. The server itself builds without it, and everything that uses it (`internal/media`, `cmd/imgbench`) builds and runs in containers.
+The backend links against libvips through cgo, so it needs a working C toolchain on the host.
+
+The host may have a newer libvips than production: Homebrew has 8.18, while the image has 8.16 from Debian. Run `make test` before pushing, as it uses the same versions as the image.
+
+### macOS: linker errors
+
+On macOS, cgo builds can fail with an error like this:
+
+```
+ld: multiple errors: tapi error: malformed file
+.../SDKs/MacOSX27.0.sdk/usr/lib/libSystem.B.tbd:4:20: error: unknown architecture
+```
+
+It means that the Command Line Tools are older than the macOS SDK selected by default. Check the versions with `ld -v` and `xcrun --show-sdk-path`.
+
+The fix is to update the Command Line Tools through System Settings or `softwareupdate`. Until then, select an older SDK that the installed tools understand:
+
+```sh
+ls /Library/Developer/CommandLineTools/SDKs
+export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.sdk
+```
+
+With an older SDK, the linker prints many `was built for newer 'macOS' version` warnings. They are harmless, and the binary works.
 
 Run `make help` to list all `make` targets. All commands below run from the repository root.
 
@@ -16,13 +39,14 @@ Run each of these in its own terminal:
 
 ```sh
 make dev-db         # PostgreSQL on port 5432
+make dev-admin LOGIN=admin   # once: create an administrator, then type a password and press Enter
 make dev-backend    # applies migrations, then serves the API on port 8080
 make dev-frontend   # Vite dev server on port 5173
 ```
 
 Open <http://localhost:5173>. Vite proxies `/api` to the backend.
 
-`make dev-db` keeps no data: the database is empty after each restart.
+The development database lives in a Docker volume and the photos in `deploy/data/dev`, so they survive restarts. To start over, stop the database and run `make dev-clean`.
 
 ## Backend
 
@@ -39,6 +63,11 @@ The server reads its settings from environment variables:
 |---|---|---|
 | `DATABASE_URL` | required | PostgreSQL connection URL |
 | `HTTP_ADDR` | `:8080` | Listen address |
+| `LIBRARY_DIR` | `/data/library` | Original photos |
+| `CACHE_DIR` | `/data/cache` | Previews |
+| `WORKERS` | `2` | Photos processed at once |
+| `PREVIEW_FORMAT` | `webp` | Format of new previews: `webp` or `jpeg` |
+| `COOKIE_INSECURE` | unset | Set to `true` to allow the session cookie over plain HTTP. Local development only |
 
 ### Database and migrations
 
@@ -52,6 +81,7 @@ Migrations live in `backend/db/migrations` and are embedded in the binary. The s
 | Roll back the last migration | `make dev-goose ARGS=down` |
 | Apply rolled back migrations | `make dev-goose ARGS=up` |
 | Open psql | `make dev-psql` |
+| Regenerate Go code after changing `db/queries` or the schema | `make sqlc` |
 
 `make dev-goose` manages only the application's migrations, not River's.
 
@@ -61,8 +91,8 @@ A new migration file has an empty `Up` and `Down` section, and both must be fill
 
 `api/openapi.yaml` is the contract between the backend and the frontend. Change it first, then:
 
-1. Update the handlers in `backend/internal/api`. They are written by hand for now.
-2. Run `make api-types` to regenerate the frontend types, and commit the result. CI fails if they are out of date.
+1. Update the handlers in `backend/internal/api`. They are written by hand.
+2. Run `make api-types` to regenerate the frontend types, and commit the result.
 
 ## Frontend
 
@@ -81,10 +111,18 @@ TypeScript stays on version 5, because `vue-tsc` does not work with version 7 ye
 | Task | Command |
 |---|---|
 | All backend tests, with PostgreSQL | `make test` |
-| API and frontend serving, on the host | `cd backend && go test ./internal/api ./internal/web` |
-| Database tests, against `make dev-db` | `cd backend && TEST_DATABASE_URL=postgres://photos:photos@localhost:5432/photos go test ./db` |
+| One package, on the host | `cd backend && go test ./internal/web` |
+| Everything on the host, against a scratch database | see below |
 | Selected tests in a container | see below |
 | Regenerate image fixtures | `make fixtures` |
+
+To run everything on the host, use a scratch database rather than the development one:
+
+```sh
+docker run -d --rm --name fuchsia-photos-test-db -p 127.0.0.1:5433:5432 -e POSTGRES_PASSWORD=test postgres:18
+cd backend && TEST_DATABASE_URL=postgres://postgres:test@localhost:5433/postgres go test ./...
+docker stop fuchsia-photos-test-db
+```
 
 To run selected tests in a container:
 
@@ -95,15 +133,13 @@ docker compose -f deploy/compose.test.yaml down --volumes
 
 Things to know:
 
-- `go test ./...` fails on the host, because `internal/media` needs libvips. Use `make test`.
 - Without `TEST_DATABASE_URL`, the database tests are skipped, and `go test` still reports `ok`. `make test` sets it.
-- The database tests leave the schema in place, so use a disposable database.
+- Each test creates and drops its own database next to the one in `TEST_DATABASE_URL`, so tests run in parallel without interfering. `TestMigrate` in `./db` uses that database directly and leaves the schema in place.
+- API, job and database tests need `TEST_DATABASE_URL`, including on the host. The job tests also need exiftool.
 - The frontend has no tests yet. Type checks and the build are its only automated checks.
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pushes to `master` and on pull requests:
+`.github/workflows/ci.yml` runs on pushes to `master` and on pull requests. It only builds the `linux/amd64` production image, which includes the frontend type checks and build and the backend build.
 
-- `make test`
-- Frontend: a check that the generated API types are current, type checks and the build
-- A `linux/amd64` production image, with a check that it decodes every supported format
+Tests do not run in CI, so run `make test` before pushing.

@@ -1,8 +1,10 @@
-.PHONY: help dev-db dev-migrate dev-goose dev-psql migration dev-backend dev-frontend test image bench fixtures api-types
+.PHONY: help dev-db dev-clean dev-admin dev-migrate dev-goose dev-psql migration dev-backend dev-frontend test image bench fixtures api-types sqlc
 
 COMPOSE_TEST = docker compose -f deploy/compose.test.yaml
 DEV_DATABASE_URL = postgres://photos:photos@localhost:5432/photos
 BENCH_OUT ?= .bench
+DEV_DATA = $(CURDIR)/deploy/data/dev
+DEV_ENV = DATABASE_URL=$(DEV_DATABASE_URL) LIBRARY_DIR=$(DEV_DATA)/library CACHE_DIR=$(DEV_DATA)/cache COOKIE_INSECURE=true
 
 # Keep the version in step with backend/go.mod. Without cgo and the other
 # database drivers, the CLI builds on macOS and needs no C toolchain.
@@ -12,6 +14,8 @@ GOOSE = cd backend && CGO_ENABLED=0 go run \
 
 help:
 	@echo "dev-db        start PostgreSQL for local development on port 5432"
+	@echo "dev-clean     delete the development database and photos"
+	@echo "dev-admin     create an administrator in dev-db, for example LOGIN=admin"
 	@echo "dev-migrate   apply pending migrations to dev-db"
 	@echo "dev-goose     run a goose command on dev-db, for example ARGS=status"
 	@echo "dev-psql      open psql in dev-db"
@@ -23,13 +27,21 @@ help:
 	@echo "bench         run the benchmark on samples/, BENCH_OUT sets the disk under test"
 	@echo "fixtures      regenerate the image fixtures of internal/media"
 	@echo "api-types     regenerate frontend types from api/openapi.yaml"
+	@echo "sqlc          regenerate backend/internal/store from db/queries"
 
 dev-db:
-	docker run --rm --name fuchsia-photos-dev-db -p 127.0.0.1:5432:5432 \
+	docker run --rm --name fuchsia-photos-dev-db -p 127.0.0.1:5432:5432 -v fuchsia-photos-dev-db:/var/lib/postgresql \
 		-e POSTGRES_USER=photos -e POSTGRES_PASSWORD=photos -e POSTGRES_DB=photos postgres:18
 
+dev-clean:
+	docker volume rm fuchsia-photos-dev-db
+	rm -rf "$(DEV_DATA)"
+
+dev-admin:
+	cd backend && $(DEV_ENV) go run ./cmd/fuchsia-photos create-admin $(LOGIN)
+
 dev-migrate:
-	cd backend && DATABASE_URL=$(DEV_DATABASE_URL) go run ./cmd/fuchsia-photos migrate
+	cd backend && $(DEV_ENV) go run ./cmd/fuchsia-photos migrate
 
 dev-goose:
 	$(GOOSE) postgres $(DEV_DATABASE_URL) $(ARGS)
@@ -41,7 +53,7 @@ dev-psql:
 	docker exec -it fuchsia-photos-dev-db psql -U photos photos
 
 dev-backend:
-	cd backend && DATABASE_URL=$(DEV_DATABASE_URL) go run ./cmd/fuchsia-photos serve
+	cd backend && $(DEV_ENV) go run ./cmd/fuchsia-photos serve
 
 dev-frontend:
 	cd frontend && pnpm dev
@@ -66,3 +78,6 @@ fixtures:
 
 api-types:
 	cd frontend && pnpm gen:api
+
+sqlc:
+	docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR)/backend:/src" -w /src sqlc/sqlc:1.31.1 generate

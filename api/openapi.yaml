@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Fuchsia Photos API
-  version: 0.1.0
+  version: 0.2.0
 servers:
   - url: /api/v1
 paths:
@@ -9,6 +9,7 @@ paths:
     get:
       operationId: getHealth
       summary: Report whether the application can serve requests
+      security: []
       responses:
         "200":
           description: The application and its database are available
@@ -22,8 +23,317 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Health"
+  /login:
+    post:
+      operationId: login
+      summary: Start a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login, password]
+              properties:
+                login:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Logged in. The session cookie is set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Error"
+  /logout:
+    post:
+      operationId: logout
+      summary: End the session
+      security: []
+      responses:
+        "204":
+          description: Logged out
+  /me:
+    get:
+      operationId: getMe
+      summary: Get the current user
+      responses:
+        "200":
+          description: The current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Error"
+  /me/password:
+    post:
+      operationId: changePassword
+      summary: Change the current user's password and end their other sessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        "204":
+          description: The password is changed
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /users:
+    get:
+      operationId: listUsers
+      summary: List users (administrators only)
+      responses:
+        "200":
+          description: All users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "403":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createUser
+      summary: Create a user (administrators only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login, password, role]
+              properties:
+                login:
+                  type: string
+                password:
+                  type: string
+                role:
+                  $ref: "#/components/schemas/Role"
+      responses:
+        "201":
+          description: The new user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /users/{id}:
+    patch:
+      operationId: updateUser
+      summary: Change a user (administrators only)
+      description: Resetting a password or disabling a user ends their sessions. Administrators cannot change their own role or disable themselves.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  $ref: "#/components/schemas/Role"
+                disabled:
+                  type: boolean
+                password:
+                  type: string
+      responses:
+        "200":
+          description: The changed user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /photos:
+    get:
+      operationId: listPhotos
+      summary: List the current user's photos, newest first
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 200
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: One page of photos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Photo"
+                  nextCursor:
+                    type: [string, "null"]
+        "400":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: uploadPhoto
+      summary: Upload a photo
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: The user already had this photo, and nothing was added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResult"
+        "201":
+          description: The photo was added and queued for processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResult"
+        "400":
+          $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
+        "415":
+          $ref: "#/components/responses/Error"
+  /photos/events:
+    get:
+      operationId: photoEvents
+      summary: Stream changes to the current user's photos
+      description: Server-sent events named `photos`, each holding a PhotoEvent as JSON.
+      responses:
+        "200":
+          description: The event stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/PhotoEvent"
+  /photos/{id}:
+    get:
+      operationId: getPhoto
+      summary: Get a photo the current user may see
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The photo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Photo"
+        "404":
+          $ref: "#/components/responses/Error"
+  /photos/{id}/previews/{kind}:
+    get:
+      operationId: getPreview
+      summary: Get a preview without metadata
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [grid, viewer]
+      responses:
+        "200":
+          description: The preview image
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Error"
+  /photos/{id}/original:
+    get:
+      operationId: getOriginal
+      summary: Download the original file
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The original file
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Error"
+security:
+  - session: []
 components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: fuchsia_session
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  responses:
+    Error:
+      description: The request failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
   schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
     Health:
       type: object
       required: [status]
@@ -31,3 +341,75 @@ components:
         status:
           type: string
           enum: [ok, unavailable]
+    Role:
+      type: string
+      enum: [admin, user]
+    User:
+      type: object
+      required: [id, login, role, disabled, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        login:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        disabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    Photo:
+      type: object
+      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        ownerId:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [pending, ready, failed]
+        name:
+          type: string
+        mime:
+          type: string
+        size:
+          type: integer
+          format: int64
+        width:
+          type: [integer, "null"]
+        height:
+          type: [integer, "null"]
+        takenAt:
+          type: [string, "null"]
+          format: date-time
+        sortAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    UploadResult:
+      type: object
+      required: [photo, duplicate]
+      properties:
+        photo:
+          $ref: "#/components/schemas/Photo"
+        duplicate:
+          type: boolean
+    PhotoEvent:
+      type: object
+      required: [pending, failed, photos]
+      properties:
+        pending:
+          type: integer
+        failed:
+          type: integer
+        photos:
+          type: array
+          items:
+            $ref: "#/components/schemas/Photo"

@@ -1,5 +1,40 @@
 import createClient from 'openapi-fetch'
 
-import type { paths } from './schema'
+import type { components, paths } from './schema'
 
-export const api = createClient<paths>({ baseUrl: '/api/v1' })
+export type Photo = components['schemas']['Photo']
+export type PhotoEvent = components['schemas']['PhotoEvent']
+export type Role = components['schemas']['Role']
+export type UploadResult = components['schemas']['UploadResult']
+export type User = components['schemas']['User']
+
+export const API_BASE = '/api/v1'
+
+export const api = createClient<paths>({ baseUrl: API_BASE })
+
+let onUnauthorized = () => {}
+
+// Called when the session ends while the app is open.
+export function setUnauthorizedHandler(handler: () => void) {
+  onUnauthorized = handler
+}
+
+export function notifyUnauthorized() {
+  onUnauthorized()
+}
+
+api.use({
+  onResponse({ request, response }) {
+    if (response.status === 401 && !request.url.endsWith('/login') && !request.url.endsWith('/me')) {
+      onUnauthorized()
+    }
+  },
+})
+
+export function previewUrl(id: number, kind: 'grid' | 'viewer') {
+  return `${API_BASE}/photos/${id}/previews/${kind}`
+}
+
+export function originalUrl(id: number) {
+  return `${API_BASE}/photos/${id}/original`
+}

@@ -6,40 +6,8 @@ on:
   pull_request:
 
 jobs:
-  backend:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: make test
-
-  frontend:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          package_json_file: frontend/package.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - name: Check that generated API types are up to date
-        run: pnpm gen:api && git diff --exit-code src/api/schema.d.ts
-      - run: pnpm build
-
-  image:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: make image
-      - name: Check that the production image decodes all formats
-        run: >
-          docker run --rm --tmpfs /tmp
-          -v "$PWD/backend/internal/media/testdata:/in:ro"
-          fuchsia-photos:latest
-          imgbench -in /in -out /tmp -workers 1

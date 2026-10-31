@@ -48,6 +48,21 @@ func Shutdown() {
 	vips.Shutdown()
 }
 
+// Dimensions returns the size of the photo at path as it is displayed, taking
+// the EXIF orientation into account.
+func Dimensions(path string) (width, height int, err error) {
+	image, err := vips.NewImageFromFile(path)
+	if err != nil {
+		return 0, 0, fmt.Errorf("load %s: %w", path, err)
+	}
+	defer image.Close()
+
+	if image.Orientation() >= 5 {
+		return image.Height(), image.Width(), nil
+	}
+	return image.Width(), image.Height(), nil
+}
+
 // Render generates the previews of the photo at path. They are upright, in
 // sRGB and contain no metadata, so GPS coordinates do not leak through sharing.
 //

@@ -1,0 +1,124 @@
+import { defineStore } from 'pinia'
+import { computed, ref, shallowRef } from 'vue'
+
+import { API_BASE, notifyUnauthorized, type UploadResult } from '../api/client'
+import { usePhotosStore } from './photos'
+
+const CONCURRENCY = 3
+const MAX_ATTEMPTS = 3
+const RETRY_DELAY_MS = 2000
+
+export interface FailedUpload {
+  file: File
+  error: string
+}
+
+// Failures worth another try, as opposed to a file the server will always refuse.
+class RetryableError extends Error {}
+class SessionEndedError extends Error {}
+
+export const useUploadsStore = defineStore('uploads', () => {
+  const total = ref(0)
+  const done = ref(0)
+  const duplicates = ref(0)
+  const failures = shallowRef<FailedUpload[]>([])
+  const active = ref(0)
+
+  const running = computed(() => active.value > 0)
+  const visible = computed(() => total.value > 0)
+  const progress = computed(() => (total.value ? ((done.value + failures.value.length) / total.value) * 100 : 0))
+
+  let queue: File[] = []
+
+  function add(files: File[]) {
+    if (!running.value) {
+      total.value = 0
+      done.value = 0
+      duplicates.value = 0
+      failures.value = []
+    }
+    total.value += files.length
+    queue.push(...files)
+    pump()
+  }
+
+  function pump() {
+    while (active.value < CONCURRENCY && queue.length > 0) {
+      active.value++
+      void run(queue.shift()!).finally(() => {
+        active.value--
+        pump()
+      })
+    }
+  }
+
+  async function run(file: File) {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const result = await send(file)
+        usePhotosStore().merge([result.photo])
+        if (result.duplicate) {
+          duplicates.value++
+        }
+        done.value++
+        return
+      } catch (error) {
+        if (error instanceof SessionEndedError) {
+          queue = []
+          notifyUnauthorized()
+          return
+        }
+        if (!(error instanceof RetryableError) || attempt >= MAX_ATTEMPTS) {
+          const message = error instanceof Error ? error.message : 'Upload failed'
+          failures.value = [...failures.value, { file, error: message }]
+          return
+        }
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempt))
+      }
+    }
+  }
+
+  async function send(file: File): Promise<UploadResult> {
+    const body = new FormData()
+    body.append('file', file)
+
+    let response: Response
+    try {
+      response = await fetch(`${API_BASE}/photos`, { method: 'POST', body })
+    } catch {
+      throw new RetryableError('Network error')
+    }
+    if (response.ok) {
+      return (await response.json()) as UploadResult
+    }
+    if (response.status === 401) {
+      throw new SessionEndedError()
+    }
+    const message = await errorMessage(response)
+    throw response.status >= 500 ? new RetryableError(message) : new Error(message)
+  }
+
+  async function errorMessage(response: Response) {
+    try {
+      return ((await response.json()) as { error: string }).error
+    } catch {
+      return `Upload failed with status ${response.status}`
+    }
+  }
+
+  function retryFailed() {
+    const files = failures.value.map((f) => f.file)
+    failures.value = []
+    total.value -= files.length
+    add(files)
+  }
+
+  function dismiss() {
+    if (!running.value) {
+      total.value = 0
+      failures.value = []
+    }
+  }
+
+  return { total, done, duplicates, failures, running, visible, progress, add, retryFailed, dismiss }
+})
