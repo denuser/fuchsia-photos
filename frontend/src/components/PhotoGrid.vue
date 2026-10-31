@@ -83,12 +83,14 @@ onBeforeUnmount(() => resizeObserver.disconnect())
         v-for="{ photo, style } in tiles"
         :key="photo.id"
         class="tile"
+        data-testid="tile"
         :class="{ selected: selected.has(photo.id), selecting }"
         :style="style"
       >
         <button
           type="button"
           class="open"
+          data-testid="tile-open"
           :disabled="photo.status !== 'ready' && !selecting"
           :aria-label="photo.name"
           @click="onTileClick(photo, $event)"
@@ -104,6 +106,7 @@ onBeforeUnmount(() => resizeObserver.disconnect())
         <button
           type="button"
           class="check"
+          data-testid="tile-check"
           role="checkbox"
           :aria-checked="selected.has(photo.id)"
           :aria-label="`Select ${photo.name}`"

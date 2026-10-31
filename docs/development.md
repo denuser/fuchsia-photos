@@ -5,6 +5,7 @@
 - Docker
 - Go 1.27
 - Node.js 24 and pnpm 12
+- Google Chrome, for `make e2e`
 - libvips, pkg-config and exiftool: `brew install vips pkg-config exiftool`
 
 The backend links against libvips through cgo, so it needs a working C toolchain on the host.
@@ -114,6 +115,7 @@ TypeScript stays on version 5, because `vue-tsc` does not work with version 7 ye
 | One package, on the host | `cd backend && go test ./internal/web` |
 | Everything on the host, against a scratch database | see below |
 | Selected tests in a container | see below |
+| The main flow in a browser | `make e2e` |
 | Regenerate image fixtures | `make fixtures` |
 
 To run everything on the host, use a scratch database rather than the development one:
@@ -136,10 +138,18 @@ Things to know:
 - Without `TEST_DATABASE_URL`, the database tests are skipped, and `go test` still reports `ok`. `make test` sets it.
 - Each test creates and drops its own database next to the one in `TEST_DATABASE_URL`, so tests run in parallel without interfering. `TestMigrate` in `./db` uses that database directly and leaves the schema in place.
 - API, job and database tests need `TEST_DATABASE_URL`, including on the host. The job tests also need exiftool.
-- The frontend has no tests yet. Type checks and the build are its only automated checks.
+- The frontend has no unit tests. Its automated checks are type checks, the build and `make e2e`.
+
+### Browser test
+
+`make e2e` builds the production image, starts it with a throwaway database on port 18080, runs `frontend/e2e/main-flow.mjs` in the installed Google Chrome, and removes everything afterwards. It does not touch the development data, and it can run while `make dev-db` is up. The first run takes a few minutes to build the image.
+
+It covers one path through the application: upload, selection, albums, tags, search and the trash. Add a step when a stage adds something to that path, and leave details to the backend tests. Run it before pushing a change to the interface.
+
+On failure it prints the failed step and saves a screenshot to `frontend/e2e/results/`. To watch it run, set `E2E_HEADED=1`.
 
 ## CI
 
 `.github/workflows/ci.yml` runs on pushes to `master` and on pull requests. It only builds the `linux/amd64` production image, which includes the frontend type checks and build and the backend build.
 
-Tests do not run in CI, so run `make test` before pushing.
+Tests do not run in CI, so run `make test` and, for interface changes, `make e2e` before pushing.

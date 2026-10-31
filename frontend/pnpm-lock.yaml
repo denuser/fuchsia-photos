@@ -194,6 +194,9 @@ importers:
       openapi-typescript:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.9.3)
+      playwright-core:
+        specifier: ^1.64.1
+        version: 1.64.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -778,6 +781,11 @@ packages:
 
   pkg-types@2.4.0:
     resolution: {integrity: sha512-07Fys7iVx0X6TcviMOgogM1Lk33ZyqOezMnU79S+kffWqwolG/5W9V8EgQSeYCIfFTYVgssRbnH630Oa2+soBA==}
+
+  playwright-core@1.64.1:
+    resolution: {integrity: sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
@@ -1477,6 +1485,8 @@ snapshots:
       confbox: 0.3.2
       exsolve: 1.2.0
       pathe: 2.0.3
+
+  playwright-core@1.64.1: {}
 
   pluralize@8.0.0: {}
 

@@ -110,6 +110,15 @@ Previews contain no EXIF, so GPS data does not leak through sharing.
 - [ ] **Stage 6: WebDAV (hypothesis, starts as a spike).** Per-user upload folder, separate app password, files go through ingest. Tested with real mobile clients such as PhotoSync and FolderSync. If they work poorly, the feature is dropped and the outcome recorded here.
 - [ ] **Stage 7: ML (later).** An `embed_photo` job sends a preview to an external server. The NAS stays the source of truth, and a FAISS index can be rebuilt. Search results are filtered by the permission predicate. The protocol (gRPC or HTTP) and the choice of FAISS or `pgvector` are decided at this stage.
 
+## Acceptance criteria
+
+- **Benchmark (stage 0):** a benchmark report with real speeds on the NAS replaces the estimates under [Expected performance](#expected-performance).
+- **Backend:** `go test ./...` passes against a real PostgreSQL. Required scenarios: the permission matrix, duplicates, and a worker failure followed by a job retry.
+- **End to end on the NAS:** after `docker compose up`, upload 1,000 photos from the browser. The UI stays responsive, a restart during processing loses no jobs, and every photo ends up with previews or a clear error.
+- **Permissions (stage 3):** a second user gets a 404 for another user's original and previews by direct URL, and gets the files once they are shared.
+- **Folder scan (stage 4):** a second run on the same folder creates no new records, and the source folder stays unchanged.
+- **Backup (stage 5):** a dump restores on a clean installation.
+
 ## Expected performance
 
 These are rough estimates, not measurements, for preview generation with 3 workers. Stage 0 replaces them with real numbers from the NAS.

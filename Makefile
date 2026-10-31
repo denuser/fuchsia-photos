@@ -1,6 +1,8 @@
-.PHONY: help dev-db dev-clean dev-admin dev-migrate dev-goose dev-psql migration dev-backend dev-frontend test image bench fixtures api-types sqlc
+.PHONY: help dev-db dev-clean dev-admin dev-migrate dev-goose dev-psql migration dev-backend dev-frontend test e2e image bench fixtures api-types sqlc
 
 COMPOSE_TEST = docker compose -f deploy/compose.test.yaml
+COMPOSE_E2E = docker compose -f deploy/compose.e2e.yaml
+E2E_PASSWORD = e2e-password
 DEV_DATABASE_URL = postgres://photos:photos@localhost:5432/photos
 BENCH_OUT ?= .bench
 DEV_DATA = $(CURDIR)/deploy/data/dev
@@ -23,6 +25,7 @@ help:
 	@echo "dev-backend   run the server locally against dev-db"
 	@echo "dev-frontend  run the Vite dev server"
 	@echo "test          run backend tests in a container with PostgreSQL"
+	@echo "e2e           run the main flow in Chrome against the production image"
 	@echo "image         build the production image for the NAS (linux/amd64)"
 	@echo "bench         run the benchmark on samples/, BENCH_OUT sets the disk under test"
 	@echo "fixtures      regenerate the image fixtures of internal/media"
@@ -61,6 +64,18 @@ dev-frontend:
 test:
 	$(COMPOSE_TEST) up --build --abort-on-container-exit --exit-code-from test test; \
 	status=$$?; $(COMPOSE_TEST) down --volumes; exit $$status
+
+e2e:
+	$(COMPOSE_E2E) up --build --detach --wait app; \
+	status=$$?; \
+	if [ $$status -eq 0 ]; then \
+		for i in $$(seq 60); do curl -sf http://127.0.0.1:18080/api/v1/health >/dev/null && break; sleep 1; done; \
+		printf '%s\n' "$(E2E_PASSWORD)" | $(COMPOSE_E2E) exec -T app fuchsia-photos create-admin admin && \
+		(cd frontend && E2E_PASSWORD="$(E2E_PASSWORD)" pnpm e2e); \
+		status=$$?; \
+	fi; \
+	if [ $$status -ne 0 ]; then $(COMPOSE_E2E) logs --tail 30 app; fi; \
+	$(COMPOSE_E2E) down --volumes; exit $$status
 
 image:
 	docker buildx build --platform linux/amd64 --load -f deploy/Dockerfile -t fuchsia-photos:latest .

@@ -1,0 +1,34 @@
+# The production image on a throwaway database, for `make e2e`. Nothing outlives
+# the run, and nothing touches the development data.
+name: fuchsia-photos-e2e
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: e2e
+      POSTGRES_PASSWORD: e2e
+      POSTGRES_DB: e2e
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U e2e -d e2e"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  app:
+    image: fuchsia-photos:e2e
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://e2e:e2e@postgres:5432/e2e
+      COOKIE_INSECURE: "true"
+    tmpfs:
+      - /data:uid=1000,gid=1000
+    ports:
+      - "127.0.0.1:18080:8080"

@@ -50,7 +50,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <div class="viewer" role="dialog" aria-modal="true" :aria-label="photo.name">
+  <div class="viewer" data-testid="viewer" role="dialog" aria-modal="true" :aria-label="photo.name">
     <img :key="photo.id" :src="previewUrl(photo.id, 'viewer')" :alt="photo.name" class="image" />
 
     <div class="bar">
