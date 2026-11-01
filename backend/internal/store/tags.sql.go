@@ -17,6 +17,7 @@ JOIN photos p ON p.owner_id = t.owner_id
 WHERE t.owner_id = $1
   AND t.id = ANY ($2::bigint[])
   AND p.id = ANY ($3::bigint[])
+  AND p.purged_at IS NULL
 ON CONFLICT DO NOTHING
 `
 

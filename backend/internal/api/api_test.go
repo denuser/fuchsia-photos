@@ -19,6 +19,7 @@ import (
 	"github.com/denuser/fuchsia-photos/backend/internal/auth"
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
 	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
+	"github.com/denuser/fuchsia-photos/backend/internal/scan"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 	"github.com/denuser/fuchsia-photos/backend/internal/testdb"
@@ -67,6 +68,8 @@ type env struct {
 	server  *httptest.Server
 	queries *store.Queries
 	layout  storage.Layout
+	// importDir is the root of folder scans.
+	importDir string
 }
 
 func setup(t *testing.T) *env {
@@ -81,15 +84,18 @@ func setup(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	queries := store.New(pool)
+	importDir := t.TempDir()
+	ingester := &ingest.Service{Pool: pool, Jobs: client, Layout: layout}
 	server := httptest.NewServer(NewHandler(Deps{
 		DB:      pool,
 		Queries: queries,
-		Ingest:  &ingest.Service{Pool: pool, Jobs: client, Layout: layout},
+		Ingest:  ingester,
+		Scan:    &scan.Service{Ingest: ingester, Dir: importDir},
 		Layout:  layout,
 		Static:  http.NotFoundHandler(),
 	}))
 	t.Cleanup(server.Close)
-	return &env{t, server, queries, layout}
+	return &env{t, server, queries, layout, importDir}
 }
 
 func (e *env) addUser(login, role string) store.User {

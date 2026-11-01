@@ -66,6 +66,7 @@ window.addEventListener('beforeunload', (event) => {
           <v-list-item :subtitle="auth.isAdmin ? 'Administrator' : 'User'" :title="auth.user.login" />
           <v-divider />
           <v-list-item v-if="auth.isAdmin" to="/users" prepend-icon="mdi-account-multiple" title="Users" />
+          <v-list-item v-if="auth.isAdmin" to="/import" prepend-icon="mdi-folder-arrow-down-outline" title="Import from folder" />
           <v-list-item prepend-icon="mdi-lock-reset" title="Change password" @click="passwordDialog = true" />
           <v-list-item prepend-icon="mdi-logout" title="Log out" @click="logout" />
         </v-list>

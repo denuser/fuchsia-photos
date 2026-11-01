@@ -30,5 +30,5 @@ export const useUsersStore = defineStore('users', () => {
     return logins.value.get(id) ?? null
   }
 
-  return { everyone, recipients, load, login }
+  return { active, everyone, recipients, load, login }
 })

@@ -6,7 +6,7 @@ E2E_PASSWORD = e2e-password
 DEV_DATABASE_URL = postgres://photos:photos@localhost:5432/photos
 BENCH_OUT ?= .bench
 DEV_DATA = $(CURDIR)/deploy/data/dev
-DEV_ENV = DATABASE_URL=$(DEV_DATABASE_URL) LIBRARY_DIR=$(DEV_DATA)/library CACHE_DIR=$(DEV_DATA)/cache COOKIE_INSECURE=true
+DEV_ENV = DATABASE_URL=$(DEV_DATABASE_URL) LIBRARY_DIR=$(DEV_DATA)/library CACHE_DIR=$(DEV_DATA)/cache IMPORT_DIR=$(DEV_DATA)/import COOKIE_INSECURE=true
 
 # Keep the version in step with backend/go.mod. Without cgo and the other
 # database drivers, the CLI builds on macOS and needs no C toolchain.
@@ -56,6 +56,7 @@ dev-psql:
 	docker exec -it fuchsia-photos-dev-db psql -U photos photos
 
 dev-backend:
+	mkdir -p "$(DEV_DATA)/import"
 	cd backend && $(DEV_ENV) go run ./cmd/fuchsia-photos serve
 
 dev-frontend:

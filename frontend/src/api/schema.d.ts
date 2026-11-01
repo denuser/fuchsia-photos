@@ -604,10 +604,146 @@ export interface paths {
         patch: operations["renameTag"];
         trace?: never;
     };
+    "/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recent folder scans, newest first (administrators only) */
+        get: operations["listImports"];
+        put?: never;
+        /**
+         * Start a scan of a folder for a user (administrators only)
+         * @description Only one scan runs at a time. The source folder is never changed.
+         */
+        post: operations["startImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the folders inside the import folder, three levels deep (administrators only) */
+        get: operations["listImportFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** Get a scan with the files that had problems, up to 500 (administrators only) */
+        get: operations["getImport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/{id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop a running scan. Photos already imported stay (administrators only) */
+        post: operations["stopImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ImportRun: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            ownerId: number;
+            folder: string;
+            /** @enum {string} */
+            status: "listing" | "importing" | "finished" | "stopped" | "failed";
+            error: string | null;
+            /**
+             * Format: int64
+             * @description Files found in the folder
+             */
+            found: number;
+            /**
+             * Format: int64
+             * @description New photos
+             */
+            added: number;
+            /**
+             * Format: int64
+             * @description Photos the owner already has
+             */
+            duplicates: number;
+            /**
+             * Format: int64
+             * @description Photos in the owner's trash, which stay there
+             */
+            inTrash: number;
+            /**
+             * Format: int64
+             * @description Photos the owner deleted permanently, which stay deleted
+             */
+            purged: number;
+            /**
+             * Format: int64
+             * @description Files that are not supported photos
+             */
+            unsupported: number;
+            /**
+             * Format: int64
+             * @description Files that changed during the scan, probably still being copied
+             */
+            changing: number;
+            /**
+             * Format: int64
+             * @description Files that could not be imported
+             */
+            failed: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            finishedAt: string | null;
+        };
+        ImportProblem: {
+            path: string;
+            /** @enum {string} */
+            state: "changing" | "failed";
+            error: string | null;
+        };
         Error: {
             error: string;
         };
@@ -1773,6 +1909,129 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listImports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent scans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportRun"][];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    startImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    ownerId: number;
+                    /** @description A folder inside the import folder. Empty means all of it */
+                    folder: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The new scan */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportRun"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listImportFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Relative paths of folders */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    getImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        run: components["schemas"]["ImportRun"];
+                        problems: components["schemas"]["ImportProblem"][];
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    stopImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scan stops after the files it is working on */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
             409: components["responses"]["Error"];
         };
     };

@@ -29,8 +29,30 @@ func (q *Queries) CountPhotosByStatus(ctx context.Context, ownerID int64) (Count
 	return i, err
 }
 
+const deletePhotoLinks = `-- name: DeletePhotoLinks :exec
+WITH albums_removed AS (DELETE FROM album_photos ap WHERE ap.photo_id = $1),
+     tags_removed AS (DELETE FROM photo_tags pt WHERE pt.photo_id = $1),
+     covers_cleared AS (UPDATE albums a SET cover_photo_id = NULL WHERE a.cover_photo_id = $1)
+DELETE FROM photo_shares s WHERE s.photo_id = $1
+`
+
+func (q *Queries) DeletePhotoLinks(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deletePhotoLinks, id)
+	return err
+}
+
+const deletePurgedPhoto = `-- name: DeletePurgedPhoto :exec
+DELETE FROM photos WHERE id = $1 AND purged_at IS NOT NULL
+`
+
+// An upload brings a purged photo back as a new one, as photo ids are never reused.
+func (q *Queries) DeletePurgedPhoto(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deletePurgedPhoto, id)
+	return err
+}
+
 const getPhoto = `-- name: GetPhoto :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at FROM photos WHERE id = $1
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at FROM photos WHERE id = $1
 `
 
 func (q *Queries) GetPhoto(ctx context.Context, id int64) (Photo, error) {
@@ -55,12 +77,13 @@ func (q *Queries) GetPhoto(ctx context.Context, id int64) (Photo, error) {
 		&i.PreviewFormat,
 		&i.SortAt,
 		&i.UpdatedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
 
 const getPhotoByHash = `-- name: GetPhotoByHash :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at FROM photos WHERE owner_id = $1 AND sha256 = $2
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at FROM photos WHERE owner_id = $1 AND sha256 = $2
 `
 
 type GetPhotoByHashParams struct {
@@ -90,30 +113,52 @@ func (q *Queries) GetPhotoByHash(ctx context.Context, arg GetPhotoByHashParams) 
 		&i.PreviewFormat,
 		&i.SortAt,
 		&i.UpdatedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
 
-const getTrashedPhotoHash = `-- name: GetTrashedPhotoHash :one
-SELECT sha256 FROM photos WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL
+const getTrashedPhoto = `-- name: GetTrashedPhoto :one
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at FROM photos WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL AND purged_at IS NULL
 `
 
-type GetTrashedPhotoHashParams struct {
+type GetTrashedPhotoParams struct {
 	ID      int64
 	OwnerID int64
 }
 
-func (q *Queries) GetTrashedPhotoHash(ctx context.Context, arg GetTrashedPhotoHashParams) ([]byte, error) {
-	row := q.db.QueryRow(ctx, getTrashedPhotoHash, arg.ID, arg.OwnerID)
-	var sha256 []byte
-	err := row.Scan(&sha256)
-	return sha256, err
+func (q *Queries) GetTrashedPhoto(ctx context.Context, arg GetTrashedPhotoParams) (Photo, error) {
+	row := q.db.QueryRow(ctx, getTrashedPhoto, arg.ID, arg.OwnerID)
+	var i Photo
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Sha256,
+		&i.Mime,
+		&i.Size,
+		&i.Width,
+		&i.Height,
+		&i.TakenAt,
+		&i.Exif,
+		&i.Status,
+		&i.Error,
+		&i.Visibility,
+		&i.CreatedAt,
+		&i.DeletedAt,
+		&i.OriginalName,
+		&i.PreviewFormat,
+		&i.SortAt,
+		&i.UpdatedAt,
+		&i.PurgedAt,
+	)
+	return i, err
 }
 
 const getVisiblePhoto = `-- name: GetVisiblePhoto :one
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at
 FROM photos p
 WHERE p.id = $1
+  AND p.purged_at IS NULL
   AND (p.deleted_at IS NULL OR p.owner_id = $2::bigint)
   AND photo_visible_to(p, $2::bigint, $3::boolean)
 `
@@ -146,6 +191,7 @@ func (q *Queries) GetVisiblePhoto(ctx context.Context, arg GetVisiblePhotoParams
 		&i.PreviewFormat,
 		&i.SortAt,
 		&i.UpdatedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -153,7 +199,7 @@ func (q *Queries) GetVisiblePhoto(ctx context.Context, arg GetVisiblePhotoParams
 const insertPhoto = `-- name: InsertPhoto :one
 INSERT INTO photos (owner_id, sha256, mime, size, original_name)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at
 `
 
 type InsertPhotoParams struct {
@@ -192,14 +238,15 @@ func (q *Queries) InsertPhoto(ctx context.Context, arg InsertPhotoParams) (Photo
 		&i.PreviewFormat,
 		&i.SortAt,
 		&i.UpdatedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
 
 const listChangedPhotos = `-- name: ListChangedPhotos :many
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at
 FROM photos
-WHERE owner_id = $1 AND updated_at > $2
+WHERE owner_id = $1 AND updated_at > $2 AND purged_at IS NULL
 ORDER BY updated_at
 LIMIT $3
 `
@@ -239,6 +286,7 @@ func (q *Queries) ListChangedPhotos(ctx context.Context, arg ListChangedPhotosPa
 			&i.PreviewFormat,
 			&i.SortAt,
 			&i.UpdatedAt,
+			&i.PurgedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -251,7 +299,7 @@ func (q *Queries) ListChangedPhotos(ctx context.Context, arg ListChangedPhotosPa
 }
 
 const listTimeline = `-- name: ListTimeline :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at
 FROM photos p
 WHERE p.owner_id = $1
   AND p.deleted_at IS NULL
@@ -315,6 +363,7 @@ func (q *Queries) ListTimeline(ctx context.Context, arg ListTimelineParams) ([]P
 			&i.PreviewFormat,
 			&i.SortAt,
 			&i.UpdatedAt,
+			&i.PurgedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -327,10 +376,11 @@ func (q *Queries) ListTimeline(ctx context.Context, arg ListTimelineParams) ([]P
 }
 
 const listTrash = `-- name: ListTrash :many
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at
 FROM photos
 WHERE owner_id = $1
   AND deleted_at IS NOT NULL
+  AND purged_at IS NULL
   AND ($2::timestamptz IS NULL
        OR (deleted_at, id) < ($2::timestamptz, $3::bigint))
 ORDER BY deleted_at DESC, id DESC
@@ -377,6 +427,7 @@ func (q *Queries) ListTrash(ctx context.Context, arg ListTrashParams) ([]Photo, 
 			&i.PreviewFormat,
 			&i.SortAt,
 			&i.UpdatedAt,
+			&i.PurgedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -393,6 +444,7 @@ SELECT id
 FROM photos
 WHERE owner_id = $1
   AND deleted_at IS NOT NULL
+  AND purged_at IS NULL
 ORDER BY id
 LIMIT $2
 `
@@ -439,7 +491,7 @@ func (q *Queries) LockPhotoFile(ctx context.Context, arg LockPhotoFileParams) er
 }
 
 const markPhotoFailed = `-- name: MarkPhotoFailed :exec
-UPDATE photos SET status = 'failed', error = $1, updated_at = now() WHERE id = $2
+UPDATE photos SET status = 'failed', error = $1, updated_at = now() WHERE id = $2 AND purged_at IS NULL
 `
 
 type MarkPhotoFailedParams struct {
@@ -463,7 +515,7 @@ SET status = 'ready',
     exif = $4,
     preview_format = $5,
     updated_at = now()
-WHERE id = $6
+WHERE id = $6 AND purged_at IS NULL
 `
 
 type MarkPhotoReadyParams struct {
@@ -488,9 +540,19 @@ func (q *Queries) MarkPhotoReady(ctx context.Context, arg MarkPhotoReadyParams) 
 }
 
 const purgePhoto = `-- name: PurgePhoto :one
-DELETE FROM photos
-WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at
+UPDATE photos
+SET purged_at = now(),
+    updated_at = now(),
+    visibility = 'private',
+    original_name = '',
+    width = NULL,
+    height = NULL,
+    taken_at = NULL,
+    exif = NULL,
+    error = NULL,
+    preview_format = NULL
+WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL AND purged_at IS NULL
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at
 `
 
 type PurgePhotoParams struct {
@@ -498,6 +560,7 @@ type PurgePhotoParams struct {
 	OwnerID int64
 }
 
+// Keeps only what a folder scan needs to recognize the file.
 func (q *Queries) PurgePhoto(ctx context.Context, arg PurgePhotoParams) (Photo, error) {
 	row := q.db.QueryRow(ctx, purgePhoto, arg.ID, arg.OwnerID)
 	var i Photo
@@ -520,6 +583,7 @@ func (q *Queries) PurgePhoto(ctx context.Context, arg PurgePhotoParams) (Photo, 
 		&i.PreviewFormat,
 		&i.SortAt,
 		&i.UpdatedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -527,8 +591,8 @@ func (q *Queries) PurgePhoto(ctx context.Context, arg PurgePhotoParams) (Photo, 
 const restorePhoto = `-- name: RestorePhoto :one
 UPDATE photos
 SET deleted_at = NULL, updated_at = now()
-WHERE id = $1
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at
+WHERE id = $1 AND purged_at IS NULL
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at
 `
 
 func (q *Queries) RestorePhoto(ctx context.Context, id int64) (Photo, error) {
@@ -553,6 +617,7 @@ func (q *Queries) RestorePhoto(ctx context.Context, id int64) (Photo, error) {
 		&i.PreviewFormat,
 		&i.SortAt,
 		&i.UpdatedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
@@ -560,7 +625,7 @@ func (q *Queries) RestorePhoto(ctx context.Context, id int64) (Photo, error) {
 const restorePhotos = `-- name: RestorePhotos :exec
 UPDATE photos
 SET deleted_at = NULL, updated_at = now()
-WHERE owner_id = $1 AND id = ANY ($2::bigint[]) AND deleted_at IS NOT NULL
+WHERE owner_id = $1 AND id = ANY ($2::bigint[]) AND deleted_at IS NOT NULL AND purged_at IS NULL
 `
 
 type RestorePhotosParams struct {

@@ -28,7 +28,10 @@ services:
     environment:
       DATABASE_URL: postgres://e2e:e2e@postgres:5432/e2e
       COOKIE_INSECURE: "true"
+      IMPORT_STABLE_SECONDS: "1"
     tmpfs:
       - /data:uid=1000,gid=1000
+    volumes:
+      - ../backend/internal/media/testdata:/data/import:ro
     ports:
       - "127.0.0.1:18080:8080"

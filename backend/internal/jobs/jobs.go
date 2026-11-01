@@ -63,6 +63,9 @@ func (w *processPhotoWorker) Work(ctx context.Context, job *river.Job[ProcessPho
 	if err != nil {
 		return fmt.Errorf("load photo: %w", err)
 	}
+	if photo.PurgedAt != nil {
+		return nil // Its original is gone.
+	}
 
 	err = w.process(ctx, photo)
 	var unreadable *unreadableError
@@ -182,7 +185,13 @@ type Config struct {
 	Metadata *metadata.Reader
 	Format   media.Format
 	Workers  int
+	// Register adds workers that live in packages depending on this one.
+	Register func(*river.Workers)
 }
+
+// QueueImport runs folder scans. It is separate so that a scan takes no worker
+// from photo processing, and has one worker because only one scan runs at a time.
+const QueueImport = "import"
 
 // NewClient returns a client that also runs jobs once started.
 func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
@@ -191,9 +200,15 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 	workers := river.NewWorkers()
 	river.AddWorker(workers, &processPhotoWorker{queries: queries, layout: cfg.Layout, metadata: cfg.Metadata, format: cfg.Format})
 	river.AddWorker(workers, &cleanupWorker{queries: queries, layout: cfg.Layout})
+	if cfg.Register != nil {
+		cfg.Register(workers)
+	}
 
 	return river.NewClient(riverpgxv5.New(pool), &river.Config{
-		Queues:               map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: cfg.Workers}},
+		Queues: map[string]river.QueueConfig{
+			river.QueueDefault: {MaxWorkers: cfg.Workers},
+			QueueImport:        {MaxWorkers: 1},
+		},
 		Workers:              workers,
 		RescueStuckJobsAfter: rescueAfter,
 		PeriodicJobs: []*river.PeriodicJob{

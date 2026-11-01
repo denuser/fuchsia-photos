@@ -29,6 +29,35 @@ type AlbumShare struct {
 	CreatedAt time.Time
 }
 
+type ImportFile struct {
+	RunID int64
+	Path  string
+	Size  int64
+	Mtime time.Time
+	State string
+	Error *string
+}
+
+type ImportRun struct {
+	ID          int64
+	OwnerID     int64
+	StartedBy   int64
+	Folder      string
+	Status      string
+	Error       *string
+	Found       int64
+	Added       int64
+	Duplicates  int64
+	InTrash     int64
+	Purged      int64
+	Unsupported int64
+	Changing    int64
+	Failed      int64
+	SettleAt    *time.Time
+	CreatedAt   time.Time
+	FinishedAt  *time.Time
+}
+
 type Photo struct {
 	ID            int64
 	OwnerID       int64
@@ -48,6 +77,7 @@ type Photo struct {
 	PreviewFormat *string
 	SortAt        time.Time
 	UpdatedAt     time.Time
+	PurgedAt      *time.Time
 }
 
 type PhotoShare struct {

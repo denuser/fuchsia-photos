@@ -2,7 +2,7 @@
 
 A self-hosted application for organizing photos, designed to run on a home NAS (Intel N150, 4 cores, 16 GB DDR5).
 
-**Status:** stage 3. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash and sharing work. The stage 0 benchmark on the NAS is still to be run, so the preview format and worker count are provisional defaults. This document records the decisions made so far and the roadmap.
+**Status:** stage 4. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing and folder scans work. The stage 0 benchmark on the NAS is still to be run, so the preview format and worker count are provisional defaults. This document records the decisions made so far and the roadmap.
 
 ## Features
 
@@ -30,6 +30,9 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | Image processing | libvips through govips | libvips is fast and memory-efficient. govips has a long history, a large community, and is not tied to one libvips version |
 | Photo metadata | exiftool through go-exiftool | Handles HEIC and camera-specific tags. One long-running process avoids starting Perl for every photo |
 | Folder scan | Copy files into the library, leave the source folder untouched | One ingest path for all sources |
+| What a scan covers | A folder inside a fixed root, chosen by the administrator, with an owner for the scan. One scan at a time | Folders per user can be imported to their owners. Nothing outside the root is reachable |
+| Running a scan | A River job on its own queue with one worker. It records the list of files in the database, then works through it in slices | A scan can take hours, and continues after a restart with correct counts. It takes no worker from photo processing |
+| Permanently deleted photos | The row stays with its hash, stripped of everything else, and files are removed. A scan leaves such a photo out, and an upload adds it again as a new photo | Adding files to a folder and scanning it again must not bring back what the owner deleted, or fill the disk again |
 | Sharing | Photos and albums, with all users or by login | Sharing an album makes all of its photos visible to the recipient |
 | Rights of a recipient | View and download, read-only | A recipient cannot change, tag or pass on another user's photo, or add it to an album. Tags and albums of shared photos can be reconsidered later |
 | "Shared with me" | Albums and photos tabs. Each user chooses whether the photos tab includes the photos of shared albums, which is off by default | One large album would otherwise push everything else out of the list |
@@ -53,7 +56,9 @@ All sources (browser, folder scan, WebDAV) go through a single `Ingest(file, own
 4. In one transaction, create the photo record and a `process_photo` River job.
 5. A worker reads EXIF, applies auto-rotation and sRGB conversion, generates a grid preview (~400 px) and a viewer preview (~2048 px) on the SSD. Until a preview loads, the grid shows a neutral tile. WebP or JPEG is chosen from benchmarks, with WebP as the default until then. AVIF is ruled out because of its encoding cost.
 6. A periodic job removes abandoned uploads and expired sessions. It leaves originals without a database record alone: after restoring an older database backup, those are the photos uploaded since that backup. A stray original is harmless, and uploading the same photo again reuses it.
-7. Permanently deleting a photo from the trash removes its record, original and previews. A database lock on the owner and hash keeps this from colliding with an upload of the same file.
+7. Permanently deleting a photo from the trash removes its original and previews, and leaves a record with only its hash. A database lock on the owner and hash keeps this from colliding with an upload of the same file.
+
+A folder scan lists the files in the chosen folder with their sizes and modification times, waits, and passes each file to ingest if neither has changed. It hashes a file before copying it, so a repeat scan reads everything but writes only what is new. Duplicates in the trash stay there, unlike with an upload.
 
 Queue behavior:
 
@@ -83,10 +88,10 @@ The built frontend is embedded in the binary with `go:embed`. The image is built
 ### Data model
 
 - `users` (login, argon2id password hash, admin/user role, disabled flag, whether "Shared with me" includes album photos), `sessions`
-- `photos` (`bigint` id, owner, SHA-256, MIME type, size, dimensions, `taken_at`, EXIF as JSONB, status, private/all visibility, `deleted_at`). A `bigint` id also fits future FAISS ids (int64).
+- `photos` (`bigint` id, owner, SHA-256, MIME type, size, dimensions, `taken_at`, EXIF as JSONB, status, private/all visibility, `deleted_at`, `purged_at`). A `bigint` id also fits future FAISS ids (int64).
 - `photo_shares`, `albums` (with private/all visibility), `album_photos`, `album_shares`
 - `tags` (owner, name), `photo_tags`
-- `import_runs` (scan report: found, added, duplicates, errors)
+- `import_runs` (scan report: found, added, duplicates, in the trash, permanently deleted, unsupported, still changing, failed), `import_files` (files still to process, and the ones to report)
 
 ### Access control
 
@@ -113,7 +118,7 @@ Revoking access takes effect on the server at once. Previews are cached for a ye
 - [x] **Stage 1: core.** Login, user management, roles. Browser upload (3–4 files in parallel, retrying failed files). Ingest, queue, previews, virtual-scrolling timeline, viewer, processing progress.
 - [x] **Stage 2: organization.** Albums, tags, search by date and tag, bulk actions, trash with soft delete.
 - [x] **Stage 3: sharing.** Visibility for all users, sharing photos and albums by login, a "Shared with me" section, the admin view of everything. Test suite for the permission predicate.
-- [ ] **Stage 4: folder scan.** Admin only: fixed root, owner selection, safe re-runs thanks to hashing. Skips files still being copied (size and mtime unchanged for N seconds). Report in `import_runs`. A re-run must not restore photos the owner moved to the trash, unlike a browser upload.
+- [x] **Stage 4: folder scan.** Admin only: fixed root, owner selection, safe re-runs thanks to hashing. Skips files still being copied (size and mtime unchanged for N seconds). Report in `import_runs`. A re-run must not restore photos the owner moved to the trash, unlike a browser upload.
 - [ ] **Stage 5: operations.** Nightly `pg_dump`, backup and tested restore instructions, logs and queue metrics.
 - [ ] **Stage 6: WebDAV (hypothesis, starts as a spike).** Per-user upload folder, separate app password, files go through ingest. Tested with real mobile clients such as PhotoSync and FolderSync. If they work poorly, the feature is dropped and the outcome recorded here.
 - [ ] **Stage 7: ML (later).** An `embed_photo` job sends a preview to an external server. The NAS stays the source of truth, and a FAISS index can be rebuilt. Search results are filtered by the permission predicate. The protocol (gRPC or HTTP) and the choice of FAISS or `pgvector` are decided at this stage.

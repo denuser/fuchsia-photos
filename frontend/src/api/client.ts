@@ -3,6 +3,8 @@ import createClient from 'openapi-fetch'
 import type { components, paths } from './schema'
 
 export type Album = components['schemas']['Album']
+export type ImportProblem = components['schemas']['ImportProblem']
+export type ImportRun = components['schemas']['ImportRun']
 export type Photo = components['schemas']['Photo']
 export type PhotoEvent = components['schemas']['PhotoEvent']
 export type Role = components['schemas']['Role']

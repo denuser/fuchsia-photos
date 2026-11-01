@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/auth'
 import AllPhotosView from './views/AllPhotosView.vue'
 import AlbumsView from './views/AlbumsView.vue'
 import AlbumView from './views/AlbumView.vue'
+import ImportView from './views/ImportView.vue'
 import LoginView from './views/LoginView.vue'
 import SharedView from './views/SharedView.vue'
 import TagsView from './views/TagsView.vue'
@@ -22,6 +23,7 @@ export const router = createRouter({
     { path: '/tags', component: TagsView },
     { path: '/trash', component: TrashView },
     { path: '/all', component: AllPhotosView, meta: { admin: true } },
+    { path: '/import', component: ImportView, meta: { admin: true } },
     { path: '/users', component: UsersView, meta: { admin: true } },
     { path: '/:rest(.*)*', redirect: '/' },
   ],

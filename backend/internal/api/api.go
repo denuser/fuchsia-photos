@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
+	"github.com/denuser/fuchsia-photos/backend/internal/scan"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 )
@@ -29,6 +30,7 @@ type Deps struct {
 	DB           Pinger
 	Queries      *store.Queries
 	Ingest       *ingest.Service
+	Scan         *scan.Service
 	Layout       storage.Layout
 	CookieSecure bool
 	// Static serves everything outside /api/.
@@ -91,6 +93,12 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("POST /api/v1/tags", s.authenticated(s.createTag))
 	mux.HandleFunc("PATCH /api/v1/tags/{id}", s.authenticated(s.renameTag))
 	mux.HandleFunc("DELETE /api/v1/tags/{id}", s.authenticated(s.deleteTag))
+
+	mux.HandleFunc("GET /api/v1/imports", s.admin(s.listImports))
+	mux.HandleFunc("POST /api/v1/imports", s.admin(s.startImport))
+	mux.HandleFunc("GET /api/v1/imports/folders", s.admin(s.listImportFolders))
+	mux.HandleFunc("GET /api/v1/imports/{id}", s.admin(s.getImport))
+	mux.HandleFunc("POST /api/v1/imports/{id}/stop", s.admin(s.stopImport))
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")

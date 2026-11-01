@@ -162,7 +162,20 @@ func TestPurge(t *testing.T) {
 	}
 	wantStatus(t, anna.get("/api/v1/photos/"+itoa(id)), http.StatusNotFound)
 
-	// The hash is free again, so the same file becomes a new photo.
+	t.Run("nothing but the hash remains", func(t *testing.T) {
+		purged, err := e.queries.GetPhoto(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if purged.PurgedAt == nil || purged.OriginalName != "" || purged.Exif != nil || purged.TakenAt != nil || purged.PreviewFormat != nil {
+			t.Errorf("purged photo = %+v", purged)
+		}
+		wantIDs(t, anna.photoIDs("/api/v1/photos/trash"))
+		wantStatus(t, anna.json(http.MethodPost, "/api/v1/photos/restore", ids(id)), http.StatusNoContent)
+		wantIDs(t, anna.photoIDs("/api/v1/photos"))
+	})
+
+	// An upload shows that the owner wants it, so the same file becomes a new photo.
 	again := anna.addPhoto("landscape.jpg")
 	if again == id {
 		t.Errorf("a purged id came back: %d", again)

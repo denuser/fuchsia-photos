@@ -48,6 +48,11 @@ type Result struct {
 	Duplicate bool
 	// Restored means the duplicate was in the trash and has been taken out of it.
 	Restored bool
+	// InTrash means a folder scan found a duplicate in the trash and left it there.
+	InTrash bool
+	// Purged means a folder scan found a photo the owner deleted permanently and
+	// did not add it again.
+	Purged bool
 }
 
 // Ingest stores the photo read from r and queues its processing.
@@ -74,7 +79,66 @@ func (s *Service) Ingest(ctx context.Context, ownerID int64, r io.Reader, name s
 		Mime:         mime,
 		Size:         size,
 		OriginalName: cleanName(name),
-	}, priority)
+	}, priority, false)
+}
+
+// Import adds a photo found by a folder scan. Unlike an upload, it leaves photos
+// the owner has deleted as they are: the source folder stays in place, and a later
+// scan is no sign that the owner wants them back. It hashes the file first and
+// writes nothing for a file it already knows, so that scanning a folder again
+// costs only reads.
+func (s *Service) Import(ctx context.Context, ownerID int64, file io.ReadSeeker, name string) (Result, error) {
+	head := make([]byte, 512)
+	n, err := io.ReadFull(file, head)
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return Result{}, fmt.Errorf("read file: %w", err)
+	}
+	mime, ok := detectMIME(head[:n])
+	if !ok {
+		return Result{}, ErrUnsupported
+	}
+
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return Result{}, fmt.Errorf("read file: %w", err)
+	}
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return Result{}, fmt.Errorf("read file: %w", err)
+	}
+	queries := store.New(s.Pool)
+	existing, err := queries.GetPhotoByHash(ctx, store.GetPhotoByHashParams{OwnerID: ownerID, Sha256: hash.Sum(nil)})
+	if err == nil {
+		return importedDuplicate(existing), nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return Result{}, fmt.Errorf("look up photo: %w", err)
+	}
+
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return Result{}, fmt.Errorf("read file: %w", err)
+	}
+	tmp, sum, size, err := s.writeTemp(file)
+	if err != nil {
+		return Result{}, err
+	}
+	defer os.Remove(tmp) // Fails harmlessly once the file has been moved.
+
+	return s.store(ctx, tmp, store.InsertPhotoParams{
+		OwnerID:      ownerID,
+		Sha256:       sum,
+		Mime:         mime,
+		Size:         size,
+		OriginalName: cleanName(name),
+	}, PriorityBulk, true)
+}
+
+func importedDuplicate(photo store.Photo) Result {
+	return Result{
+		Photo:     photo,
+		Duplicate: true,
+		InTrash:   photo.DeletedAt != nil && photo.PurgedAt == nil,
+		Purged:    photo.PurgedAt != nil,
+	}
 }
 
 // Purge permanently deletes a photo from the owner's trash, with its files. It
@@ -89,22 +153,29 @@ func (s *Service) Purge(ctx context.Context, ownerID, photoID int64) error {
 	defer tx.Rollback(ctx)
 
 	queries := store.New(tx)
-	sum, err := queries.GetTrashedPhotoHash(ctx, store.GetTrashedPhotoHashParams{ID: photoID, OwnerID: ownerID})
+	trashed := store.GetTrashedPhotoParams{ID: photoID, OwnerID: ownerID}
+	photo, err := queries.GetTrashedPhoto(ctx, trashed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("look up photo: %w", err)
 	}
-	if err := queries.LockPhotoFile(ctx, store.LockPhotoFileParams{OwnerID: ownerID, Sha256: sum}); err != nil {
+	if err := queries.LockPhotoFile(ctx, store.LockPhotoFileParams{OwnerID: ownerID, Sha256: photo.Sha256}); err != nil {
 		return fmt.Errorf("lock photo: %w", err)
 	}
-	photo, err := queries.PurgePhoto(ctx, store.PurgePhotoParams{ID: photoID, OwnerID: ownerID})
+	photo, err = queries.GetTrashedPhoto(ctx, trashed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // Restored or purged while waiting for the lock.
 	}
 	if err != nil {
+		return fmt.Errorf("look up photo: %w", err)
+	}
+	if _, err := queries.PurgePhoto(ctx, store.PurgePhotoParams{ID: photoID, OwnerID: ownerID}); err != nil {
 		return fmt.Errorf("delete photo: %w", err)
+	}
+	if err := queries.DeletePhotoLinks(ctx, photoID); err != nil {
+		return fmt.Errorf("delete photo links: %w", err)
 	}
 
 	// The record goes only if the file does. A commit that fails after this leaves
@@ -158,7 +229,7 @@ func (s *Service) writeTemp(r io.Reader) (path string, sum []byte, size int64, e
 // store moves the temporary file into the library and creates the photo and its
 // job in one transaction, so neither the record nor the job can exist alone. An
 // original left behind by a failure here is harmless, and the next upload reuses it.
-func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhotoParams, priority int) (Result, error) {
+func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhotoParams, priority int, fromScan bool) (Result, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return Result{}, fmt.Errorf("begin transaction: %w", err)
@@ -172,10 +243,17 @@ func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhot
 	}
 
 	existing, err := queries.GetPhotoByHash(ctx, store.GetPhotoByHashParams{OwnerID: params.OwnerID, Sha256: params.Sha256})
-	if err == nil {
+	switch {
+	case err == nil && fromScan:
+		return importedDuplicate(existing), nil
+	case err == nil && existing.PurgedAt == nil:
 		return s.duplicate(ctx, tx, queries, existing)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	case err == nil:
+		// Uploading a permanently deleted photo adds it again.
+		if err := queries.DeletePurgedPhoto(ctx, existing.ID); err != nil {
+			return Result{}, fmt.Errorf("forget deleted photo: %w", err)
+		}
+	case !errors.Is(err, pgx.ErrNoRows):
 		return Result{}, fmt.Errorf("look up photo: %w", err)
 	}
 

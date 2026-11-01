@@ -35,6 +35,7 @@ JOIN photos p ON p.owner_id = t.owner_id
 WHERE t.owner_id = @owner_id
   AND t.id = ANY (@tag_ids::bigint[])
   AND p.id = ANY (@photo_ids::bigint[])
+  AND p.purged_at IS NULL
 ON CONFLICT DO NOTHING;
 
 -- name: RemovePhotoTags :exec

@@ -47,7 +47,7 @@ make dev-frontend   # Vite dev server on port 5173
 
 Open <http://localhost:5173>. Vite proxies `/api` to the backend.
 
-The development database lives in a Docker volume and the photos in `deploy/data/dev`, so they survive restarts. To start over, stop the database and run `make dev-clean`.
+The development database lives in a Docker volume and the photos in `deploy/data/dev`, so they survive restarts. To try a folder scan, put photos in `deploy/data/dev/import`. To start over, stop the database and run `make dev-clean`.
 
 ## Backend
 
@@ -66,6 +66,8 @@ The server reads its settings from environment variables:
 | `HTTP_ADDR` | `:8080` | Listen address |
 | `LIBRARY_DIR` | `/data/library` | Original photos |
 | `CACHE_DIR` | `/data/cache` | Previews |
+| `IMPORT_DIR` | `/data/import` | The folder that scans read from. Only read, never changed |
+| `IMPORT_STABLE_SECONDS` | `60` | How long a file must stay unchanged before a scan imports it |
 | `WORKERS` | `2` | Photos processed at once |
 | `PREVIEW_FORMAT` | `webp` | Format of new previews: `webp` or `jpeg` |
 | `COOKIE_INSECURE` | unset | Set to `true` to allow the session cookie over plain HTTP. Local development only |
@@ -85,6 +87,8 @@ Migrations live in `backend/db/migrations` and are embedded in the binary. The s
 | Regenerate Go code after changing `db/queries` or the schema | `make sqlc` |
 
 `make dev-goose` manages only the application's migrations, not River's.
+
+A permanently deleted photo keeps its row in `photos`, with `purged_at` set and `deleted_at` still set. Queries that filter on `deleted_at IS NULL` leave it out by themselves, but a query about the trash must also check `purged_at IS NULL`.
 
 A new migration file has an empty `Up` and `Down` section, and both must be filled in. Change only migrations that have not been merged yet. After that, add a new one.
 
@@ -144,7 +148,7 @@ Things to know:
 
 `make e2e` builds the production image, starts it with a throwaway database on port 18080, runs `frontend/e2e/main-flow.mjs` in the installed Google Chrome, and removes everything afterwards. It does not touch the development data, and it can run while `make dev-db` is up. The first run takes a few minutes to build the image.
 
-It covers one path through the application: upload, selection, albums, tags, search, sharing with a second user and the trash. Add a step when a stage adds something to that path, and leave details to the backend tests. Run it before pushing a change to the interface.
+It covers one path through the application: upload, selection, albums, tags, search, sharing with a second user, the trash and a folder scan. Add a step when a stage adds something to that path, and leave details to the backend tests. Run it before pushing a change to the interface.
 
 On failure it prints the failed step and saves a screenshot to `frontend/e2e/results/`. To watch it run, set `E2E_HEADED=1`.
 

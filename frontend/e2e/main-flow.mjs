@@ -269,6 +269,24 @@ const steps = {
     await expectRequest('/photos/trash/empty', () => dialog().getByRole('button', { name: 'Empty trash' }).click())
     await page.getByText('The trash is empty').first().waitFor()
   },
+  'an administrator imports a folder for the second user, twice': async () => {
+    const scanFolder = async (runs, column, count) => {
+      await expectRequest('/imports', () => button('Start scan').click())
+      // The newest run comes first, once the list has reloaded.
+      await waitFor(`${runs} scans`, (k) => document.querySelectorAll('[data-testid=import-run]').length === k, runs)
+      const run = page.getByTestId('import-run').first()
+      await run.getByText('Finished').waitFor({ timeout: 60_000 })
+      const got = await run.getByTestId(column).textContent()
+      if (got.trim() !== String(count)) {
+        throw new Error(`${column} = ${got}, want ${count}`)
+      }
+    }
+    await page.goto(`${BASE}/import`)
+    await page.getByLabel('Owner').click()
+    await page.getByRole('option', { name: 'guest' }).click()
+    await scanFolder(1, 'added', PHOTOS.length + 1) // The fixtures hold one more photo than the upload uses.
+    await scanFolder(2, 'duplicates', PHOTOS.length + 1)
+  },
   'the server agrees with the screen': async () => {
     const [library, trash] = [await apiTotal('photos'), await apiTotal('photos/trash')]
     if (library !== 3 || trash !== 0) {

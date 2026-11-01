@@ -25,6 +25,7 @@ import (
 	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
 	"github.com/denuser/fuchsia-photos/backend/internal/media"
 	"github.com/denuser/fuchsia-photos/backend/internal/metadata"
+	"github.com/denuser/fuchsia-photos/backend/internal/scan"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 	"github.com/denuser/fuchsia-photos/backend/internal/web"
@@ -127,15 +128,19 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 	}
 	defer reader.Close()
 
+	ingester := &ingest.Service{Pool: pool, Layout: layout}
+	scanner := &scan.Service{Ingest: ingester, Dir: cfg.ImportDir, Stable: cfg.ImportStable}
 	jobClient, err := jobs.NewClient(pool, jobs.Config{
 		Layout:   layout,
 		Metadata: reader,
 		Format:   media.Format(cfg.PreviewFormat),
 		Workers:  cfg.Workers,
+		Register: scanner.Register,
 	})
 	if err != nil {
 		return fmt.Errorf("create job client: %w", err)
 	}
+	ingester.Jobs = jobClient
 	if err := jobClient.Start(ctx); err != nil {
 		return fmt.Errorf("start jobs: %w", err)
 	}
@@ -155,7 +160,8 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 	handler := api.NewHandler(api.Deps{
 		DB:           pool,
 		Queries:      store.New(pool),
-		Ingest:       &ingest.Service{Pool: pool, Jobs: jobClient, Layout: layout},
+		Ingest:       ingester,
+		Scan:         scanner,
 		Layout:       layout,
 		CookieSecure: cfg.CookieSecure,
 		Static:       static,
