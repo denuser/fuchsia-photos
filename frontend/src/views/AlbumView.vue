@@ -7,10 +7,13 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import NameDialog from '../components/NameDialog.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
+import ShareDialog from '../components/ShareDialog.vue'
+import { useAuthStore } from '../stores/auth'
 import { inBatches, usePhotosStore } from '../stores/photos'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const photos = usePhotosStore()
 const browser = useTemplateRef('browser')
 
@@ -18,6 +21,9 @@ const id = computed(() => Number(route.params.id))
 const album = shallowRef<Album | null>(null)
 const renameOpen = ref(false)
 const deleteOpen = ref(false)
+const shareOpen = ref(false)
+// Another user's album is read-only here, even for an administrator.
+const owned = computed(() => album.value?.ownerId === auth.user?.id)
 
 onMounted(async () => {
   await loadAlbum()
@@ -78,18 +84,19 @@ async function resetCover() {
 </script>
 
 <template>
-  <PhotoBrowser ref="browser" mode="library" @tagged="loadAlbum">
+  <PhotoBrowser v-if="album" ref="browser" :mode="owned ? 'library' : 'shared'" @tagged="loadAlbum">
     <template #toolbar>
       <div class="d-flex align-center pa-2 ga-1">
-        <v-btn to="/albums" icon="mdi-arrow-left" size="small" variant="text" aria-label="Albums" />
+        <v-btn :to="owned ? '/albums' : '/shared'" icon="mdi-arrow-left" size="small" variant="text" :aria-label="owned ? 'Albums' : 'Shared with me'" />
         <div class="text-subtitle-1 text-truncate">{{ album?.name }}</div>
         <div class="text-body-2 text-medium-emphasis ml-2 flex-grow-1">{{ album?.photoCount }} photos</div>
-        <v-menu>
+        <v-menu v-if="owned">
           <template #activator="{ props }">
             <v-btn v-bind="props" icon="mdi-dots-vertical" size="small" variant="text" aria-label="Album actions" />
           </template>
           <v-list density="compact">
             <v-list-item title="Rename" prepend-icon="mdi-pencil" @click="renameOpen = true" />
+            <v-list-item title="Share" prepend-icon="mdi-share-variant-outline" @click="shareOpen = true" />
             <v-list-item v-if="album?.coverChosen" title="Use the newest photo as the cover" prepend-icon="mdi-image-refresh" @click="resetCover" />
             <v-list-item title="Delete album" prepend-icon="mdi-delete" @click="deleteOpen = true" />
           </v-list>
@@ -105,10 +112,12 @@ async function resetCover() {
       />
     </template>
     <template #empty>
-      <EmptyState icon="mdi-image-album" title="This album is empty" text="Select photos in the timeline and add them here." />
+      <EmptyState v-if="owned" icon="mdi-image-album" title="This album is empty" text="Select photos in the timeline and add them here." />
+      <EmptyState v-else icon="mdi-image-album" title="This album is empty" />
     </template>
   </PhotoBrowser>
 
+  <ShareDialog v-model="shareOpen" :album-id="id" @done="loadAlbum" />
   <NameDialog v-model="renameOpen" title="Rename album" label="Name" action="Rename" :initial="album?.name" :save="rename" />
   <ConfirmDialog
     v-model="deleteOpen"

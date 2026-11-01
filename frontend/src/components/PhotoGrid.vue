@@ -4,7 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { previewUrl, type Photo } from '../api/client'
 import { justify, visibleRows } from '../lib/justify'
 
-const props = defineProps<{ photos: Photo[]; hasMore: boolean; selected: ReadonlySet<number> }>()
+const props = defineProps<{ photos: Photo[]; hasMore: boolean; selected: ReadonlySet<number>; selectable: boolean }>()
 const emit = defineEmits<{ open: [photo: Photo]; 'load-more': []; toggle: [photo: Photo, range: boolean] }>()
 
 const TARGET_HEIGHT = 200
@@ -104,6 +104,7 @@ onBeforeUnmount(() => resizeObserver.disconnect())
           </v-tooltip>
         </button>
         <button
+          v-if="selectable"
           type="button"
           class="check"
           data-testid="tile-check"

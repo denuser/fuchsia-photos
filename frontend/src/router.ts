@@ -1,9 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { useAuthStore } from './stores/auth'
+import AllPhotosView from './views/AllPhotosView.vue'
 import AlbumsView from './views/AlbumsView.vue'
 import AlbumView from './views/AlbumView.vue'
 import LoginView from './views/LoginView.vue'
+import SharedView from './views/SharedView.vue'
 import TagsView from './views/TagsView.vue'
 import TimelineView from './views/TimelineView.vue'
 import TrashView from './views/TrashView.vue'
@@ -16,8 +18,10 @@ export const router = createRouter({
     { path: '/', component: TimelineView },
     { path: '/albums', component: AlbumsView },
     { path: '/albums/:id(\\d+)', component: AlbumView },
+    { path: '/shared', component: SharedView },
     { path: '/tags', component: TagsView },
     { path: '/trash', component: TrashView },
+    { path: '/all', component: AllPhotosView, meta: { admin: true } },
     { path: '/users', component: UsersView, meta: { admin: true } },
     { path: '/:rest(.*)*', redirect: '/' },
   ],

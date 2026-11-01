@@ -18,3 +18,10 @@ UPDATE users SET disabled = @disabled WHERE id = @id;
 
 -- name: SetUserPassword :exec
 UPDATE users SET password_hash = @password_hash WHERE id = @id;
+
+-- name: SetUserSharedIncludesAlbums :one
+UPDATE users SET shared_includes_albums = @shared_includes_albums WHERE id = @id RETURNING *;
+
+-- The logins any user can choose from when sharing. Disabled users cannot log in, so they are left out.
+-- name: ListActiveUserLogins :many
+SELECT id, login FROM users WHERE NOT disabled ORDER BY lower(login);

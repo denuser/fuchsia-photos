@@ -3,18 +3,23 @@ import { computed, onMounted, ref, shallowRef } from 'vue'
 
 import type { Photo } from '../api/client'
 import { usePhotosStore } from '../stores/photos'
+import { useUsersStore } from '../stores/users'
 import AddToAlbumDialog from './AddToAlbumDialog.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import PhotoGrid from './PhotoGrid.vue'
 import PhotoViewer from './PhotoViewer.vue'
+import ShareDialog from './ShareDialog.vue'
 import TagDialog from './TagDialog.vue'
 
-// The grid, the viewer and the bulk actions shared by the timeline, albums and
-// the trash. A library list edits photos, the trash restores or purges them.
-const props = defineProps<{ mode: 'library' | 'trash' }>()
+// The grid, the viewer and the bulk actions shared by all lists of photos. A
+// library list edits the user's photos, and the trash restores or purges them.
+// An administrator's list shares or trashes the photos of any user. Photos
+// shared with the user are read-only.
+const props = defineProps<{ mode: 'library' | 'trash' | 'admin' | 'shared' }>()
 const emit = defineEmits<{ tagged: [] }>()
 
 const photos = usePhotosStore()
+const users = useUsersStore()
 
 const opened = shallowRef<Photo | null>(null)
 const selected = shallowRef<ReadonlySet<number>>(new Set())
@@ -26,14 +31,19 @@ const noticeOpen = ref(false)
 const tagDialog = ref(false)
 const albumDialog = ref(false)
 const purgeDialog = ref(false)
+const shareDialog = ref(false)
 const viewerTargets = ref<number[]>([])
 
 const selectedIds = computed(() => [...selected.value])
-// The tag dialog serves both the selection and the photo in the viewer.
+// The tag and share dialogs serve both the selection and the photo in the viewer.
 const tagTargets = computed(() => (viewerTargets.value.length > 0 ? viewerTargets.value : selectedIds.value))
-const dialogOpen = computed(() => tagDialog.value || albumDialog.value || purgeDialog.value)
+const dialogOpen = computed(() => tagDialog.value || albumDialog.value || purgeDialog.value || shareDialog.value)
+const canManage = computed(() => props.mode === 'library' || props.mode === 'admin')
 
-onMounted(() => photos.connect())
+onMounted(() => {
+  photos.connect()
+  void users.load()
+})
 
 function clearSelection() {
   selected.value = new Set()
@@ -115,6 +125,23 @@ function onTagged() {
   emit('tagged')
 }
 
+function openSelectionSharing() {
+  viewerTargets.value = []
+  shareDialog.value = true
+}
+
+function openViewerSharing(photo: Photo) {
+  viewerTargets.value = [photo.id]
+  shareDialog.value = true
+}
+
+function onShared() {
+  if (viewerTargets.value.length === 0) {
+    clearSelection()
+  }
+  say('Sharing saved')
+}
+
 function onAddedToAlbum(album: string) {
   const n = selected.value.size
   clearSelection()
@@ -144,9 +171,12 @@ defineExpose({ clearSelection, say })
       <v-btn icon="mdi-close" aria-label="Clear the selection" @click="clearSelection" />
       <v-toolbar-title>{{ selected.size }} selected</v-toolbar-title>
       <slot name="selection-actions" :ids="selectedIds" :run="run" />
-      <template v-if="props.mode === 'library'">
-        <v-btn prepend-icon="mdi-image-album" text="Add to album" :disabled="busy" @click="albumDialog = true" />
-        <v-btn prepend-icon="mdi-tag-outline" text="Tags" :disabled="busy" @click="openSelectionTags" />
+      <template v-if="canManage">
+        <template v-if="props.mode === 'library'">
+          <v-btn prepend-icon="mdi-image-album" text="Add to album" :disabled="busy" @click="albumDialog = true" />
+          <v-btn prepend-icon="mdi-tag-outline" text="Tags" :disabled="busy" @click="openSelectionTags" />
+        </template>
+        <v-btn prepend-icon="mdi-share-variant-outline" text="Share" :disabled="busy" @click="openSelectionSharing" />
         <v-btn prepend-icon="mdi-trash-can-outline" text="Move to trash" :loading="busy" @click="trashSelected" />
       </template>
       <template v-else>
@@ -163,6 +193,7 @@ defineExpose({ clearSelection, say })
         :photos="photos.photos"
         :has-more="photos.hasMore"
         :selected="selected"
+        :selectable="props.mode !== 'shared'"
         @open="opened = $event"
         @toggle="toggle"
         @load-more="photos.loadMore()"
@@ -173,15 +204,18 @@ defineExpose({ clearSelection, say })
       v-if="opened"
       :photos="photos.photos"
       :photo="opened"
-      :editable="props.mode === 'library'"
+      :can-tag="props.mode === 'library'"
+      :can-manage="canManage"
       :paused="dialogOpen"
       @close="opened = null"
       @navigate="opened = $event"
       @trash="trashOpened"
       @tags="openViewerTags"
+      @share="openViewerSharing"
     />
 
     <TagDialog v-model="tagDialog" :photo-ids="tagTargets" @done="onTagged" />
+    <ShareDialog v-model="shareDialog" :photo-ids="tagTargets" @done="onShared" />
     <AddToAlbumDialog v-model="albumDialog" :photo-ids="selectedIds" @done="onAddedToAlbum" />
     <ConfirmDialog
       v-model="purgeDialog"

@@ -75,7 +75,9 @@ UPDATE photos SET status = 'failed', error = @error, updated_at = now() WHERE id
 -- name: TrashPhotos :exec
 UPDATE photos
 SET deleted_at = now(), updated_at = now()
-WHERE owner_id = @owner_id AND id = ANY (@ids::bigint[]) AND deleted_at IS NULL;
+WHERE id = ANY (@ids::bigint[])
+  AND deleted_at IS NULL
+  AND (owner_id = @actor_id::bigint OR @actor_is_admin::boolean);
 
 -- name: RestorePhotos :exec
 UPDATE photos

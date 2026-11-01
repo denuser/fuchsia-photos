@@ -10,7 +10,7 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (login, password_hash, role) VALUES ($1, $2, $3) RETURNING id, login, password_hash, role, disabled, created_at
+INSERT INTO users (login, password_hash, role) VALUES ($1, $2, $3) RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums
 `
 
 type CreateUserParams struct {
@@ -29,12 +29,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Role,
 		&i.Disabled,
 		&i.CreatedAt,
+		&i.SharedIncludesAlbums,
 	)
 	return i, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, login, password_hash, role, disabled, created_at FROM users WHERE id = $1
+SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
@@ -47,12 +48,13 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.Role,
 		&i.Disabled,
 		&i.CreatedAt,
+		&i.SharedIncludesAlbums,
 	)
 	return i, err
 }
 
 const getUserByLogin = `-- name: GetUserByLogin :one
-SELECT id, login, password_hash, role, disabled, created_at FROM users WHERE lower(login) = lower($1)
+SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums FROM users WHERE lower(login) = lower($1)
 `
 
 func (q *Queries) GetUserByLogin(ctx context.Context, login string) (User, error) {
@@ -65,12 +67,43 @@ func (q *Queries) GetUserByLogin(ctx context.Context, login string) (User, error
 		&i.Role,
 		&i.Disabled,
 		&i.CreatedAt,
+		&i.SharedIncludesAlbums,
 	)
 	return i, err
 }
 
+const listActiveUserLogins = `-- name: ListActiveUserLogins :many
+SELECT id, login FROM users WHERE NOT disabled ORDER BY lower(login)
+`
+
+type ListActiveUserLoginsRow struct {
+	ID    int64
+	Login string
+}
+
+// The logins any user can choose from when sharing. Disabled users cannot log in, so they are left out.
+func (q *Queries) ListActiveUserLogins(ctx context.Context) ([]ListActiveUserLoginsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveUserLogins)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveUserLoginsRow
+	for rows.Next() {
+		var i ListActiveUserLoginsRow
+		if err := rows.Scan(&i.ID, &i.Login); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
-SELECT id, login, password_hash, role, disabled, created_at FROM users ORDER BY lower(login)
+SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums FROM users ORDER BY lower(login)
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -89,6 +122,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Role,
 			&i.Disabled,
 			&i.CreatedAt,
+			&i.SharedIncludesAlbums,
 		); err != nil {
 			return nil, err
 		}
@@ -140,4 +174,28 @@ type SetUserRoleParams struct {
 func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) error {
 	_, err := q.db.Exec(ctx, setUserRole, arg.Role, arg.ID)
 	return err
+}
+
+const setUserSharedIncludesAlbums = `-- name: SetUserSharedIncludesAlbums :one
+UPDATE users SET shared_includes_albums = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums
+`
+
+type SetUserSharedIncludesAlbumsParams struct {
+	SharedIncludesAlbums bool
+	ID                   int64
+}
+
+func (q *Queries) SetUserSharedIncludesAlbums(ctx context.Context, arg SetUserSharedIncludesAlbumsParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserSharedIncludesAlbums, arg.SharedIncludesAlbums, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Login,
+		&i.PasswordHash,
+		&i.Role,
+		&i.Disabled,
+		&i.CreatedAt,
+		&i.SharedIncludesAlbums,
+	)
+	return i, err
 }

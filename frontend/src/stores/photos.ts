@@ -8,6 +8,11 @@ const BULK_SIZE = 500
 
 export interface PhotoQuery {
   trash?: boolean
+  // Other users' photos shared with the current user.
+  shared?: boolean
+  // All users' photos, for an administrator, optionally of one owner.
+  everyone?: boolean
+  owner?: number
   album?: number
   tags?: number[]
   from?: string
@@ -32,6 +37,19 @@ export async function inBatches(ids: number[], send: (batch: number[]) => Promis
   }
 }
 
+function fetchPage({ trash, shared, everyone, owner, album, tags, from, to }: PhotoQuery, cursor?: string) {
+  if (trash) {
+    return api.GET('/photos/trash', { params: { query: { cursor } } })
+  }
+  if (shared) {
+    return api.GET('/photos/shared', { params: { query: { cursor } } })
+  }
+  if (everyone) {
+    return api.GET('/photos/all', { params: { query: { cursor, owner } } })
+  }
+  return api.GET('/photos', { params: { query: { cursor, album, tag: tags?.length ? tags : undefined, from, to } } })
+}
+
 export const usePhotosStore = defineStore('photos', () => {
   const photos = shallowRef<Photo[]>([])
   const query = shallowRef<PhotoQuery>({})
@@ -44,10 +62,10 @@ export const usePhotosStore = defineStore('photos', () => {
 
   const order = computed(() => (query.value.trash ? deletedFirst : newestFirst))
   // Only the whole library and the trash can tell from a photo alone that it
-  // belongs in the list. A filtered list learns about new members by loading.
+  // belongs in the list. Other lists learn about new members by loading.
   const unfiltered = computed(() => {
-    const { album, tags, from, to } = query.value
-    return album === undefined && !tags?.length && !from && !to
+    const { shared, everyone, album, tags, from, to } = query.value
+    return !shared && !everyone && album === undefined && !tags?.length && !from && !to
   })
 
   let events: EventSource | null = null
@@ -60,12 +78,9 @@ export const usePhotosStore = defineStore('photos', () => {
     }
     const started = generation
     const cursor = nextCursor.value ?? undefined
-    const { trash, album, tags, from, to } = query.value
     loading.value = true
     try {
-      const { data } = trash
-        ? await api.GET('/photos/trash', { params: { query: { cursor } } })
-        : await api.GET('/photos', { params: { query: { cursor, album, tag: tags?.length ? tags : undefined, from, to } } })
+      const { data } = await fetchPage(query.value, cursor)
       if (data && started === generation) {
         nextCursor.value = data.nextCursor
         loadedOnce.value = true

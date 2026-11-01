@@ -13,7 +13,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
@@ -101,9 +100,17 @@ func (s *server) listPhotos(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid album")
 			return
 		}
-		if _, ok := s.ownAlbum(w, r, id); !ok {
+		album, ok := s.visibleAlbum(w, r, id)
+		if !ok {
 			return
 		}
+		// Tags are personal: filtering another user's album by tag would reveal
+		// how that user grouped its photos.
+		if album.OwnerID != params.OwnerID && len(params.TagIds) > 0 {
+			writeError(w, http.StatusBadRequest, "another user's album cannot be filtered by tag")
+			return
+		}
+		params.OwnerID = album.OwnerID
 		params.AlbumID = &id
 	}
 
@@ -112,8 +119,13 @@ func (s *server) listPhotos(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err)
 		return
 	}
+	writePhotoPage(w, photos, params.MaxRows)
+}
+
+// writePhotoPage answers with a page of a list ordered by sort time.
+func writePhotoPage(w http.ResponseWriter, photos []store.Photo, maxRows int32) {
 	var next *string
-	if len(photos) == int(params.MaxRows) {
+	if len(photos) == int(maxRows) {
 		last := photos[len(photos)-1]
 		next = cursorFor(last.SortAt, last.ID)
 	}
@@ -191,8 +203,8 @@ func timeParam(w http.ResponseWriter, r *http.Request, name string) (*time.Time,
 	return &at, true
 }
 
-// readIDs reads the photos a bulk action applies to. Actions touch only the
-// current user's photos, so ids of other users' photos are ignored.
+// readIDs reads the photos a bulk action applies to. Ids of photos the current
+// user may not change are ignored.
 func readIDs(w http.ResponseWriter, r *http.Request) ([]int64, bool) {
 	var req struct {
 		IDs []int64 `json:"ids"`
@@ -219,7 +231,8 @@ func (s *server) trashPhotos(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.Queries.TrashPhotos(r.Context(), store.TrashPhotosParams{OwnerID: currentUser(r).ID, Ids: ids}); err != nil {
+	user := currentUser(r)
+	if err := s.Queries.TrashPhotos(r.Context(), store.TrashPhotosParams{Ids: ids, ActorID: user.ID, ActorIsAdmin: isAdmin(user)}); err != nil {
 		internalError(w, r, err)
 		return
 	}
@@ -357,7 +370,7 @@ func (s *server) visiblePhoto(w http.ResponseWriter, r *http.Request) (store.Pho
 	photo, err := s.Queries.GetVisiblePhoto(r.Context(), store.GetVisiblePhotoParams{
 		ID:            id,
 		ViewerID:      user.ID,
-		ViewerIsAdmin: user.Role == auth.RoleAdmin,
+		ViewerIsAdmin: isAdmin(user),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "not found")

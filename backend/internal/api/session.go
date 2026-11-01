@@ -129,6 +129,28 @@ func (s *server) getMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toUserJSON(currentUser(r)))
 }
 
+func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		SharedIncludesAlbums *bool `json:"sharedIncludesAlbums"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	user := currentUser(r)
+	if req.SharedIncludesAlbums != nil {
+		var err error
+		user, err = s.Queries.SetUserSharedIncludesAlbums(r.Context(), store.SetUserSharedIncludesAlbumsParams{
+			ID:                   user.ID,
+			SharedIncludesAlbums: *req.SharedIncludesAlbums,
+		})
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, toUserJSON(user))
+}
+
 func (s *server) changePassword(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		CurrentPassword string `json:"currentPassword"`

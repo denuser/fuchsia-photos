@@ -576,15 +576,18 @@ func (q *Queries) RestorePhotos(ctx context.Context, arg RestorePhotosParams) er
 const trashPhotos = `-- name: TrashPhotos :exec
 UPDATE photos
 SET deleted_at = now(), updated_at = now()
-WHERE owner_id = $1 AND id = ANY ($2::bigint[]) AND deleted_at IS NULL
+WHERE id = ANY ($1::bigint[])
+  AND deleted_at IS NULL
+  AND (owner_id = $2::bigint OR $3::boolean)
 `
 
 type TrashPhotosParams struct {
-	OwnerID int64
-	Ids     []int64
+	Ids          []int64
+	ActorID      int64
+	ActorIsAdmin bool
 }
 
 func (q *Queries) TrashPhotos(ctx context.Context, arg TrashPhotosParams) error {
-	_, err := q.db.Exec(ctx, trashPhotos, arg.OwnerID, arg.Ids)
+	_, err := q.db.Exec(ctx, trashPhotos, arg.Ids, arg.ActorID, arg.ActorIsAdmin)
 	return err
 }

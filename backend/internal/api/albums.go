@@ -1,8 +1,11 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 )
@@ -11,7 +14,9 @@ const maxAlbumName = 200
 
 type albumJSON struct {
 	ID         int64  `json:"id"`
+	OwnerID    int64  `json:"ownerId"`
 	Name       string `json:"name"`
+	Shared     bool   `json:"shared"`
 	PhotoCount int64  `json:"photoCount"`
 	// CoverPhotoID is the photo shown as the cover, chosen or automatic.
 	CoverPhotoID *int64    `json:"coverPhotoId"`
@@ -22,7 +27,9 @@ type albumJSON struct {
 func toAlbumJSON(a store.ListAlbumsRow) albumJSON {
 	out := albumJSON{
 		ID:         a.ID,
+		OwnerID:    a.OwnerID,
 		Name:       a.Name,
+		Shared:     a.Shared,
 		PhotoCount: a.PhotoCount,
 		// A chosen cover that left the album or went to the trash no longer applies.
 		CoverChosen: a.ChosenCoverID != nil && *a.ChosenCoverID == a.CoverID,
@@ -62,6 +69,25 @@ func (s *server) ownAlbum(w http.ResponseWriter, r *http.Request, id int64) (sto
 	return albums[0], true
 }
 
+// visibleAlbum answers 404 for albums the user may not see.
+func (s *server) visibleAlbum(w http.ResponseWriter, r *http.Request, id int64) (store.ListAlbumsRow, bool) {
+	user := currentUser(r)
+	album, err := s.Queries.GetVisibleAlbum(r.Context(), store.GetVisibleAlbumParams{
+		ID:            id,
+		ViewerID:      user.ID,
+		ViewerIsAdmin: isAdmin(user),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "not found")
+		return store.ListAlbumsRow{}, false
+	}
+	if err != nil {
+		internalError(w, r, err)
+		return store.ListAlbumsRow{}, false
+	}
+	return store.ListAlbumsRow(album), true
+}
+
 func (s *server) writeAlbum(w http.ResponseWriter, r *http.Request, id int64, status int) {
 	if album, ok := s.ownAlbum(w, r, id); ok {
 		writeJSON(w, status, toAlbumJSON(album))
@@ -69,8 +95,12 @@ func (s *server) writeAlbum(w http.ResponseWriter, r *http.Request, id int64, st
 }
 
 func (s *server) getAlbum(w http.ResponseWriter, r *http.Request) {
-	if id, ok := pathID(w, r); ok {
-		s.writeAlbum(w, r, id, http.StatusOK)
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if album, ok := s.visibleAlbum(w, r, id); ok {
+		writeJSON(w, http.StatusOK, toAlbumJSON(album))
 	}
 }
 

@@ -69,7 +69,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Change the current user's settings */
+        patch: operations["updateMe"];
         trace?: never;
     };
     "/me/password": {
@@ -101,6 +102,23 @@ export interface paths {
         put?: never;
         /** Create a user (administrators only) */
         post: operations["createUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/directory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the logins of active users, to choose whom to share with */
+        get: operations["listUserDirectory"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -260,6 +278,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/photos/shared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List other users' photos shared with the current user
+         * @description Photos shared by login or visible to all users. Photos of shared albums are included if the user's `sharedIncludesAlbums` setting is on.
+         */
+        get: operations["listSharedPhotos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the photos of all users, outside the trash
+         * @description Administrators only.
+         */
+        get: operations["listAllPhotos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/sharing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change who can see photos
+         * @description Applies to photos of the current user, or to any photo for an administrator. Other ids are ignored, and so are the photos' owners and disabled users among those added. All changes apply or none does.
+         */
+        post: operations["changePhotoSharing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/photos/{id}": {
         parameters: {
             query?: never;
@@ -286,6 +364,26 @@ export interface paths {
         };
         /** List the current user's own tags on a photo */
         get: operations["getPhotoTags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/{id}/sharing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get who can see a photo
+         * @description For the owner and administrators.
+         */
+        get: operations["getPhotoSharing"];
         put?: never;
         post?: never;
         delete?: never;
@@ -346,6 +444,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/albums/shared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List other users' albums shared with the current user */
+        get: operations["listSharedAlbums"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/albums/{id}": {
         parameters: {
             query?: never;
@@ -381,6 +496,30 @@ export interface paths {
          */
         put: operations["setAlbumCover"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/albums/{id}/sharing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get who can see an album
+         * @description For the album's owner.
+         */
+        get: operations["getAlbumSharing"];
+        put?: never;
+        /**
+         * Change who can see an album and its photos
+         * @description For the album's owner. The album's owner and disabled users among those added are ignored. All changes apply or none does.
+         */
+        post: operations["changeAlbumSharing"];
         delete?: never;
         options?: never;
         head?: never;
@@ -486,6 +625,28 @@ export interface components {
             disabled: boolean;
             /** Format: date-time */
             createdAt: string;
+            /** @description Whether the user's list of shared photos includes the photos of shared albums */
+            sharedIncludesAlbums: boolean;
+        };
+        UserRef: {
+            /** Format: int64 */
+            id: number;
+            login: string;
+        };
+        /** @enum {string} */
+        Visibility: "private" | "all";
+        Sharing: {
+            visibility: components["schemas"]["Visibility"];
+            /** @description The users it is shared with by login */
+            users: components["schemas"]["UserRef"][];
+        };
+        /** @description Fields left out change nothing. */
+        SharingChange: {
+            visibility?: components["schemas"]["Visibility"];
+            /** @description Users to share with */
+            add?: number[];
+            /** @description Users to stop sharing with */
+            remove?: number[];
         };
         Photo: {
             /** Format: int64 */
@@ -526,7 +687,11 @@ export interface components {
         Album: {
             /** Format: int64 */
             id: number;
+            /** Format: int64 */
+            ownerId: number;
             name: string;
+            /** @description Whether anyone but the owner has been given access to the album */
+            shared: boolean;
             /**
              * Format: int64
              * @description Photos of the album outside the trash
@@ -693,6 +858,33 @@ export interface operations {
             401: components["responses"]["Error"];
         };
     };
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    sharedIncludesAlbums?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The changed user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
     changePassword: {
         parameters: {
             query?: never;
@@ -770,6 +962,26 @@ export interface operations {
             400: components["responses"]["Error"];
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    listUserDirectory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active users, by login */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRef"][];
+                };
+            };
         };
     };
     updateUser: {
@@ -1024,6 +1236,82 @@ export interface operations {
             };
         };
     };
+    listSharedPhotos: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of photos, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoPage"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    listAllPhotos: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+                /** @description Only the photos of this user */
+                owner?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of photos, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoPage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    changePhotoSharing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharingChange"] & {
+                    ids: number[];
+                };
+            };
+        };
+        responses: {
+            /** @description The photos were changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
     getPhoto: {
         parameters: {
             query?: never;
@@ -1065,6 +1353,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagRef"][];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    getPhotoSharing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The photo's sharing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sharing"];
                 };
             };
             404: components["responses"]["Error"];
@@ -1156,6 +1467,26 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+        };
+    };
+    listSharedAlbums: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Shared albums, by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Album"][];
+                };
+            };
         };
     };
     getAlbum: {
@@ -1253,6 +1584,55 @@ export interface operations {
                     "application/json": components["schemas"]["Album"];
                 };
             };
+            404: components["responses"]["Error"];
+        };
+    };
+    getAlbumSharing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The album's sharing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sharing"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    changeAlbumSharing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharingChange"];
+            };
+        };
+        responses: {
+            /** @description The album was changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };

@@ -144,7 +144,7 @@ Things to know:
 
 `make e2e` builds the production image, starts it with a throwaway database on port 18080, runs `frontend/e2e/main-flow.mjs` in the installed Google Chrome, and removes everything afterwards. It does not touch the development data, and it can run while `make dev-db` is up. The first run takes a few minutes to build the image.
 
-It covers one path through the application: upload, selection, albums, tags, search and the trash. Add a step when a stage adds something to that path, and leave details to the backend tests. Run it before pushing a change to the interface.
+It covers one path through the application: upload, selection, albums, tags, search, sharing with a second user and the trash. Add a step when a stage adds something to that path, and leave details to the backend tests. Run it before pushing a change to the interface.
 
 On failure it prints the failed step and saves a screenshot to `frontend/e2e/results/`. To watch it run, set `E2E_HEADED=1`.
 

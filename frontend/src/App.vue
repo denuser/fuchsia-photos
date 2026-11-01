@@ -76,8 +76,10 @@ window.addEventListener('beforeunload', (event) => {
       <v-list nav density="compact">
         <v-list-item to="/" exact prepend-icon="mdi-image-multiple-outline" title="Photos" aria-label="Photos" />
         <v-list-item to="/albums" prepend-icon="mdi-image-album" title="Albums" aria-label="Albums" />
+        <v-list-item to="/shared" prepend-icon="mdi-account-multiple-outline" title="Shared with me" aria-label="Shared with me" />
         <v-list-item to="/tags" prepend-icon="mdi-tag-multiple-outline" title="Tags" aria-label="Tags" />
         <v-list-item to="/trash" prepend-icon="mdi-trash-can-outline" title="Trash" aria-label="Trash" />
+        <v-list-item v-if="auth.isAdmin" to="/all" prepend-icon="mdi-shield-account-outline" title="All photos" aria-label="All photos" />
       </v-list>
     </v-navigation-drawer>
 

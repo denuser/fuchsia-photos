@@ -253,7 +253,7 @@ func TestTrashedPhotoIsStillProcessed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = e.queries.TrashPhotos(context.Background(), store.TrashPhotosParams{OwnerID: e.owner, Ids: []int64{res.Photo.ID}})
+	err = e.queries.TrashPhotos(context.Background(), store.TrashPhotosParams{Ids: []int64{res.Photo.ID}, ActorID: e.owner})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ func TestPurgeAndUploadOfTheSameFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := e.queries.TrashPhotos(ctx, store.TrashPhotosParams{OwnerID: e.owner, Ids: []int64{photo.ID}}); err != nil {
+		if err := e.queries.TrashPhotos(ctx, store.TrashPhotosParams{Ids: []int64{photo.ID}, ActorID: e.owner}); err != nil {
 			t.Fatal(err)
 		}
 

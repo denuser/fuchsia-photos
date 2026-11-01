@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref, shallowRef } from 'vue'
 
-import { api, previewUrl, type Album } from '../api/client'
+import { api, type Album } from '../api/client'
+import AlbumCard from '../components/AlbumCard.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import NameDialog from '../components/NameDialog.vue'
+import ShareDialog from '../components/ShareDialog.vue'
 
 const albums = shallowRef<Album[]>([])
 const loaded = ref(false)
@@ -15,6 +17,8 @@ const renaming = shallowRef<Album | null>(null)
 const renameOpen = ref(false)
 const deleting = shallowRef<Album | null>(null)
 const deleteOpen = ref(false)
+const sharing = shallowRef<Album | null>(null)
+const shareOpen = ref(false)
 
 onMounted(load)
 
@@ -53,6 +57,11 @@ function startRename(album: Album) {
   renameOpen.value = true
 }
 
+function startShare(album: Album) {
+  sharing.value = album
+  shareOpen.value = true
+}
+
 function startDelete(album: Album) {
   deleting.value = album
   deleteOpen.value = true
@@ -70,27 +79,26 @@ function startDelete(album: Album) {
     <EmptyState v-if="loaded && albums.length === 0" icon="mdi-image-album" title="No albums yet" text="Create one here, or select photos and add them to an album." />
 
     <div class="albums">
-      <v-card v-for="album in albums" :key="album.id" :to="`/albums/${album.id}`" variant="flat" border>
-        <v-img v-if="album.coverPhotoId" :src="previewUrl(album.coverPhotoId, 'grid')" :alt="album.name" aspect-ratio="1.33" cover />
-        <div v-else class="no-cover"><v-icon icon="mdi-image-album" size="48" /></div>
-        <v-card-item :title="album.name" :subtitle="`${album.photoCount} photos`">
-          <template #append>
-            <v-menu>
-              <template #activator="{ props }">
-                <v-btn v-bind="props" icon="mdi-dots-vertical" size="small" variant="text" aria-label="Album actions" @click.prevent />
-              </template>
-              <v-list density="compact">
-                <v-list-item title="Rename" prepend-icon="mdi-pencil" @click="startRename(album)" />
-                <v-list-item title="Delete" prepend-icon="mdi-delete" @click="startDelete(album)" />
-              </v-list>
-            </v-menu>
-          </template>
-        </v-card-item>
-      </v-card>
+      <AlbumCard v-for="album in albums" :key="album.id" :album="album" :subtitle="`${album.photoCount} photos`">
+        <template #actions>
+          <v-icon v-if="album.shared" icon="mdi-account-multiple-outline" size="small" class="mr-1" aria-label="Shared" />
+          <v-menu>
+            <template #activator="{ props }">
+              <v-btn v-bind="props" icon="mdi-dots-vertical" size="small" variant="text" aria-label="Album actions" @click.prevent />
+            </template>
+            <v-list density="compact">
+              <v-list-item title="Rename" prepend-icon="mdi-pencil" @click="startRename(album)" />
+              <v-list-item title="Share" prepend-icon="mdi-share-variant-outline" @click="startShare(album)" />
+              <v-list-item title="Delete" prepend-icon="mdi-delete" @click="startDelete(album)" />
+            </v-list>
+          </v-menu>
+        </template>
+      </AlbumCard>
     </div>
 
     <NameDialog v-model="createOpen" title="New album" label="Name" action="Create" :save="create" />
     <NameDialog v-model="renameOpen" title="Rename album" label="Name" action="Rename" :initial="renaming?.name" :save="rename" />
+    <ShareDialog v-model="shareOpen" :album-id="sharing?.id" @done="load" />
     <ConfirmDialog
       v-model="deleteOpen"
       title="Delete this album?"
@@ -112,13 +120,5 @@ function startDelete(album: Album) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
-}
-
-.no-cover {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 1.33;
-  background: rgba(128, 128, 128, 0.18);
 }
 </style>

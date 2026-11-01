@@ -83,8 +83,58 @@ func (q *Queries) DeleteAlbum(ctx context.Context, arg DeleteAlbumParams) (int64
 	return result.RowsAffected(), nil
 }
 
+const getVisibleAlbum = `-- name: GetVisibleAlbum :one
+SELECT a.id, a.owner_id, a.name, a.created_at, a.cover_photo_id AS chosen_cover_id,
+       (a.visibility = 'all' OR EXISTS (SELECT 1 FROM album_shares s WHERE s.album_id = a.id))::boolean AS shared,
+       (SELECT count(*)
+        FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
+        WHERE ap.album_id = a.id AND p.deleted_at IS NULL)::bigint AS photo_count,
+       COALESCE((SELECT p.id
+                 FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
+                 WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.status = 'ready'
+                 ORDER BY p.id = a.cover_photo_id DESC NULLS LAST, p.sort_at DESC, p.id DESC
+                 LIMIT 1), 0)::bigint AS cover_id
+FROM albums a
+WHERE a.id = $1
+  AND album_visible_to(a, $2::bigint, $3::boolean)
+`
+
+type GetVisibleAlbumParams struct {
+	ID            int64
+	ViewerID      int64
+	ViewerIsAdmin bool
+}
+
+type GetVisibleAlbumRow struct {
+	ID            int64
+	OwnerID       int64
+	Name          string
+	CreatedAt     time.Time
+	ChosenCoverID *int64
+	Shared        bool
+	PhotoCount    int64
+	CoverID       int64
+}
+
+func (q *Queries) GetVisibleAlbum(ctx context.Context, arg GetVisibleAlbumParams) (GetVisibleAlbumRow, error) {
+	row := q.db.QueryRow(ctx, getVisibleAlbum, arg.ID, arg.ViewerID, arg.ViewerIsAdmin)
+	var i GetVisibleAlbumRow
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.ChosenCoverID,
+		&i.Shared,
+		&i.PhotoCount,
+		&i.CoverID,
+	)
+	return i, err
+}
+
 const listAlbums = `-- name: ListAlbums :many
-SELECT a.id, a.name, a.created_at, a.cover_photo_id AS chosen_cover_id,
+SELECT a.id, a.owner_id, a.name, a.created_at, a.cover_photo_id AS chosen_cover_id,
+       (a.visibility = 'all' OR EXISTS (SELECT 1 FROM album_shares s WHERE s.album_id = a.id))::boolean AS shared,
        (SELECT count(*)
         FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
         WHERE ap.album_id = a.id AND p.deleted_at IS NULL)::bigint AS photo_count,
@@ -106,13 +156,16 @@ type ListAlbumsParams struct {
 
 type ListAlbumsRow struct {
 	ID            int64
+	OwnerID       int64
 	Name          string
 	CreatedAt     time.Time
 	ChosenCoverID *int64
+	Shared        bool
 	PhotoCount    int64
 	CoverID       int64
 }
 
+// These three queries return the same columns, so the handlers can treat their rows alike.
 func (q *Queries) ListAlbums(ctx context.Context, arg ListAlbumsParams) ([]ListAlbumsRow, error) {
 	rows, err := q.db.Query(ctx, listAlbums, arg.OwnerID, arg.ID)
 	if err != nil {
@@ -124,9 +177,68 @@ func (q *Queries) ListAlbums(ctx context.Context, arg ListAlbumsParams) ([]ListA
 		var i ListAlbumsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.OwnerID,
 			&i.Name,
 			&i.CreatedAt,
 			&i.ChosenCoverID,
+			&i.Shared,
+			&i.PhotoCount,
+			&i.CoverID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSharedAlbums = `-- name: ListSharedAlbums :many
+SELECT a.id, a.owner_id, a.name, a.created_at, a.cover_photo_id AS chosen_cover_id,
+       (a.visibility = 'all' OR EXISTS (SELECT 1 FROM album_shares s WHERE s.album_id = a.id))::boolean AS shared,
+       (SELECT count(*)
+        FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
+        WHERE ap.album_id = a.id AND p.deleted_at IS NULL)::bigint AS photo_count,
+       COALESCE((SELECT p.id
+                 FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
+                 WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.status = 'ready'
+                 ORDER BY p.id = a.cover_photo_id DESC NULLS LAST, p.sort_at DESC, p.id DESC
+                 LIMIT 1), 0)::bigint AS cover_id
+FROM albums a
+WHERE a.owner_id <> $1::bigint
+  AND album_visible_to(a, $1::bigint, false)
+ORDER BY lower(a.name), a.id
+`
+
+type ListSharedAlbumsRow struct {
+	ID            int64
+	OwnerID       int64
+	Name          string
+	CreatedAt     time.Time
+	ChosenCoverID *int64
+	Shared        bool
+	PhotoCount    int64
+	CoverID       int64
+}
+
+func (q *Queries) ListSharedAlbums(ctx context.Context, viewerID int64) ([]ListSharedAlbumsRow, error) {
+	rows, err := q.db.Query(ctx, listSharedAlbums, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSharedAlbumsRow
+	for rows.Next() {
+		var i ListSharedAlbumsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.ChosenCoverID,
+			&i.Shared,
 			&i.PhotoCount,
 			&i.CoverID,
 		); err != nil {

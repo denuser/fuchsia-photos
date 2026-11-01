@@ -20,10 +20,28 @@ type userJSON struct {
 	Role      string    `json:"role"`
 	Disabled  bool      `json:"disabled"`
 	CreatedAt time.Time `json:"createdAt"`
+	// SharedIncludesAlbums adds photos of shared albums to the user's list of shared photos.
+	SharedIncludesAlbums bool `json:"sharedIncludesAlbums"`
+}
+
+type userRefJSON struct {
+	ID    int64  `json:"id"`
+	Login string `json:"login"`
 }
 
 func toUserJSON(u store.User) userJSON {
-	return userJSON{ID: u.ID, Login: u.Login, Role: u.Role, Disabled: u.Disabled, CreatedAt: u.CreatedAt}
+	return userJSON{
+		ID:                   u.ID,
+		Login:                u.Login,
+		Role:                 u.Role,
+		Disabled:             u.Disabled,
+		CreatedAt:            u.CreatedAt,
+		SharedIncludesAlbums: u.SharedIncludesAlbums,
+	}
+}
+
+func isAdmin(u store.User) bool {
+	return u.Role == auth.RoleAdmin
 }
 
 func validRole(role string) bool {
@@ -39,6 +57,20 @@ func (s *server) listUsers(w http.ResponseWriter, r *http.Request) {
 	out := make([]userJSON, len(users))
 	for i, u := range users {
 		out[i] = toUserJSON(u)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// listUserDirectory gives every user the logins to choose from when sharing.
+func (s *server) listUserDirectory(w http.ResponseWriter, r *http.Request) {
+	users, err := s.Queries.ListActiveUserLogins(r.Context())
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	out := make([]userRefJSON, len(users))
+	for i, u := range users {
+		out[i] = userRefJSON{ID: u.ID, Login: u.Login}
 	}
 	writeJSON(w, http.StatusOK, out)
 }

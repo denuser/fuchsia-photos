@@ -10,6 +10,8 @@ export type Tag = components['schemas']['Tag']
 export type TagRef = components['schemas']['TagRef']
 export type UploadResult = components['schemas']['UploadResult']
 export type User = components['schemas']['User']
+export type UserRef = components['schemas']['UserRef']
+export type Visibility = components['schemas']['Visibility']
 
 export const API_BASE = '/api/v1'
 

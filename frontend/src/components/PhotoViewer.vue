@@ -2,10 +2,15 @@
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 
 import { originalUrl, previewUrl, type Photo } from '../api/client'
+import { useAuthStore } from '../stores/auth'
+import { useUsersStore } from '../stores/users'
 
 // paused leaves the keyboard to a dialog opened over the viewer.
-const props = defineProps<{ photos: Photo[]; photo: Photo; editable: boolean; paused: boolean }>()
-const emit = defineEmits<{ close: []; navigate: [photo: Photo]; trash: [photo: Photo]; tags: [photo: Photo] }>()
+const props = defineProps<{ photos: Photo[]; photo: Photo; canTag: boolean; canManage: boolean; paused: boolean }>()
+const emit = defineEmits<{ close: []; navigate: [photo: Photo]; trash: [photo: Photo]; tags: [photo: Photo]; share: [photo: Photo] }>()
+
+const auth = useAuthStore()
+const users = useUsersStore()
 
 const ready = computed(() => props.photos.filter((p) => p.status === 'ready'))
 const index = computed(() => ready.value.findIndex((p) => p.id === props.photo.id))
@@ -14,7 +19,8 @@ const next = computed(() => ready.value[index.value + 1])
 
 const details = computed(() => {
   const date = new Date(props.photo.takenAt ?? props.photo.createdAt)
-  return [date.toLocaleString(), props.photo.width && `${props.photo.width} × ${props.photo.height}`]
+  const owner = props.photo.ownerId === auth.user?.id ? null : users.login(props.photo.ownerId)
+  return [owner && `Shared by ${owner}`, date.toLocaleString(), props.photo.width && `${props.photo.width} × ${props.photo.height}`]
     .filter(Boolean)
     .join(' · ')
 })
@@ -58,8 +64,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <div class="name">{{ photo.name }}</div>
         <div class="details">{{ details }}</div>
       </div>
-      <template v-if="editable">
-        <v-btn icon="mdi-tag-outline" variant="text" aria-label="Tags" @click="emit('tags', photo)" />
+      <v-btn v-if="canTag" icon="mdi-tag-outline" variant="text" aria-label="Tags" @click="emit('tags', photo)" />
+      <template v-if="canManage">
+        <v-btn icon="mdi-share-variant-outline" variant="text" aria-label="Share" @click="emit('share', photo)" />
         <v-btn icon="mdi-trash-can-outline" variant="text" aria-label="Move to trash" @click="emit('trash', photo)" />
       </template>
       <v-btn :href="originalUrl(photo.id)" icon="mdi-download" variant="text" aria-label="Download the original" />

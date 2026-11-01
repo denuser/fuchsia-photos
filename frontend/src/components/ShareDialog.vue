@@ -1,0 +1,166 @@
+<script setup lang="ts">
+import { computed, ref, shallowRef, watch } from 'vue'
+
+import { api, type UserRef, type Visibility } from '../api/client'
+import { inBatches } from '../stores/photos'
+import { useUsersStore } from '../stores/users'
+
+const open = defineModel<boolean>({ required: true })
+
+// Shares either an album or photos.
+const props = defineProps<{ photoIds?: number[]; albumId?: number }>()
+const emit = defineEmits<{ done: [] }>()
+
+const users = useUsersStore()
+
+const KEEP = 'keep'
+
+// One album or photo shows its current state. Several photos may differ from
+// each other, so the dialog only describes the changes to make.
+const single = computed(() => props.albumId !== undefined || props.photoIds?.length === 1)
+const title = computed(() => {
+  if (props.albumId !== undefined) {
+    return 'Share this album'
+  }
+  return single.value ? 'Share this photo' : `Share ${props.photoIds?.length} photos`
+})
+
+const loaded = ref(false)
+const error = ref('')
+const saving = ref(false)
+
+const initialVisibility = ref<Visibility>('private')
+const initialUsers = shallowRef<UserRef[]>([])
+const everyone = ref(false)
+const chosen = ref<number[]>([])
+
+const visibilityChoice = ref<Visibility | typeof KEEP>(KEEP)
+const toRemove = ref<number[]>([])
+
+const visibilityChoices = [
+  { title: 'Leave as it is', value: KEEP },
+  { title: 'Only the people chosen', value: 'private' },
+  { title: 'All users', value: 'all' },
+]
+
+// Someone disabled after being given access is not among the recipients, but stays on the list.
+const candidates = computed(() => {
+  const known = new Set(users.recipients.map((u) => u.id))
+  return [...users.recipients, ...initialUsers.value.filter((u) => !known.has(u.id))]
+})
+
+watch(open, async (isOpen) => {
+  if (!isOpen) {
+    return
+  }
+  loaded.value = false
+  error.value = ''
+  initialVisibility.value = 'private'
+  initialUsers.value = []
+  everyone.value = false
+  chosen.value = []
+  visibilityChoice.value = KEEP
+  toRemove.value = []
+  await users.load()
+  if (single.value) {
+    const { data, error: failure } =
+      props.albumId !== undefined
+        ? await api.GET('/albums/{id}/sharing', { params: { path: { id: props.albumId } } })
+        : await api.GET('/photos/{id}/sharing', { params: { path: { id: props.photoIds![0]! } } })
+    if (!data) {
+      error.value = failure?.error ?? 'The current sharing could not be loaded'
+      return
+    }
+    initialVisibility.value = data.visibility
+    initialUsers.value = data.users
+    everyone.value = data.visibility === 'all'
+    chosen.value = data.users.map((u) => u.id)
+  }
+  loaded.value = true
+})
+
+function change() {
+  if (!single.value) {
+    return {
+      ...(visibilityChoice.value === KEEP ? {} : { visibility: visibilityChoice.value }),
+      add: chosen.value,
+      remove: toRemove.value,
+    }
+  }
+  const before = new Set(initialUsers.value.map((u) => u.id))
+  const after = new Set(chosen.value)
+  const visibility: Visibility = everyone.value ? 'all' : 'private'
+  return {
+    ...(visibility === initialVisibility.value ? {} : { visibility }),
+    add: chosen.value.filter((id) => !before.has(id)),
+    remove: [...before].filter((id) => !after.has(id)),
+  }
+}
+
+async function save() {
+  saving.value = true
+  error.value = ''
+  try {
+    const body = change()
+    if (props.albumId !== undefined) {
+      const { error: failure } = await api.POST('/albums/{id}/sharing', { params: { path: { id: props.albumId } }, body })
+      if (failure) {
+        throw new Error(failure.error)
+      }
+    } else {
+      await inBatches(props.photoIds ?? [], (batch) => api.POST('/photos/sharing', { body: { ...body, ids: batch } }))
+    }
+    open.value = false
+    emit('done')
+  } catch (failure) {
+    error.value = (failure as Error).message
+  } finally {
+    saving.value = false
+  }
+}
+</script>
+
+<template>
+  <v-dialog v-model="open" max-width="480">
+    <v-card :title="title">
+      <div>
+        <v-card-text>
+          <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
+          <template v-if="single">
+            <v-switch v-model="everyone" label="Visible to all users" color="primary" density="compact" hide-details class="mb-4" />
+          </template>
+          <v-select v-else v-model="visibilityChoice" :items="visibilityChoices" label="Visibility" class="mb-2" />
+          <v-autocomplete
+            v-model="chosen"
+            :items="candidates"
+            item-title="login"
+            item-value="id"
+            label="Share with"
+            multiple
+            chips
+            closable-chips
+          />
+          <v-autocomplete
+            v-if="!single"
+            v-model="toRemove"
+            :items="users.everyone"
+            item-title="login"
+            item-value="id"
+            label="Stop sharing with"
+            multiple
+            chips
+            closable-chips
+          />
+          <div class="text-body-2 text-medium-emphasis">
+            Recipients can download the original files, which keep their metadata, including location.
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn text="Cancel" @click="open = false" />
+          <v-btn color="primary" text="Save" :loading="saving" :disabled="single && !loaded" @click="save" />
+        </v-card-actions>
+      </div>
+    </v-card>
+  </v-dialog>
+</template>

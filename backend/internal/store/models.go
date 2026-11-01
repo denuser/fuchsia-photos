@@ -14,12 +14,19 @@ type Album struct {
 	Name         string
 	CoverPhotoID *int64
 	CreatedAt    time.Time
+	Visibility   string
 }
 
 type AlbumPhoto struct {
 	AlbumID int64
 	PhotoID int64
 	AddedAt time.Time
+}
+
+type AlbumShare struct {
+	AlbumID   int64
+	UserID    int64
+	CreatedAt time.Time
 }
 
 type Photo struct {
@@ -43,6 +50,12 @@ type Photo struct {
 	UpdatedAt     time.Time
 }
 
+type PhotoShare struct {
+	PhotoID   int64
+	UserID    int64
+	CreatedAt time.Time
+}
+
 type PhotoTag struct {
 	TagID   int64
 	PhotoID int64
@@ -63,10 +76,11 @@ type Tag struct {
 }
 
 type User struct {
-	ID           int64
-	Login        string
-	PasswordHash string
-	Role         string
-	Disabled     bool
-	CreatedAt    time.Time
+	ID                   int64
+	Login                string
+	PasswordHash         string
+	Role                 string
+	Disabled             bool
+	CreatedAt            time.Time
+	SharedIncludesAlbums bool
 }

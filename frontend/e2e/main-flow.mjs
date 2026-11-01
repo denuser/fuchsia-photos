@@ -79,6 +79,15 @@ async function closeWithEscape(content) {
   throw new Error('Escape did not close the dialog')
 }
 
+async function shareWithGuest() {
+  await page.getByLabel('Share with').click()
+  await page.getByRole('option', { name: 'guest' }).click()
+  // The list of logins covers the dialog's lower part until a click elsewhere closes it.
+  await dialog().getByText(/^Share this/).click()
+  await expectRequest('/sharing', () => button('Save').click())
+  await button('Save').waitFor({ state: 'hidden' })
+}
+
 async function moveToTrash() {
   await expectRequest('/photos/trash', () => button('Move to trash').click())
 }
@@ -148,6 +157,60 @@ const steps = {
     await select(0)
     await expectRequest('/photos/remove', () => button('Remove from album').click())
     await tiles(2)
+  },
+  'share an album and a photo with a second user': async () => {
+    const created = await page.request.post(`${BASE}/api/v1/users`, { data: { login: 'guest', password: PASSWORD, role: 'user' } })
+    if (!created.ok()) {
+      throw new Error(`creating the second user answered ${created.status()}`)
+    }
+    await button('Album actions').click()
+    await page.locator('.v-list-item', { hasText: /^Share$/ }).click()
+    await shareWithGuest()
+
+    await page.goto(BASE)
+    await previews(5)
+    await select(4)
+    await button('Share').click()
+    await shareWithGuest()
+    await page.getByText('1 selected').waitFor({ state: 'hidden' })
+  },
+  'the second user sees them, read-only': async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+    const guest = await context.newPage()
+    guest.on('pageerror', (error) => problems.push(`second user's page error: ${error.message}`))
+    await guest.goto(BASE)
+    await guest.getByLabel('Login').fill('guest')
+    await guest.getByLabel('Password').fill(PASSWORD)
+    await guest.keyboard.press('Enter')
+    await guest.getByRole('button', { name: 'Upload', exact: true }).waitFor()
+
+    const guestTiles = (n) =>
+      guest.waitForFunction((k) => document.querySelectorAll('[data-testid=tile] img').length === k, n, { timeout: 30_000 }).catch(() => {
+        throw new Error(`timed out waiting for the second user to see ${n} photos`)
+      })
+
+    await guest.goto(`${BASE}/shared`)
+    await guest.getByText('Trip').click()
+    await guestTiles(2)
+    if ((await guest.getByTestId('tile-check').count()) > 0) {
+      throw new Error('another user\'s photos can be selected')
+    }
+
+    await guest.goto(`${BASE}/shared?tab=photos`)
+    await guestTiles(1)
+    await guest.getByLabel('Include photos from shared albums').click()
+    await guestTiles(3)
+
+    await guest.getByTestId('tile-open').first().click()
+    await guest.getByTestId('viewer').waitFor()
+    if ((await guest.getByRole('button', { name: 'Move to trash', exact: true }).count()) > 0) {
+      throw new Error('another user\'s photo offers to be moved to the trash')
+    }
+    await context.close()
+  },
+  'an administrator sees the photos of all users': async () => {
+    await page.goto(`${BASE}/all`)
+    await previews(5)
   },
   'trash a photo from the viewer and stay in the viewer': async () => {
     await page.goto(BASE)

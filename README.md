@@ -2,7 +2,7 @@
 
 A self-hosted application for organizing photos, designed to run on a home NAS (Intel N150, 4 cores, 16 GB DDR5).
 
-**Status:** stage 2. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions and the trash work. The stage 0 benchmark on the NAS is still to be run, so the preview format and worker count are provisional defaults. This document records the decisions made so far and the roadmap.
+**Status:** stage 3. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash and sharing work. The stage 0 benchmark on the NAS is still to be run, so the preview format and worker count are provisional defaults. This document records the decisions made so far and the roadmap.
 
 ## Features
 
@@ -31,6 +31,10 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | Photo metadata | exiftool through go-exiftool | Handles HEIC and camera-specific tags. One long-running process avoids starting Perl for every photo |
 | Folder scan | Copy files into the library, leave the source folder untouched | One ingest path for all sources |
 | Sharing | Photos and albums, with all users or by login | Sharing an album makes all of its photos visible to the recipient |
+| Rights of a recipient | View and download, read-only | A recipient cannot change, tag or pass on another user's photo, or add it to an album. Tags and albums of shared photos can be reconsidered later |
+| "Shared with me" | Albums and photos tabs. Each user chooses whether the photos tab includes the photos of shared albums, which is off by default | One large album would otherwise push everything else out of the list |
+| Choosing a recipient | Autocomplete from the logins of active users, available to every logged-in user | Convenient and free of typos. On a home NAS, users knowing each other's logins is not a concern |
+| Administrator | A page with all users' photos and an owner filter, where the administrator can change sharing and move photos to the trash. Other users' albums are read-only and tags stay hidden. Restoring and permanently deleting stay with the owner | An administrator cannot lose someone's photos by accident |
 | Tags | Personal to each user. A search with several tags finds photos with any of them | Other users' tag names stay private |
 | Album covers | The newest processed photo, unless the owner chooses one | Works without effort, and can still be set by hand |
 | Trash | Photos stay until the owner restores or permanently deletes them, with no automatic expiry | Nothing is lost by waiting. Emptying the trash is the way to free disk space |
@@ -78,9 +82,9 @@ The built frontend is embedded in the binary with `go:embed`. The image is built
 
 ### Data model
 
-- `users` (login, argon2id password hash, admin/user role, disabled flag), `sessions`
+- `users` (login, argon2id password hash, admin/user role, disabled flag, whether "Shared with me" includes album photos), `sessions`
 - `photos` (`bigint` id, owner, SHA-256, MIME type, size, dimensions, `taken_at`, EXIF as JSONB, status, private/all visibility, `deleted_at`). A `bigint` id also fits future FAISS ids (int64).
-- `photo_shares`, `albums`, `album_photos`, `album_shares`
+- `photo_shares`, `albums` (with private/all visibility), `album_photos`, `album_shares`
 - `tags` (owner, name), `photo_tags`
 - `import_runs` (scan report: found, added, duplicates, errors)
 
@@ -90,11 +94,15 @@ Permissions are checked in one place: a single SQL predicate, "this photo is vis
 
 - The user is an admin or the photo's owner
 - The photo is visible to all users
-- The photo, or an album containing it, is shared with the user
+- The photo, or an album containing it, is shared with the user or visible to all users
+
+A photo in the trash is visible only to its owner. Its sharing comes back when it is restored.
 
 Authentication uses sessions in HttpOnly cookies. There is no registration: the first admin is created with a CLI command, and the admin manages all other users.
 
-Previews contain no EXIF, so GPS data does not leak through sharing.
+Previews and the API contain no EXIF, but originals keep it, including GPS data, and recipients can download them. The share dialog warns about this.
+
+Revoking access takes effect on the server at once. Previews are cached for a year as private, so a browser that already loaded one can still show it from its cache.
 
 ## Roadmap
 
@@ -104,7 +112,7 @@ Previews contain no EXIF, so GPS data does not leak through sharing.
   - [ ] Benchmark on the real NAS: JPEG and HEIC, HDD and SSD, WebP and JPEG, 2 or 3 workers
 - [x] **Stage 1: core.** Login, user management, roles. Browser upload (3–4 files in parallel, retrying failed files). Ingest, queue, previews, virtual-scrolling timeline, viewer, processing progress.
 - [x] **Stage 2: organization.** Albums, tags, search by date and tag, bulk actions, trash with soft delete.
-- [ ] **Stage 3: sharing.** Visibility for all users, sharing photos and albums by login, a "Shared with me" section, the admin view of everything. Test suite for the permission predicate.
+- [x] **Stage 3: sharing.** Visibility for all users, sharing photos and albums by login, a "Shared with me" section, the admin view of everything. Test suite for the permission predicate.
 - [ ] **Stage 4: folder scan.** Admin only: fixed root, owner selection, safe re-runs thanks to hashing. Skips files still being copied (size and mtime unchanged for N seconds). Report in `import_runs`. A re-run must not restore photos the owner moved to the trash, unlike a browser upload.
 - [ ] **Stage 5: operations.** Nightly `pg_dump`, backup and tested restore instructions, logs and queue metrics.
 - [ ] **Stage 6: WebDAV (hypothesis, starts as a spike).** Per-user upload folder, separate app password, files go through ingest. Tested with real mobile clients such as PhotoSync and FolderSync. If they work poorly, the feature is dropped and the outcome recorded here.
