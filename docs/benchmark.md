@@ -81,6 +81,22 @@ To measure a cold disk, clear the page cache on the NAS before a run. Otherwise,
 sync && echo 3 | sudo tee /proc/sys/vm/drop_caches
 ```
 
+### Full run
+
+This script compares every format and worker count on a cold disk, clearing the page cache before each combination so that all the rows are measured under the same conditions. Run it once for each disk, with a mix of JPEG and HEIC photos in the source folder:
+
+```sh
+for f in webp jpeg; do for w in 2 3; do
+  sync && echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null
+  docker run --rm --user "$(id -u):$(id -g)" \
+    -v /path/to/photos:/in:ro \
+    -v /path/on/disk/under/test:/out \
+    fuchsia-photos:latest imgbench -in /in -out /out -limit 500 -formats "$f" -workers "$w"
+done; done
+```
+
+Each combination prints its own table and peak memory.
+
 ## Reading the results
 
 The output is a Markdown table with one row per file type, plus a total row for each combination of format and worker count.
