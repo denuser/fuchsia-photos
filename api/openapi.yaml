@@ -906,6 +906,39 @@ paths:
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
+  /settings/previews:
+    get:
+      operationId: getPreviewSettings
+      summary: Settings for generating new previews (administrators only)
+      responses:
+        "200":
+          description: The current settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreviewSettings"
+        "403":
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: updatePreviewSettings
+      summary: Change the settings for new previews. Existing previews stay as they are (administrators only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreviewSettings"
+      responses:
+        "200":
+          description: The saved settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreviewSettings"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
 security:
   - session: []
 components:
@@ -951,6 +984,35 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
   schemas:
+    PreviewSettings:
+      type: object
+      required: [format, webpQuality, webpEffort, jpegQuality, gridEdge, viewerEdge]
+      properties:
+        format:
+          type: string
+          enum: [webp, jpeg]
+        webpQuality:
+          type: integer
+          minimum: 1
+          maximum: 100
+        webpEffort:
+          type: integer
+          minimum: 0
+          maximum: 6
+        jpegQuality:
+          type: integer
+          minimum: 1
+          maximum: 100
+        gridEdge:
+          type: integer
+          minimum: 200
+          maximum: 800
+          description: Longest side of a grid preview, in pixels
+        viewerEdge:
+          type: integer
+          minimum: 1024
+          maximum: 4096
+          description: Longest side of a viewer preview, in pixels
     ImportRun:
       type: object
       required: [id, ownerId, folder, status, error, found, added, duplicates, inTrash, purged, unsupported, changing, failed, createdAt, finishedAt]

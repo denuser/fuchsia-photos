@@ -100,6 +100,9 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/imports/{id}", s.admin(s.getImport))
 	mux.HandleFunc("POST /api/v1/imports/{id}/stop", s.admin(s.stopImport))
 
+	mux.HandleFunc("GET /api/v1/settings/previews", s.admin(s.getPreviewSettings))
+	mux.HandleFunc("PUT /api/v1/settings/previews", s.admin(s.updatePreviewSettings))
+
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})

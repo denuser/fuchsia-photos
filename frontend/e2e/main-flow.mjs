@@ -269,6 +269,13 @@ const steps = {
     await expectRequest('/photos/trash/empty', () => dialog().getByRole('button', { name: 'Empty trash' }).click())
     await page.getByText('The trash is empty').first().waitFor()
   },
+  'an administrator changes the preview settings': async () => {
+    await page.goto(`${BASE}/admin`)
+    await page.getByLabel('Grid preview size').fill('300')
+    await expectRequest('/settings/previews', () => button('Save').click())
+    await page.reload()
+    await waitFor('the saved size', () => document.querySelector('[data-testid=grid-edge] input')?.value === '300')
+  },
   'an administrator imports a folder for the second user, twice': async () => {
     const scanFolder = async (runs, column, count) => {
       await expectRequest('/imports', () => button('Start scan').click())

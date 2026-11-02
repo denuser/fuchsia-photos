@@ -7,10 +7,17 @@ import (
 	"github.com/davidbyttow/govips/v2/vips"
 )
 
-// Preview sizes, as the longest edge in pixels.
+// Limits of the settings. The preview size ranges do not overlap, so a grid
+// preview, which is made from the viewer preview, is always the smaller one.
 const (
-	GridEdge   = 400
-	ViewerEdge = 2048
+	MinQuality    = 1
+	MaxQuality    = 100
+	MinWebPEffort = 0
+	MaxWebPEffort = 6
+	MinGridEdge   = 200
+	MaxGridEdge   = 800
+	MinViewerEdge = 1024
+	MaxViewerEdge = 4096
 )
 
 // Format is a preview image format.
@@ -21,6 +28,45 @@ const (
 	WebP Format = "webp"
 	JPEG Format = "jpeg"
 )
+
+// Settings control how previews are generated. Edges are the longest side of a
+// preview in pixels.
+type Settings struct {
+	Format      Format
+	WebPQuality int
+	WebPEffort  int
+	JPEGQuality int
+	GridEdge    int
+	ViewerEdge  int
+}
+
+// DefaultSettings returns the settings chosen from the benchmark. A new database
+// starts with the same values.
+func DefaultSettings() Settings {
+	return Settings{Format: WebP, WebPQuality: 75, WebPEffort: 2, JPEGQuality: 80, GridEdge: 400, ViewerEdge: 2048}
+}
+
+// Validate returns an error that describes the first setting out of range.
+func (s Settings) Validate() error {
+	if s.Format != WebP && s.Format != JPEG {
+		return fmt.Errorf("format must be %s or %s", WebP, JPEG)
+	}
+	for _, field := range []struct {
+		name          string
+		value, lo, hi int
+	}{
+		{"WebP quality", s.WebPQuality, MinQuality, MaxQuality},
+		{"WebP effort", s.WebPEffort, MinWebPEffort, MaxWebPEffort},
+		{"JPEG quality", s.JPEGQuality, MinQuality, MaxQuality},
+		{"grid preview size", s.GridEdge, MinGridEdge, MaxGridEdge},
+		{"viewer preview size", s.ViewerEdge, MinViewerEdge, MaxViewerEdge},
+	} {
+		if field.value < field.lo || field.value > field.hi {
+			return fmt.Errorf("%s must be from %d to %d", field.name, field.lo, field.hi)
+		}
+	}
+	return nil
+}
 
 // Preview is an encoded preview image.
 type Preview struct {
@@ -68,43 +114,43 @@ func Dimensions(path string) (width, height int, err error) {
 //
 // The grid preview is made from the viewer preview rather than the original,
 // because decoding a HEIC file a second time would be far more expensive.
-func Render(path string, format Format) (Previews, error) {
-	viewerImage, err := vips.NewThumbnailWithSizeFromFile(path, ViewerEdge, ViewerEdge, vips.InterestingNone, vips.SizeDown)
+func Render(path string, settings Settings) (Previews, error) {
+	viewerImage, err := vips.NewThumbnailWithSizeFromFile(path, settings.ViewerEdge, settings.ViewerEdge, vips.InterestingNone, vips.SizeDown)
 	if err != nil {
 		return Previews{}, fmt.Errorf("load %s: %w", path, err)
 	}
 	defer viewerImage.Close()
 
-	viewer, err := encode(viewerImage, format)
+	viewer, err := encode(viewerImage, settings)
 	if err != nil {
 		return Previews{}, fmt.Errorf("encode viewer preview of %s: %w", path, err)
 	}
 
-	gridImage, err := vips.NewThumbnailWithSizeFromBuffer(viewer.Data, GridEdge, GridEdge, vips.InterestingNone, vips.SizeDown)
+	gridImage, err := vips.NewThumbnailWithSizeFromBuffer(viewer.Data, settings.GridEdge, settings.GridEdge, vips.InterestingNone, vips.SizeDown)
 	if err != nil {
 		return Previews{}, fmt.Errorf("resize %s: %w", path, err)
 	}
 	defer gridImage.Close()
 
-	grid, err := encode(gridImage, format)
+	grid, err := encode(gridImage, settings)
 	if err != nil {
 		return Previews{}, fmt.Errorf("encode grid preview of %s: %w", path, err)
 	}
 	return Previews{Viewer: viewer, Grid: grid}, nil
 }
 
-func encode(image *vips.ImageRef, format Format) (Preview, error) {
+func encode(image *vips.ImageRef, settings Settings) (Preview, error) {
 	var (
 		data []byte
 		err  error
 	)
-	switch format {
+	switch settings.Format {
 	case WebP:
-		data, _, err = image.ExportWebp(&vips.WebpExportParams{Quality: 75, ReductionEffort: 2, StripMetadata: true})
+		data, _, err = image.ExportWebp(&vips.WebpExportParams{Quality: settings.WebPQuality, ReductionEffort: settings.WebPEffort, StripMetadata: true})
 	case JPEG:
-		data, _, err = image.ExportJpeg(&vips.JpegExportParams{Quality: 80, StripMetadata: true})
+		data, _, err = image.ExportJpeg(&vips.JpegExportParams{Quality: settings.JPEGQuality, StripMetadata: true})
 	default:
-		err = fmt.Errorf("unknown format %q", format)
+		err = fmt.Errorf("unknown format %q", settings.Format)
 	}
 	if err != nil {
 		return Preview{}, err

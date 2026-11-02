@@ -68,8 +68,7 @@ The server reads its settings from environment variables:
 | `CACHE_DIR` | `/data/cache` | Previews |
 | `IMPORT_DIR` | `/data/import` | The folder that scans read from. Only read, never changed |
 | `IMPORT_STABLE_SECONDS` | `60` | How long a file must stay unchanged before a scan imports it |
-| `WORKERS` | `2` | Photos processed at once |
-| `PREVIEW_FORMAT` | `webp` | Format of new previews: `webp` or `jpeg` |
+| `WORKERS` | `3` | Photos processed at once |
 | `COOKIE_INSECURE` | unset | Set to `true` to allow the session cookie over plain HTTP. Local development only |
 
 ### Database and migrations

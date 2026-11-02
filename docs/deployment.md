@@ -19,8 +19,7 @@ Edit `deploy/.env`:
 | `LIBRARY_DIR` | `./data/library` | Original photos |
 | `IMPORT_DIR` | `./data/import` | Folder scanned for imports, mounted read-only |
 | `IMPORT_STABLE_SECONDS` | `60` | How long a file must stay unchanged before a folder scan imports it |
-| `WORKERS` | `2` | Photos processed at once. Keep at least one core free for the UI |
-| `PREVIEW_FORMAT` | `webp` | Format of new previews: `webp` or `jpeg` |
+| `WORKERS` | `3` | Photos processed at once. Keep at least one core free for the UI |
 | `HTTP_PORT` | `80` | HTTP port on the host |
 | `HTTPS_PORT` | `443` | HTTPS port on the host |
 

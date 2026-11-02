@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { useAuthStore } from './stores/auth'
+import AdminView from './views/AdminView.vue'
 import AllPhotosView from './views/AllPhotosView.vue'
 import AlbumsView from './views/AlbumsView.vue'
 import AlbumView from './views/AlbumView.vue'
@@ -25,6 +26,7 @@ export const router = createRouter({
     { path: '/all', component: AllPhotosView, meta: { admin: true } },
     { path: '/import', component: ImportView, meta: { admin: true } },
     { path: '/users', component: UsersView, meta: { admin: true } },
+    { path: '/admin', component: AdminView, meta: { admin: true } },
     { path: '/:rest(.*)*', redirect: '/' },
   ],
 })

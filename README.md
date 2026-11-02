@@ -2,7 +2,7 @@
 
 A self-hosted application for organizing photos, designed to run on a home NAS (Intel N150, 4 cores, 16 GB DDR5).
 
-**Status:** stage 4. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing and folder scans work. The stage 0 benchmark on the NAS is still to be run, so the preview format and worker count are provisional defaults. This document records the decisions made so far and the roadmap.
+**Status:** stage 4. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work. The stage 0 benchmark set the preview format and worker count for JPEG photos. This document records the decisions made so far and the roadmap.
 
 ## Features
 
@@ -37,6 +37,7 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | Rights of a recipient | View and download, read-only | A recipient cannot change, tag or pass on another user's photo, or add it to an album. Tags and albums of shared photos can be reconsidered later |
 | "Shared with me" | Albums and photos tabs. Each user chooses whether the photos tab includes the photos of shared albums, which is off by default | One large album would otherwise push everything else out of the list |
 | Choosing a recipient | Autocomplete from the logins of active users, available to every logged-in user | Convenient and free of typos. On a home NAS, users knowing each other's logins is not a concern |
+| Preview settings | Stored in the database and edited on an administration page. They apply to new photos only. Purely technical settings, such as the number of workers, stay in the environment | Regenerating the previews of a library takes hours and needs its own progress and safeguards |
 | Administrator | A page with all users' photos and an owner filter, where the administrator can change sharing and move photos to the trash. Other users' albums are read-only and tags stay hidden. Restoring and permanently deleting stay with the owner | An administrator cannot lose someone's photos by accident |
 | Tags | Personal to each user. A search with several tags finds photos with any of them | Other users' tag names stay private |
 | Album covers | The newest processed photo, unless the owner chooses one | Works without effort, and can still be set by hand |
@@ -54,7 +55,7 @@ All sources (browser, folder scan, WebDAV) go through a single `Ingest(file, own
 2. Check for duplicates with `UNIQUE (owner_id, sha256)`. Deduplication is per user only.
 3. Atomically rename the file to `originals/{owner_id}/{sha[:2]}/{sha}.{ext}`. Originals are never modified.
 4. In one transaction, create the photo record and a `process_photo` River job.
-5. A worker reads EXIF, applies auto-rotation and sRGB conversion, generates a grid preview (~400 px) and a viewer preview (~2048 px) on the SSD. Until a preview loads, the grid shows a neutral tile. WebP or JPEG is chosen from benchmarks, with WebP as the default until then. AVIF is ruled out because of its encoding cost.
+5. A worker reads EXIF, applies auto-rotation and sRGB conversion, generates a grid preview (~400 px) and a viewer preview (~2048 px) on the SSD. Until a preview loads, the grid shows a neutral tile. Previews are WebP: in the [benchmark](docs/benchmark.md#results) they take about 45% less disk space than JPEG, and the slower encoding is a one-time background cost. The format, quality and sizes can be changed on the administration page, and apply to new photos. AVIF is ruled out because of its encoding cost.
 6. A periodic job removes abandoned uploads and expired sessions. It leaves originals without a database record alone: after restoring an older database backup, those are the photos uploaded since that backup. A stray original is harmless, and uploading the same photo again reuses it.
 7. Permanently deleting a photo from the trash removes its original and previews, and leaves a record with only its hash. A database lock on the owner and hash keeps this from colliding with an upload of the same file.
 
@@ -62,7 +63,7 @@ A folder scan lists the files in the chosen folder with their sizes and modifica
 
 Queue behavior:
 
-- 2–3 workers, leaving one core for the UI
+- 3 workers, leaving one core for the UI
 - Bulk imports run at low priority
 - Processing resumes where it stopped after a restart
 
@@ -91,6 +92,7 @@ The built frontend is embedded in the binary with `go:embed`. The image is built
 - `photos` (`bigint` id, owner, SHA-256, MIME type, size, dimensions, `taken_at`, EXIF as JSONB, status, private/all visibility, `deleted_at`, `purged_at`). A `bigint` id also fits future FAISS ids (int64).
 - `photo_shares`, `albums` (with private/all visibility), `album_photos`, `album_shares`
 - `tags` (owner, name), `photo_tags`
+- `preview_settings` (one row: format, quality and preview sizes)
 - `import_runs` (scan report: found, added, duplicates, in the trash, permanently deleted, unsupported, still changing, failed), `import_files` (files still to process, and the ones to report)
 
 ### Access control
@@ -114,7 +116,7 @@ Revoking access takes effect on the server at once. Previews are cached for a ye
 - **Stage 0: skeleton and benchmarks.**
   - [x] Monorepo structure, compose, migrations, CI
   - [x] Choose the libvips binding
-  - [ ] Benchmark on the real NAS: JPEG and HEIC, HDD and SSD, WebP and JPEG, 2 or 3 workers
+  - [x] Benchmark on the real NAS: JPEG photos, previews on the SSD, WebP and JPEG, 1 to 3 workers. HEIC was left out as not currently relevant
 - [x] **Stage 1: core.** Login, user management, roles. Browser upload (3–4 files in parallel, retrying failed files). Ingest, queue, previews, virtual-scrolling timeline, viewer, processing progress.
 - [x] **Stage 2: organization.** Albums, tags, search by date and tag, bulk actions, trash with soft delete.
 - [x] **Stage 3: sharing.** Visibility for all users, sharing photos and albums by login, a "Shared with me" section, the admin view of everything. Test suite for the permission predicate.
@@ -134,12 +136,14 @@ Revoking access takes effect on the server at once. Previews are cached for a ye
 
 ## Expected performance
 
-These are rough estimates, not measurements, for preview generation with 3 workers. Stage 0 replaces them with real numbers from the NAS.
+Measured on the NAS with JPEG photos, WebP previews on the SSD and 3 workers, at 3.0 photos/s. See the [benchmark results](docs/benchmark.md#results).
 
-| Photos | JPEG, 24 MP | HEIC |
-|---|---|---|
-| 1,000 | 2–4 min | 6–11 min |
-| 10,000 | 20–35 min | 1–2 h |
+| Photos | Time |
+|---|---|
+| 1,000 | about 5.5 min |
+| 10,000 | about 56 min |
+
+The real pipeline is somewhat slower, because these numbers leave out EXIF extraction and database writes. HEIC has not been measured, and takes longer to decode.
 
 For tens of thousands of photos, prefer copying them to the NAS and running a folder scan over uploading through the browser.
 
@@ -148,6 +152,7 @@ For tens of thousands of photos, prefer copying them to the NAS and running a fo
 - [Development](docs/development.md): running locally, backend, migrations, frontend and test commands
 - [Deployment](docs/deployment.md): installing and operating on the NAS
 - [Benchmark](docs/benchmark.md): measuring performance on the NAS
+- [Improvements](docs/improvements.md): the current list of improvements
 
 ## License
 

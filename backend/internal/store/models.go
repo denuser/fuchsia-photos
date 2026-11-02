@@ -91,6 +91,16 @@ type PhotoTag struct {
 	PhotoID int64
 }
 
+type PreviewSetting struct {
+	ID          int16
+	Format      string
+	WebpQuality int32
+	WebpEffort  int32
+	JpegQuality int32
+	GridEdge    int32
+	ViewerEdge  int32
+}
+
 type Session struct {
 	TokenHash []byte
 	UserID    int64

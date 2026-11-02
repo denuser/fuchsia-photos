@@ -133,7 +133,6 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 	jobClient, err := jobs.NewClient(pool, jobs.Config{
 		Layout:   layout,
 		Metadata: reader,
-		Format:   media.Format(cfg.PreviewFormat),
 		Workers:  cfg.Workers,
 		Register: scanner.Register,
 	})

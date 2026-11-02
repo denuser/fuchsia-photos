@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidbyttow/govips/v2/vips"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
@@ -49,7 +50,7 @@ func setup(t *testing.T) env {
 	}
 	t.Cleanup(func() { reader.Close() })
 
-	client, err := jobs.NewClient(pool, jobs.Config{Layout: layout, Metadata: reader, Format: media.WebP, Workers: 2})
+	client, err := jobs.NewClient(pool, jobs.Config{Layout: layout, Metadata: reader, Workers: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,6 +132,55 @@ func TestProcessPhoto(t *testing.T) {
 				t.Error("the stored original differs from the upload")
 			}
 		})
+	}
+}
+
+func TestProcessPhotoUsesCurrentSettings(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	ingestFile := func(name string) store.Photo {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join("..", "media", "testdata", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := e.ingest.Ingest(ctx, e.owner, bytes.NewReader(data), name, ingest.PriorityInteractive)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return waitForStatus(t, e, res.Photo.ID, "ready")
+	}
+
+	before := ingestFile("landscape.jpg")
+	if *before.PreviewFormat != string(media.WebP) {
+		t.Errorf("default format = %s, want webp", *before.PreviewFormat)
+	}
+
+	_, err := e.queries.UpdatePreviewSettings(ctx, store.UpdatePreviewSettingsParams{
+		Format: string(media.JPEG), WebpQuality: 75, WebpEffort: 2, JpegQuality: 60, GridEdge: 200, ViewerEdge: 1024,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	after := ingestFile("large.jpg")
+	if *after.PreviewFormat != string(media.JPEG) {
+		t.Errorf("format = %s, want jpeg", *after.PreviewFormat)
+	}
+	for kind, width := range map[string]int{storage.PreviewViewer: 1024, storage.PreviewGrid: 200} {
+		image, err := vips.NewImageFromFile(e.layout.Preview(after.ID, kind, *after.PreviewFormat))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if image.Width() != width {
+			t.Errorf("%s width = %d, want %d", kind, image.Width(), width)
+		}
+		image.Close()
+	}
+
+	// The earlier photo keeps its previews, in the format recorded for it.
+	if _, err := os.Stat(e.layout.Preview(before.ID, storage.PreviewViewer, *before.PreviewFormat)); err != nil {
+		t.Error(err)
 	}
 }
 

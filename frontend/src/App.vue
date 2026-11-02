@@ -67,6 +67,7 @@ window.addEventListener('beforeunload', (event) => {
           <v-divider />
           <v-list-item v-if="auth.isAdmin" to="/users" prepend-icon="mdi-account-multiple" title="Users" />
           <v-list-item v-if="auth.isAdmin" to="/import" prepend-icon="mdi-folder-arrow-down-outline" title="Import from folder" />
+          <v-list-item v-if="auth.isAdmin" to="/admin" prepend-icon="mdi-cog-outline" title="Administration" />
           <v-list-item prepend-icon="mdi-lock-reset" title="Change password" @click="passwordDialog = true" />
           <v-list-item prepend-icon="mdi-logout" title="Log out" @click="logout" />
         </v-list>

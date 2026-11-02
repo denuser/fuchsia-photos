@@ -48,7 +48,6 @@ type processPhotoWorker struct {
 	queries  *store.Queries
 	layout   storage.Layout
 	metadata *metadata.Reader
-	format   media.Format
 }
 
 func (w *processPhotoWorker) Timeout(*river.Job[ProcessPhotoArgs]) time.Duration {
@@ -93,12 +92,23 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) err
 	if err != nil {
 		return &unreadableError{err}
 	}
-	previews, err := media.Render(path, w.format)
+	settings, err := w.queries.GetPreviewSettings(ctx)
+	if err != nil {
+		return fmt.Errorf("load preview settings: %w", err)
+	}
+	previews, err := media.Render(path, media.Settings{
+		Format:      media.Format(settings.Format),
+		WebPQuality: int(settings.WebpQuality),
+		WebPEffort:  int(settings.WebpEffort),
+		JPEGQuality: int(settings.JpegQuality),
+		GridEdge:    int(settings.GridEdge),
+		ViewerEdge:  int(settings.ViewerEdge),
+	})
 	if err != nil {
 		return &unreadableError{err}
 	}
 
-	format := string(w.format)
+	format := settings.Format
 	for _, p := range []struct {
 		kind    string
 		preview media.Preview
@@ -183,7 +193,6 @@ func removeOldFiles(dir string, before time.Time) error {
 type Config struct {
 	Layout   storage.Layout
 	Metadata *metadata.Reader
-	Format   media.Format
 	Workers  int
 	// Register adds workers that live in packages depending on this one.
 	Register func(*river.Workers)
@@ -198,7 +207,7 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 	queries := store.New(pool)
 
 	workers := river.NewWorkers()
-	river.AddWorker(workers, &processPhotoWorker{queries: queries, layout: cfg.Layout, metadata: cfg.Metadata, format: cfg.Format})
+	river.AddWorker(workers, &processPhotoWorker{queries: queries, layout: cfg.Layout, metadata: cfg.Metadata})
 	river.AddWorker(workers, &cleanupWorker{queries: queries, layout: cfg.Layout})
 	if cfg.Register != nil {
 		cfg.Register(workers)

@@ -680,10 +680,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Settings for generating new previews (administrators only) */
+        get: operations["getPreviewSettings"];
+        /** Change the settings for new previews. Existing previews stay as they are (administrators only) */
+        put: operations["updatePreviewSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        PreviewSettings: {
+            /** @enum {string} */
+            format: "webp" | "jpeg";
+            webpQuality: number;
+            webpEffort: number;
+            jpegQuality: number;
+            /** @description Longest side of a grid preview, in pixels */
+            gridEdge: number;
+            /** @description Longest side of a viewer preview, in pixels */
+            viewerEdge: number;
+        };
         ImportRun: {
             /** Format: int64 */
             id: number;
@@ -2033,6 +2062,53 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    getPreviewSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewSettings"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    updatePreviewSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewSettings"];
+            };
+        };
+        responses: {
+            /** @description The saved settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewSettings"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
         };
     };
 }
