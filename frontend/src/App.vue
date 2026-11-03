@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import logo from './assets/logo.png'
 import ChangePasswordDialog from './components/ChangePasswordDialog.vue'
 import UploadPanel from './components/UploadPanel.vue'
 import { useAuthStore } from './stores/auth'
@@ -58,7 +59,10 @@ window.addEventListener('beforeunload', (event) => {
         />
       </template>
       <v-app-bar-title>
-        <router-link to="/" class="brand">Fuchsia Photos</router-link>
+        <router-link to="/" class="brand">
+          <img :src="logo" alt="" class="brand-logo" />
+          Fuchsia Photos
+        </router-link>
       </v-app-bar-title>
 
       <v-chip v-if="photos.pending > 0" class="mr-2" size="small" prepend-icon="mdi-cog-outline">
@@ -124,7 +128,15 @@ html {
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: inherit;
   text-decoration: none;
+}
+
+.brand-logo {
+  width: 32px;
+  height: 32px;
 }
 </style>

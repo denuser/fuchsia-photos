@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="bg" cx="0.45" cy="0.4" r="0.7">
+      <stop offset="0" stop-color="#3e6b45"/>
+      <stop offset="0.6" stop-color="#25452d"/>
+      <stop offset="1" stop-color="#14281a"/>
+    </radialGradient>
+    <linearGradient id="sepal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde4ee"/>
+      <stop offset="1" stop-color="#f19bbd"/>
+    </linearGradient>
+    <linearGradient id="tube" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f9d3e2"/>
+      <stop offset="1" stop-color="#ee8fb4"/>
+    </linearGradient>
+    <linearGradient id="bell" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e84f86"/>
+      <stop offset="0.55" stop-color="#d81b60"/>
+      <stop offset="1" stop-color="#a3104a"/>
+    </linearGradient>
+    <linearGradient id="bellSide" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f06292"/>
+      <stop offset="1" stop-color="#c2185b"/>
+    </linearGradient>
+    <linearGradient id="bud" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9ccc65"/>
+      <stop offset="1" stop-color="#558b2f"/>
+    </linearGradient>
+    <clipPath id="round"><circle cx="32" cy="32" r="32"/></clipPath>
+  </defs>
+  <g clip-path="url(#round)">
+    <rect width="64" height="64" fill="url(#bg)"/>
+    <ellipse cx="50" cy="16" rx="9" ry="6" fill="#4d7a52" opacity="0.35"/>
+    <ellipse cx="12" cy="50" rx="10" ry="7" fill="#4d7a52" opacity="0.3"/>
+    <!-- leaf -->
+    <path d="M15 3C18 2 23 4 24 8C21 9 17 8 15 3Z" fill="#7cb342"/>
+    <path d="M15 3L24 8" stroke="#558b2f" stroke-width="0.5"/>
+    <!-- stem and bud -->
+    <path d="M31 0V8" stroke="#6b8f3a" stroke-width="1.2"/>
+    <path d="M31 7C33.5 7 34 10 33.6 13.5C33.2 15.5 28.8 15.5 28.4 13.5C28 10 28.5 7 31 7Z" fill="url(#bud)"/>
+    <!-- tube -->
+    <path d="M28.6 14.5H33.4L35.5 26.5H26.5Z" fill="url(#tube)"/>
+    <path d="M31 15V26" stroke="#e07aa3" stroke-width="0.5" opacity="0.6"/>
+    <!-- left sepal: swoops left and curls up -->
+    <path d="M28 25C22 28 14 28.5 9 24C7 22 6 18 5.5 15C7.5 19 10 22.5 15 24.5C19 25.5 24 24 27.5 22.5Z" fill="url(#sepal)"/>
+    <path d="M27 24C20 26.5 13 25.5 7.5 19" stroke="#f48fb1" stroke-width="0.4" fill="none" opacity="0.7"/>
+    <!-- right sepal: sweeps right and slightly down -->
+    <path d="M34.5 23C41 23 49 25.5 55 29C58 30.5 61 32 63.5 33C59.5 33.5 55.5 33 51 31.5C46 30 40 29.5 35 28.5Z" fill="url(#sepal)"/>
+    <path d="M35 26C43 26.5 52 29.5 62 32.8" stroke="#f48fb1" stroke-width="0.4" fill="none" opacity="0.7"/>
+    <!-- corolla: back petals -->
+    <path d="M25 28C22 33 19 41 17.5 48C21 49.5 24 48 26 47L28 30Z" fill="url(#bellSide)"/>
+    <path d="M38 28C41.5 33 43.5 41 43.5 47.5C40.5 49 38 48 36 47L35 30Z" fill="url(#bellSide)"/>
+    <!-- corolla: front petals -->
+    <path d="M26.5 26.5C24 33 22.5 42 23 50C25.5 52 28.5 51.5 31 53L31.5 27Z" fill="url(#bell)"/>
+    <path d="M36 26.5C38.5 33 40 42 39.5 50C37 52 34 51.5 31 53L31 27Z" fill="url(#bell)"/>
+    <!-- highlights and veins -->
+    <path d="M18 47.5C19.5 41 22 34 25.5 29" stroke="#f8bbd0" stroke-width="0.7" fill="none" opacity="0.8"/>
+    <path d="M24 49C23.5 41 25 33 27.5 28" stroke="#f48fb1" stroke-width="0.5" fill="none" opacity="0.6"/>
+    <path d="M31 28V52" stroke="#9c0f48" stroke-width="0.6" opacity="0.7"/>
+    <path d="M35 29C37 35 38 42 37.5 49" stroke="#9c0f48" stroke-width="0.4" fill="none" opacity="0.5"/>
+    <!-- stamens and pistil -->
+    <path d="M29.5 51C29 54 29.8 57 29 60M31 52C31.2 55 30.8 58 31.5 61.5M32.5 51C33.2 54 32.8 56.5 33.5 59" stroke="#9ccc65" stroke-width="0.7" fill="none" stroke-linecap="round"/>
+    <circle cx="29" cy="60" r="0.8" fill="#c5e1a5"/>
+    <circle cx="31.5" cy="61.5" r="0.9" fill="#aed581"/>
+    <circle cx="33.5" cy="59" r="0.8" fill="#c5e1a5"/>
+  </g>
+</svg>

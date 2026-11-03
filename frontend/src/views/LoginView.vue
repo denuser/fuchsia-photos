@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import logo from '../assets/logo.png'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
@@ -26,6 +27,9 @@ async function submit() {
 <template>
   <v-container class="fill-height justify-center">
     <v-card width="380" title="Fuchsia Photos" subtitle="Log in to your library">
+      <template #prepend>
+        <v-avatar :image="logo" size="48" />
+      </template>
       <v-form @submit.prevent="submit">
         <v-card-text>
           <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />

@@ -1,3 +1,5 @@
+<p align="center"><img src="frontend/src/assets/logo.png" alt="Fuchsia Photos logo" width="160"></p>
+
 # Fuchsia Photos
 
 ```
