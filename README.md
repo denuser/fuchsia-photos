@@ -81,7 +81,6 @@ backend/                Go module
 frontend/               Vue + Vuetify, TypeScript client generated from OpenAPI
 deploy/                 Dockerfile, compose.yaml (app, postgres, caddy), Caddyfile
 docs/                   development, deployment and benchmark guides
-samples/                real photos for the benchmark
 ```
 
 The built frontend is embedded in the binary with `go:embed`. The image is built for `linux/amd64` with Docker buildx, because cgo and libvips rule out simple cross-compilation from macOS. It includes libvips, libheif and exiftool.

@@ -6,9 +6,9 @@ It reads the originals without changing them. For each photo it computes the SHA
 
 EXIF extraction and database writes are not included, so the real pipeline will be somewhat slower. It uses the default preview settings, not the ones saved on the administration page.
 
-## Quick run on the sample photos
+## Quick run on sample photos
 
-The repository includes [real photos](../samples/README.md) from several cameras and phones. On a machine with the repository checked out, this builds the image and benchmarks them, writing previews to `.bench`:
+Put a few photos from different cameras and phones into `samples/` at the repository root. The folder is not part of the repository; public domain photos from [Wikimedia Commons](https://commons.wikimedia.org/) work well, and HEIC files can be made from them with libvips. This builds the image and benchmarks them, writing previews to `.bench`:
 
 ```sh
 make bench
@@ -30,7 +30,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
   fuchsia-photos:latest imgbench -in /in -out /out
 ```
 
-There are only 9 photos, so this is a quick check that is easy to repeat. For the final decision, also run it on your own library, as described below.
+A handful of photos makes a quick check that is easy to repeat. For the final decision, also run it on your own library, as described below.
 
 ## Benchmarking your own photos
 
