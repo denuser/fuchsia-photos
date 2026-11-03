@@ -1,5 +1,18 @@
 # Fuchsia Photos
 
+```
+       |           _____   _   _    ____   _   _   ____    _____    ___
+       |          |  ___| | | | |  / ___| | | | | / ___|  |_   _|  / _ \
+      (o)         | |_    | | | | | |     | |_| | \___ \    | |   | |_| |
+   .-'/ \'-.      |  _|   | |_| | | |___  |  _  |  ___) |  _| |_  |  _  |
+  /  /   \  \     |_|      \___/   \____| |_| |_| |____/  |_____| |_| |_|
+ `  ( ||| )  `     ____    _   _    ___    _____    ___    ____
+     \|||/        |  _ \  | | | |  / _ \  |_   _|  / _ \  / ___|
+      |||         | |_) | | |_| | | | | |   | |   | | | | \___ \
+      |||         |  __/  |  _  | | |_| |   | |   | |_| |  ___) |
+     ' ' '        |_|     |_| |_|  \___/    |_|    \___/  |____/
+```
+
 A self-hosted application for organizing photos, designed to run on a home NAS (Intel N150, 4 cores, 16 GB DDR5).
 
 **Status:** stage 4. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work. The stage 0 benchmark set the preview format and worker count for JPEG photos. This document records the decisions made so far and the roadmap.
