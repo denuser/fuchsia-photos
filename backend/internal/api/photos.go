@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
+	"github.com/denuser/fuchsia-photos/backend/internal/metadata"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 )
@@ -26,8 +28,9 @@ const (
 	previewCacheRule = "private, max-age=31536000, immutable"
 )
 
-// EXIF stays out of this type on purpose: it can hold GPS coordinates, and
-// visible photos are not always the viewer's own.
+// Raw EXIF stays out of this type on purpose: visible photos are not always
+// the viewer's own, and EXIF can hold serial numbers and names. Only the camera
+// details go out, and the location when an administrator allows it.
 type photoJSON struct {
 	ID        int64      `json:"id"`
 	OwnerID   int64      `json:"ownerId"`
@@ -41,9 +44,16 @@ type photoJSON struct {
 	SortAt    time.Time  `json:"sortAt"`
 	CreatedAt time.Time  `json:"createdAt"`
 	DeletedAt *time.Time `json:"deletedAt"`
+
+	Camera   *metadata.Camera   `json:"camera"`
+	Location *metadata.Location `json:"location"`
 }
 
-func toPhotoJSON(p store.Photo) photoJSON {
+func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
+	camera, location := metadata.Details(p.Exif)
+	if !showLocation {
+		location = nil
+	}
 	return photoJSON{
 		ID:        p.ID,
 		OwnerID:   p.OwnerID,
@@ -57,15 +67,23 @@ func toPhotoJSON(p store.Photo) photoJSON {
 		SortAt:    p.SortAt,
 		CreatedAt: p.CreatedAt,
 		DeletedAt: p.DeletedAt,
+		Camera:    camera,
+		Location:  location,
 	}
 }
 
-func toPhotosJSON(photos []store.Photo) []photoJSON {
+func toPhotosJSON(photos []store.Photo, showLocation bool) []photoJSON {
 	out := make([]photoJSON, len(photos))
 	for i, p := range photos {
-		out[i] = toPhotoJSON(p)
+		out[i] = toPhotoJSON(p, showLocation)
 	}
 	return out
+}
+
+// showLocation tells whether photo responses may include locations.
+func (s *server) showLocation(ctx context.Context) (bool, error) {
+	settings, err := s.Queries.GetMetadataSettings(ctx)
+	return settings.ShowLocation, err
 }
 
 func (s *server) listPhotos(w http.ResponseWriter, r *http.Request) {
@@ -119,17 +137,22 @@ func (s *server) listPhotos(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err)
 		return
 	}
-	writePhotoPage(w, photos, params.MaxRows)
+	s.writePhotoPage(w, r, photos, params.MaxRows)
 }
 
 // writePhotoPage answers with a page of a list ordered by sort time.
-func writePhotoPage(w http.ResponseWriter, photos []store.Photo, maxRows int32) {
+func (s *server) writePhotoPage(w http.ResponseWriter, r *http.Request, photos []store.Photo, maxRows int32) {
+	showLocation, err := s.showLocation(r.Context())
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
 	var next *string
 	if len(photos) == int(maxRows) {
 		last := photos[len(photos)-1]
 		next = cursorFor(last.SortAt, last.ID)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": toPhotosJSON(photos), "nextCursor": next})
+	writeJSON(w, http.StatusOK, map[string]any{"items": toPhotosJSON(photos, showLocation), "nextCursor": next})
 }
 
 func (s *server) listTrash(w http.ResponseWriter, r *http.Request) {
@@ -151,12 +174,17 @@ func (s *server) listTrash(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err)
 		return
 	}
+	showLocation, err := s.showLocation(r.Context())
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
 	var next *string
 	if len(photos) == int(maxRows) {
 		last := photos[len(photos)-1]
 		next = cursorFor(*last.DeletedAt, last.ID)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": toPhotosJSON(photos), "nextCursor": next})
+	writeJSON(w, http.StatusOK, map[string]any{"items": toPhotosJSON(photos, showLocation), "nextCursor": next})
 }
 
 func pageSize(w http.ResponseWriter, r *http.Request) (int32, bool) {
@@ -338,11 +366,16 @@ func (s *server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 			uploadError(w, r, err)
 			return
 		}
+		showLocation, err := s.showLocation(r.Context())
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
 		status := http.StatusCreated
 		if res.Duplicate {
 			status = http.StatusOK
 		}
-		writeJSON(w, status, map[string]any{"photo": toPhotoJSON(res.Photo), "duplicate": res.Duplicate, "restored": res.Restored})
+		writeJSON(w, status, map[string]any{"photo": toPhotoJSON(res.Photo, showLocation), "duplicate": res.Duplicate, "restored": res.Restored})
 		return
 	}
 }
@@ -384,9 +417,16 @@ func (s *server) visiblePhoto(w http.ResponseWriter, r *http.Request) (store.Pho
 }
 
 func (s *server) getPhoto(w http.ResponseWriter, r *http.Request) {
-	if photo, ok := s.visiblePhoto(w, r); ok {
-		writeJSON(w, http.StatusOK, toPhotoJSON(photo))
+	photo, ok := s.visiblePhoto(w, r)
+	if !ok {
+		return
 	}
+	showLocation, err := s.showLocation(r.Context())
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toPhotoJSON(photo, showLocation))
 }
 
 func (s *server) getPreview(w http.ResponseWriter, r *http.Request) {

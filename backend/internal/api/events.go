@@ -57,10 +57,14 @@ func (s *server) photoEvents(w http.ResponseWriter, r *http.Request) {
 		if len(changed) > 0 || counts.Pending != lastPending || counts.Failed != lastFailed {
 			lastPending, lastFailed = counts.Pending, counts.Failed
 			idleTicks = 0
+			showLocation, err := s.showLocation(ctx)
+			if err != nil {
+				return
+			}
 			payload, err := json.Marshal(map[string]any{
 				"pending": counts.Pending,
 				"failed":  counts.Failed,
-				"photos":  toPhotosJSON(changed),
+				"photos":  toPhotosJSON(changed, showLocation),
 			})
 			if err != nil {
 				return

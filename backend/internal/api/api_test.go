@@ -399,23 +399,47 @@ func markReady(t *testing.T, e *env, id int64) {
 			t.Fatal(err)
 		}
 	}
-	err := e.queries.MarkPhotoReady(context.Background(), store.MarkPhotoReadyParams{ID: id, PreviewFormat: &format, Exif: []byte(`{"GPSLatitude":59.93}`)})
+	err := e.queries.MarkPhotoReady(context.Background(), store.MarkPhotoReadyParams{ID: id, PreviewFormat: &format, Exif: []byte(testExif)})
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPhotoJSONHasNoEXIF(t *testing.T) {
+const testExif = `{"Model":"Canon EOS R5","FNumber":2.8,"SerialNumber":"ABC123","GPSLatitude":59.93,"GPSLongitude":30.33}`
+
+func TestPhotoJSONMetadata(t *testing.T) {
 	e := setup(t)
+	e.addUser("root", auth.RoleAdmin)
 	e.addUser("anna", auth.RoleUser)
-	anna := e.loggedIn("anna")
+	e.addUser("boris", auth.RoleUser)
+	admin, anna, boris := e.loggedIn("root"), e.loggedIn("anna"), e.loggedIn("boris")
 	photo := decode[uploadResult](t, anna.upload("rotated.jpg")).Photo
 	markReady(t, e, photo.ID)
+	sharePhoto(t, anna, photo.ID, map[string]any{"visibility": "all"})
 
-	body, _ := io.ReadAll(anna.get("/api/v1/photos/" + itoa(photo.ID)).Body)
-	if strings.Contains(string(body), "GPS") {
-		t.Errorf("the API exposes EXIF: %s", body)
+	check := func(c *browser, wantLocation bool) {
+		t.Helper()
+		body, _ := io.ReadAll(c.get("/api/v1/photos/" + itoa(photo.ID)).Body)
+		if !strings.Contains(string(body), `"model":"Canon EOS R5"`) || !strings.Contains(string(body), `"fNumber":2.8`) {
+			t.Errorf("the camera details are missing: %s", body)
+		}
+		if strings.Contains(string(body), "ABC123") || strings.Contains(string(body), "GPS") {
+			t.Errorf("the API exposes raw EXIF: %s", body)
+		}
+		if got := strings.Contains(string(body), `"location":{"latitude":59.93,"longitude":30.33}`); got != wantLocation {
+			t.Errorf("location shown = %v, want %v: %s", got, wantLocation, body)
+		}
+		page, _ := io.ReadAll(c.get("/api/v1/photos/shared").Body)
+		if c == boris && strings.Contains(string(page), "59.93") != wantLocation {
+			t.Errorf("location shown in a list = %v, want %v: %s", !wantLocation, wantLocation, page)
+		}
 	}
+
+	check(anna, false)
+	check(boris, false)
+	wantStatus(t, admin.json(http.MethodPut, "/api/v1/settings/metadata", map[string]any{"showLocation": true}), http.StatusOK)
+	check(anna, true)
+	check(boris, true)
 }
 
 func TestPreviewNotReady(t *testing.T) {

@@ -58,7 +58,7 @@ func (s *server) listSharedPhotos(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err)
 		return
 	}
-	writePhotoPage(w, photos, maxRows)
+	s.writePhotoPage(w, r, photos, maxRows)
 }
 
 func (s *server) listAllPhotos(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +89,7 @@ func (s *server) listAllPhotos(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err)
 		return
 	}
-	writePhotoPage(w, photos, maxRows)
+	s.writePhotoPage(w, r, photos, maxRows)
 }
 
 func (s *server) listSharedAlbums(w http.ResponseWriter, r *http.Request) {

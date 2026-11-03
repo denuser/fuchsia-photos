@@ -47,3 +47,25 @@ func TestPreviewSettings(t *testing.T) {
 		}
 	})
 }
+
+func TestMetadataSettings(t *testing.T) {
+	e := setup(t)
+	e.addUser("root", auth.RoleAdmin)
+	e.addUser("anna", auth.RoleUser)
+	admin, user := e.loggedIn("root"), e.loggedIn("anna")
+	const path = "/api/v1/settings/metadata"
+
+	wantStatus(t, user.get(path), http.StatusForbidden)
+	wantStatus(t, user.json(http.MethodPut, path, map[string]any{"showLocation": true}), http.StatusForbidden)
+
+	if got := decode[metadataSettingsJSON](t, admin.get(path)); got.ShowLocation {
+		t.Error("locations are shown by default")
+	}
+	wantStatus(t, admin.json(http.MethodPut, path, map[string]any{}), http.StatusBadRequest)
+	if got := decode[metadataSettingsJSON](t, admin.json(http.MethodPut, path, map[string]any{"showLocation": true})); !got.ShowLocation {
+		t.Error("the response does not show the saved setting")
+	}
+	if got := decode[metadataSettingsJSON](t, admin.get(path)); !got.ShowLocation {
+		t.Error("the setting was not saved")
+	}
+}

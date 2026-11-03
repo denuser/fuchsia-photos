@@ -106,7 +106,7 @@ The built frontend is embedded in the binary with `go:embed`. The image is built
 - `photos` (`bigint` id, owner, SHA-256, MIME type, size, dimensions, `taken_at`, EXIF as JSONB, status, private/all visibility, `deleted_at`, `purged_at`). A `bigint` id also fits future FAISS ids (int64).
 - `photo_shares`, `albums` (with private/all visibility), `album_photos`, `album_shares`
 - `tags` (owner, name), `photo_tags`
-- `preview_settings` (one row: format, quality and preview sizes)
+- `preview_settings` (one row: format, quality and preview sizes), `metadata_settings` (one row: whether the API returns locations)
 - `import_runs` (scan report: found, added, duplicates, in the trash, permanently deleted, unsupported, still changing, failed), `import_files` (files still to process, and the ones to report)
 
 ### Access control
@@ -121,7 +121,7 @@ A photo in the trash is visible only to its owner. Its sharing comes back when i
 
 Authentication uses sessions in HttpOnly cookies. There is no registration: the first admin is created with a CLI command, and the admin manages all other users.
 
-Previews and the API contain no EXIF, but originals keep it, including GPS data, and recipients can download them. The share dialog warns about this.
+Previews contain no EXIF. The API returns only the camera details: camera, lens, focal length, aperture, shutter speed, ISO, exposure compensation and flash. It returns the GPS location only if an administrator turns it on, and then to everyone who can see the photo. Originals keep all EXIF, including GPS data, and recipients can download them. The share dialog warns about this.
 
 Revoking access takes effect on the server at once. Previews are cached for a year as private, so a browser that already loaded one can still show it from its cache.
 

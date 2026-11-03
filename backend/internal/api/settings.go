@@ -67,3 +67,35 @@ func (s *server) updatePreviewSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, toPreviewSettingsJSON(settings))
 }
+
+type metadataSettingsJSON struct {
+	ShowLocation bool `json:"showLocation"`
+}
+
+func (s *server) getMetadataSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.Queries.GetMetadataSettings(r.Context())
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, metadataSettingsJSON{ShowLocation: settings.ShowLocation})
+}
+
+func (s *server) updateMetadataSettings(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ShowLocation *bool `json:"showLocation"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.ShowLocation == nil {
+		writeError(w, http.StatusBadRequest, "showLocation is required")
+		return
+	}
+	settings, err := s.Queries.UpdateMetadataSettings(r.Context(), *req.ShowLocation)
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, metadataSettingsJSON{ShowLocation: settings.ShowLocation})
+}

@@ -10,3 +10,11 @@ SET format = @format,
     grid_edge = @grid_edge,
     viewer_edge = @viewer_edge
 RETURNING *;
+
+-- name: GetMetadataSettings :one
+SELECT * FROM metadata_settings;
+
+-- name: UpdateMetadataSettings :one
+UPDATE metadata_settings
+SET show_location = @show_location
+RETURNING *;

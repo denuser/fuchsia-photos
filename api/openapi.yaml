@@ -939,6 +939,39 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /settings/metadata:
+    get:
+      operationId: getMetadataSettings
+      summary: Settings for the photo metadata the API returns (administrators only)
+      responses:
+        "200":
+          description: The current settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetadataSettings"
+        "403":
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: updateMetadataSettings
+      summary: Change the settings for photo metadata. They apply to every response from then on (administrators only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MetadataSettings"
+      responses:
+        "200":
+          description: The saved settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetadataSettings"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
 security:
   - session: []
 components:
@@ -984,6 +1017,13 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
   schemas:
+    MetadataSettings:
+      type: object
+      required: [showLocation]
+      properties:
+        showLocation:
+          description: Whether photos include where they were taken, for everyone who may see them
+          type: boolean
     PreviewSettings:
       type: object
       required: [format, webpQuality, webpEffort, jpegQuality, gridEdge, viewerEdge]
@@ -1157,7 +1197,7 @@ components:
             format: int64
     Photo:
       type: object
-      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt]
+      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, camera, location]
       properties:
         id:
           type: integer
@@ -1192,6 +1232,55 @@ components:
           description: When the photo was moved to the trash
           type: [string, "null"]
           format: date-time
+        camera:
+          description: Shooting details from EXIF. Null when the photo has none
+          oneOf:
+            - $ref: "#/components/schemas/Camera"
+            - type: "null"
+        location:
+          description: Where the photo was taken. Null when it has no location or an administrator hides locations
+          oneOf:
+            - $ref: "#/components/schemas/Location"
+            - type: "null"
+    Camera:
+      description: Each field is present only when the photo has it
+      type: object
+      properties:
+        make:
+          type: string
+        model:
+          type: string
+        lens:
+          type: string
+        focalLength:
+          description: Millimetres
+          type: number
+        focalLength35mm:
+          description: Millimetres, as on a 35 mm camera
+          type: number
+        fNumber:
+          type: number
+        exposureTime:
+          description: Seconds
+          type: number
+        iso:
+          type: number
+        exposureCompensation:
+          description: EV
+          type: number
+        flash:
+          description: Whether the flash fired
+          type: boolean
+    Location:
+      type: object
+      required: [latitude, longitude]
+      properties:
+        latitude:
+          description: Degrees, negative to the south
+          type: number
+        longitude:
+          description: Degrees, negative to the west
+          type: number
     PhotoPage:
       type: object
       required: [items, nextCursor]

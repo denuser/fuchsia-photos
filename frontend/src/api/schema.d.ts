@@ -698,10 +698,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Settings for the photo metadata the API returns (administrators only) */
+        get: operations["getMetadataSettings"];
+        /** Change the settings for photo metadata. They apply to every response from then on (administrators only) */
+        put: operations["updateMetadataSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        MetadataSettings: {
+            /** @description Whether photos include where they were taken, for everyone who may see them */
+            showLocation: boolean;
+        };
         PreviewSettings: {
             /** @enum {string} */
             format: "webp" | "jpeg";
@@ -837,6 +859,34 @@ export interface components {
              * @description When the photo was moved to the trash
              */
             deletedAt: string | null;
+            /** @description Shooting details from EXIF. Null when the photo has none */
+            camera: components["schemas"]["Camera"] | null;
+            /** @description Where the photo was taken. Null when it has no location or an administrator hides locations */
+            location: components["schemas"]["Location"] | null;
+        };
+        /** @description Each field is present only when the photo has it */
+        Camera: {
+            make?: string;
+            model?: string;
+            lens?: string;
+            /** @description Millimetres */
+            focalLength?: number;
+            /** @description Millimetres, as on a 35 mm camera */
+            focalLength35mm?: number;
+            fNumber?: number;
+            /** @description Seconds */
+            exposureTime?: number;
+            iso?: number;
+            /** @description EV */
+            exposureCompensation?: number;
+            /** @description Whether the flash fired */
+            flash?: boolean;
+        };
+        Location: {
+            /** @description Degrees, negative to the south */
+            latitude: number;
+            /** @description Degrees, negative to the west */
+            longitude: number;
         };
         PhotoPage: {
             items: components["schemas"]["Photo"][];
@@ -2105,6 +2155,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PreviewSettings"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    getMetadataSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataSettings"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    updateMetadataSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataSettings"];
+            };
+        };
+        responses: {
+            /** @description The saved settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataSettings"];
                 };
             };
             400: components["responses"]["Error"];

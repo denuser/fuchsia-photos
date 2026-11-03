@@ -9,6 +9,17 @@ import (
 	"context"
 )
 
+const getMetadataSettings = `-- name: GetMetadataSettings :one
+SELECT id, show_location FROM metadata_settings
+`
+
+func (q *Queries) GetMetadataSettings(ctx context.Context) (MetadataSetting, error) {
+	row := q.db.QueryRow(ctx, getMetadataSettings)
+	var i MetadataSetting
+	err := row.Scan(&i.ID, &i.ShowLocation)
+	return i, err
+}
+
 const getPreviewSettings = `-- name: GetPreviewSettings :one
 SELECT id, format, webp_quality, webp_effort, jpeg_quality, grid_edge, viewer_edge FROM preview_settings
 `
@@ -25,6 +36,19 @@ func (q *Queries) GetPreviewSettings(ctx context.Context) (PreviewSetting, error
 		&i.GridEdge,
 		&i.ViewerEdge,
 	)
+	return i, err
+}
+
+const updateMetadataSettings = `-- name: UpdateMetadataSettings :one
+UPDATE metadata_settings
+SET show_location = $1
+RETURNING id, show_location
+`
+
+func (q *Queries) UpdateMetadataSettings(ctx context.Context, showLocation bool) (MetadataSetting, error) {
+	row := q.db.QueryRow(ctx, updateMetadataSettings, showLocation)
+	var i MetadataSetting
+	err := row.Scan(&i.ID, &i.ShowLocation)
 	return i, err
 }
 

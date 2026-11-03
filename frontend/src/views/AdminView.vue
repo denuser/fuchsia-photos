@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
-import { api, type PreviewSettings } from '../api/client'
+import { api, type MetadataSettings, type PreviewSettings } from '../api/client'
 
 const formats = [
   { title: 'WebP', value: 'webp' },
@@ -9,6 +9,7 @@ const formats = [
 ]
 
 const settings = ref<PreviewSettings | null>(null)
+const metadata = ref<MetadataSettings | null>(null)
 const error = ref('')
 const saved = ref(false)
 const saving = ref(false)
@@ -42,25 +43,35 @@ const valid = computed(() => {
   return checks.every(([value, rule]) => rule(value) === true)
 })
 
-watch(settings, () => (saved.value = false), { deep: true })
+watch([settings, metadata], () => (saved.value = false), { deep: true })
 
 onMounted(async () => {
-  const { data, error: failure } = await api.GET('/settings/previews')
+  const [previews, meta] = await Promise.all([api.GET('/settings/previews'), api.GET('/settings/metadata')])
+  const failure = previews.error ?? meta.error
   if (failure) {
     error.value = failure.error
     return
   }
-  settings.value = data
+  settings.value = previews.data!
+  metadata.value = meta.data!
 })
 
 async function save() {
   saving.value = true
-  const { data, error: failure } = await api.PUT('/settings/previews', { body: settings.value! })
+  const [previews, meta] = await Promise.all([
+    api.PUT('/settings/previews', { body: settings.value! }),
+    api.PUT('/settings/metadata', { body: metadata.value! }),
+  ])
   saving.value = false
-  error.value = failure?.error ?? ''
-  if (data) {
-    settings.value = data
-    // The new value also triggers the watcher above, which must run first.
+  error.value = (previews.error ?? meta.error)?.error ?? ''
+  if (previews.data) {
+    settings.value = previews.data
+  }
+  if (meta.data) {
+    metadata.value = meta.data
+  }
+  if (previews.data && meta.data) {
+    // The new values also trigger the watcher above, which must run first.
     await nextTick()
     saved.value = true
   }
@@ -73,7 +84,7 @@ async function save() {
 
     <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
 
-    <v-form v-if="settings" @submit.prevent="save">
+    <v-form v-if="settings && metadata" @submit.prevent="save">
       <h2 class="text-h6 mb-2">Previews</h2>
       <v-alert
         type="info"
@@ -139,6 +150,18 @@ async function save() {
         suffix="px"
         hint="Longest side, from 1024 to 4096 pixels."
         persistent-hint
+        density="compact"
+        class="mb-6"
+      />
+
+      <h2 class="text-h6 mb-2">Photo details</h2>
+      <v-switch
+        v-model="metadata.showLocation"
+        data-testid="show-location"
+        label="Show where photos were taken"
+        hint="Shows the GPS location in the viewer to everyone who can see the photo, including users it is shared with. Downloaded originals always keep it."
+        persistent-hint
+        color="primary"
         density="compact"
         class="mb-4"
       />

@@ -294,6 +294,23 @@ const steps = {
     await scanFolder(1, 'added', PHOTOS.length + 1) // The fixtures hold one more photo than the upload uses.
     await scanFolder(2, 'duplicates', PHOTOS.length + 1)
   },
+  'an administrator shows where photos were taken': async () => {
+    const location = page.getByTestId('viewer').getByRole('link', { name: '59.93000, 30.33000' })
+    const openRotated = async () => {
+      await page.goto(`${BASE}/all`)
+      await page.getByLabel('rotated.jpg', { exact: true }).first().click()
+      await page.getByTestId('viewer').waitFor()
+    }
+    await openRotated()
+    if ((await location.count()) > 0) {
+      throw new Error('the location is shown before an administrator allows it')
+    }
+    await page.goto(`${BASE}/admin`)
+    await page.getByLabel('Show where photos were taken').check()
+    await expectRequest('/settings/metadata', () => button('Save').click())
+    await openRotated()
+    await location.waitFor()
+  },
   'the server agrees with the screen': async () => {
     const [library, trash] = [await apiTotal('photos'), await apiTotal('photos/trash')]
     if (library !== 3 || trash !== 0) {

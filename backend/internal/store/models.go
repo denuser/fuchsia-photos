@@ -58,6 +58,11 @@ type ImportRun struct {
 	FinishedAt  *time.Time
 }
 
+type MetadataSetting struct {
+	ID           int16
+	ShowLocation bool
+}
+
 type Photo struct {
 	ID            int64
 	OwnerID       int64

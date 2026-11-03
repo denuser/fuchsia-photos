@@ -61,3 +61,36 @@ func TestFromFields(t *testing.T) {
 		t.Error("TakenAt is not set")
 	}
 }
+
+func TestDetails(t *testing.T) {
+	tags := []byte(`{
+		"Make": "Canon", "Model": " Canon EOS R5 ", "LensModel": "RF24-70mm F2.8 L IS USM",
+		"FocalLength": 35, "FocalLengthIn35mmFormat": 35, "FNumber": 2.8,
+		"ExposureTime": 0.004, "ISO": "100 0", "ExposureCompensation": -0.7, "Flash": 16,
+		"GPSLatitude": 33.5, "GPSLatitudeRef": "S", "GPSLongitude": -70.2, "GPSLongitudeRef": "W"
+	}`)
+	camera, location := Details(tags)
+	if camera == nil {
+		t.Fatal("no camera details")
+	}
+	if *camera.Model != "Canon EOS R5" || *camera.Lens != "RF24-70mm F2.8 L IS USM" {
+		t.Errorf("model = %q, lens = %q", *camera.Model, *camera.Lens)
+	}
+	if *camera.FNumber != 2.8 || *camera.ExposureTime != 0.004 || *camera.FocalLength != 35 {
+		t.Errorf("exposure = %+v", camera)
+	}
+	if *camera.ISO != 100 || *camera.ExposureCompensation != -0.7 || *camera.Flash {
+		t.Errorf("iso = %v, compensation = %v, flash = %v", *camera.ISO, *camera.ExposureCompensation, *camera.Flash)
+	}
+	if location == nil || *location != (Location{Latitude: -33.5, Longitude: -70.2}) {
+		t.Errorf("location = %+v", location)
+	}
+}
+
+func TestDetailsMissing(t *testing.T) {
+	for _, tags := range []string{``, `{}`, `{"FNumber": 0, "GPSLatitude": 0, "GPSLongitude": 0}`, `{"Make": " ", "GPSLatitude": 59.9}`} {
+		if camera, location := Details([]byte(tags)); camera != nil || location != nil {
+			t.Errorf("Details(%s) = %+v, %+v", tags, camera, location)
+		}
+	}
+}

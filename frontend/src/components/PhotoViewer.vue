@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 
-import { originalUrl, previewUrl, type Photo } from '../api/client'
+import { originalUrl, previewUrl, type Camera, type Photo } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import { useUsersStore } from '../stores/users'
 
@@ -24,6 +24,59 @@ const details = computed(() => {
     .filter(Boolean)
     .join(' · ')
 })
+
+const camera = computed(() => (props.photo.camera ? describeCamera(props.photo.camera) : ''))
+
+const location = computed(() => {
+  const l = props.photo.location
+  if (!l) {
+    return null
+  }
+  const lat = l.latitude.toFixed(5)
+  const lon = l.longitude.toFixed(5)
+  return { text: `${lat}, ${lon}`, url: `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=15/${lat}/${lon}` }
+})
+
+// Formats the shooting details the way cameras show them, such as
+// "Canon EOS R5 · 35 mm · ƒ/2.8 · 1/250 s · ISO 100".
+function describeCamera(c: Camera) {
+  return [
+    cameraName(c),
+    c.lens,
+    c.focalLength && focalLength(c.focalLength, c.focalLength35mm),
+    c.fNumber && `ƒ/${round(c.fNumber)}`,
+    c.exposureTime && exposureTime(c.exposureTime),
+    c.iso && `ISO ${c.iso}`,
+    c.exposureCompensation && `${c.exposureCompensation > 0 ? '+' : '−'}${round(Math.abs(c.exposureCompensation))} EV`,
+    c.flash && 'Flash',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+// Many cameras repeat the maker in the model, as in "Canon" and "Canon EOS R5".
+function cameraName(c: Camera) {
+  if (!c.make || !c.model) {
+    return c.model ?? c.make
+  }
+  const maker = c.make.split(' ')[0].toLowerCase()
+  return c.model.toLowerCase().startsWith(maker) ? c.model : `${c.make} ${c.model}`
+}
+
+function focalLength(mm: number, mm35?: number) {
+  const text = `${round(mm)} mm`
+  return mm35 && Math.abs(mm35 - mm) >= 1 ? `${text} (${Math.round(mm35)} mm equiv.)` : text
+}
+
+// Short exposures are fractions such as 1/250, longer ones decimals such as 0.8 or 2.
+function exposureTime(seconds: number) {
+  const inverse = 1 / seconds
+  return seconds < 1 && Math.abs(inverse - Math.round(inverse)) < 0.05 ? `1/${Math.round(inverse)} s` : `${round(seconds)} s`
+}
+
+function round(n: number) {
+  return String(Math.round(n * 10) / 10)
+}
 
 // Loads the neighbours ahead of time, so that stepping through photos feels instant.
 watch(
@@ -63,6 +116,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <div class="info">
         <div class="name">{{ photo.name }}</div>
         <div class="details">{{ details }}</div>
+        <div v-if="camera || location" class="details" data-testid="camera">
+          {{ camera }}<template v-if="camera && location"> · </template>
+          <a v-if="location" :href="location.url" target="_blank" rel="noopener noreferrer" class="location">{{
+            location.text
+          }}</a>
+        </div>
       </div>
       <v-btn v-if="canTag" icon="mdi-tag-outline" variant="text" aria-label="Tags" @click="emit('tags', photo)" />
       <template v-if="canManage">
@@ -137,6 +196,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .details {
   font-size: 0.8rem;
   opacity: 0.75;
+}
+
+.location {
+  color: inherit;
 }
 
 .nav {
