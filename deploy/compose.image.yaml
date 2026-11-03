@@ -21,9 +21,8 @@ services:
       retries: 20
 
   app:
-    image: fuchsia-photos:latest
-    # The image is loaded by hand and is not in a registry.
-    pull_policy: never
+    # Published by CI on every push to master. IMAGE_TAG selects a sha-<commit> tag instead.
+    image: ghcr.io/denuser/fuchsia-photos:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       postgres:

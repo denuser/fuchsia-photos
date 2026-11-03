@@ -108,12 +108,10 @@ On an ARM machine such as an Apple Silicon Mac, `make image` runs under emulatio
 - Without HTTP/2, browsers open few connections at once, so the grid loads previews more slowly.
 - Responses are not compressed.
 
-Build the image and load it onto the NAS:
+It uses the image that CI publishes to `ghcr.io/denuser/fuchsia-photos` on every push to `master`, for `linux/amd64`. Each image has two tags:
 
-```sh
-make image
-docker save fuchsia-photos:latest | ssh <nas> docker load
-```
+- `latest`, the newest build of `master`;
+- `sha-<commit>`, for example `sha-6593702`, which never changes.
 
 Copy `deploy/compose.image.yaml` to a folder on the NAS as `docker-compose.yml`. Next to it, create a `.env` file with `POSTGRES_PASSWORD` and any of the other variables from [First start](#first-start), apart from `SITE_ADDRESS`, `HTTP_PORT` and `HTTPS_PORT`. Prepare the folders as described there.
 
@@ -124,4 +122,11 @@ docker compose up -d
 docker compose exec app fuchsia-photos create-admin admin
 ```
 
-To update, load a new image and run `docker compose up -d` again.
+To update:
+
+```sh
+docker compose pull
+docker compose up -d
+```
+
+To run a specific build, set `IMAGE_TAG=sha-<commit>` in `.env`. Going back to an older build is safe only if no migrations were added since: migrations run forward only, so after a new one an older build may not start against the database.

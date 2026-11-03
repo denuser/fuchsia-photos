@@ -153,6 +153,6 @@ On failure it prints the failed step and saves a screenshot to `frontend/e2e/res
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pushes to `master` and on pull requests. It only builds the `linux/amd64` production image, which includes the frontend type checks and build and the backend build.
+`.github/workflows/ci.yml` builds the `linux/amd64` production image, which includes the frontend type checks and build and the backend build. On pull requests it only builds it. On pushes to `master` it also publishes it to `ghcr.io/denuser/fuchsia-photos` with the tags `latest` and `sha-<commit>`; only this job can write packages.
 
 Tests do not run in CI, so run `make test` and, for interface changes, `make e2e` before pushing.
