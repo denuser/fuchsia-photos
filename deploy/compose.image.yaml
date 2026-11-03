@@ -1,0 +1,41 @@
+# Runs a ready image over plain HTTP, without Caddy and without the source code.
+# Copy this file to the NAS as docker-compose.yml. Relative paths are relative to
+# its folder. See "Running from an image without TLS" in docs/deployment.md.
+name: fuchsia-photos
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: photos
+      POSTGRES_DB: photos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    command: ["postgres", "-c", "shared_buffers=1GB", "-c", "effective_cache_size=4GB"]
+    volumes:
+      - ${POSTGRES_DIR:-./data/postgres}:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U photos -d photos"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    image: fuchsia-photos:latest
+    # The image is loaded by hand and is not in a registry.
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://photos:${POSTGRES_PASSWORD}@postgres:5432/photos
+      COOKIE_INSECURE: "true"
+      WORKERS: ${WORKERS:-3}
+      IMPORT_STABLE_SECONDS: ${IMPORT_STABLE_SECONDS:-60}
+    ports:
+      - "10303:8080"
+    volumes:
+      - ${LIBRARY_DIR:-./data/library}:/data/library
+      - ${CACHE_DIR:-./data/cache}:/data/cache
+      - ${IMPORT_DIR:-./data/import}:/data/import:ro

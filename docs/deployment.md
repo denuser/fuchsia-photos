@@ -99,3 +99,29 @@ docker compose -f deploy/compose.yaml up -d
 ```
 
 On an ARM machine such as an Apple Silicon Mac, `make image` runs under emulation and is noticeably slower.
+
+## Running from an image without TLS
+
+`deploy/compose.image.yaml` needs only the image, so the NAS does not need the source code. It leaves out Caddy and serves plain HTTP on port 10303, which has these costs:
+
+- Passwords, session cookies and photos cross the network unencrypted, so use it only on a trusted home network and do not forward the port to the internet.
+- Without HTTP/2, browsers open few connections at once, so the grid loads previews more slowly.
+- Responses are not compressed.
+
+Build the image and load it onto the NAS:
+
+```sh
+make image
+docker save fuchsia-photos:latest | ssh <nas> docker load
+```
+
+Copy `deploy/compose.image.yaml` to a folder on the NAS as `docker-compose.yml`. Next to it, create a `.env` file with `POSTGRES_PASSWORD` and any of the other variables from [First start](#first-start), apart from `SITE_ADDRESS`, `HTTP_PORT` and `HTTPS_PORT`. Prepare the folders as described there.
+
+Run these commands from that folder:
+
+```sh
+docker compose up -d
+docker compose exec app fuchsia-photos create-admin admin
+```
+
+To update, load a new image and run `docker compose up -d` again.
