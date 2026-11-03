@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import ChangePasswordDialog from './components/ChangePasswordDialog.vue'
@@ -14,6 +14,18 @@ const uploads = useUploadsStore()
 const router = useRouter()
 
 const passwordDialog = ref(false)
+const navExpanded = ref(localStorage.getItem('navExpanded') === 'true')
+
+watch(navExpanded, (value) => localStorage.setItem('navExpanded', String(value)))
+
+const navItems = computed(() => [
+  { to: '/', icon: 'mdi-image-multiple-outline', title: 'Photos', exact: true },
+  { to: '/albums', icon: 'mdi-image-album', title: 'Albums' },
+  { to: '/shared', icon: 'mdi-account-multiple-outline', title: 'Shared with me' },
+  { to: '/tags', icon: 'mdi-tag-multiple-outline', title: 'Tags' },
+  { to: '/trash', icon: 'mdi-trash-can-outline', title: 'Trash' },
+  ...(auth.isAdmin ? [{ to: '/all', icon: 'mdi-shield-account-outline', title: 'All photos' }] : []),
+])
 const fileInput = ref<HTMLInputElement>()
 
 function chosen(event: Event) {
@@ -38,6 +50,13 @@ window.addEventListener('beforeunload', (event) => {
 <template>
   <v-app>
     <v-app-bar v-if="auth.user" density="comfortable" flat border="b">
+      <template #prepend>
+        <v-app-bar-nav-icon
+          :aria-label="navExpanded ? 'Collapse menu' : 'Expand menu'"
+          :aria-expanded="navExpanded"
+          @click="navExpanded = !navExpanded"
+        />
+      </template>
       <v-app-bar-title>
         <router-link to="/" class="brand">Fuchsia Photos</router-link>
       </v-app-bar-title>
@@ -74,14 +93,19 @@ window.addEventListener('beforeunload', (event) => {
       </v-menu>
     </v-app-bar>
 
-    <v-navigation-drawer v-if="auth.user" permanent rail>
+    <v-navigation-drawer v-if="auth.user" permanent :rail="!navExpanded">
       <v-list nav density="compact">
-        <v-list-item to="/" exact prepend-icon="mdi-image-multiple-outline" title="Photos" aria-label="Photos" />
-        <v-list-item to="/albums" prepend-icon="mdi-image-album" title="Albums" aria-label="Albums" />
-        <v-list-item to="/shared" prepend-icon="mdi-account-multiple-outline" title="Shared with me" aria-label="Shared with me" />
-        <v-list-item to="/tags" prepend-icon="mdi-tag-multiple-outline" title="Tags" aria-label="Tags" />
-        <v-list-item to="/trash" prepend-icon="mdi-trash-can-outline" title="Trash" aria-label="Trash" />
-        <v-list-item v-if="auth.isAdmin" to="/all" prepend-icon="mdi-shield-account-outline" title="All photos" aria-label="All photos" />
+        <v-list-item
+          v-for="item in navItems"
+          :key="item.to"
+          :to="item.to"
+          :exact="item.exact"
+          :prepend-icon="item.icon"
+          :title="item.title"
+          :aria-label="item.title"
+        >
+          <v-tooltip activator="parent" location="end" :disabled="navExpanded">{{ item.title }}</v-tooltip>
+        </v-list-item>
       </v-list>
     </v-navigation-drawer>
 
