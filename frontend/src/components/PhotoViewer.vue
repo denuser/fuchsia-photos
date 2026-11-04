@@ -237,8 +237,51 @@ function onWheel(event: WheelEvent) {
 // Dragging the photo also ends in a click, which must not zoom.
 let downAt = { x: 0, y: 0 }
 
+// A horizontal swipe with one finger steps to the neighbouring photo, unless
+// the photo is zoomed in, when the finger moves the photo instead. The photo
+// follows the finger, and a second finger, for a pinch, ends the swipe.
+const SWIPE_DISTANCE = 50
+const pointers = new Set<number>()
+let swiping = false
+const swipeOffset = ref(0)
+
 function onPointerDown(event: PointerEvent) {
   downAt = { x: event.clientX, y: event.clientY }
+  pointers.add(event.pointerId)
+  swiping = event.pointerType !== 'mouse' && pointers.size === 1 && !zoomed.value
+  swipeOffset.value = 0
+}
+
+function onPointerMove(event: PointerEvent) {
+  if (!swiping || !pointers.has(event.pointerId)) {
+    return
+  }
+  if (pointers.size > 1 || zoomed.value) {
+    swiping = false
+    swipeOffset.value = 0
+    return
+  }
+  const dx = event.clientX - downAt.x
+  // Past the first or the last photo, the photo moves only a little.
+  swipeOffset.value = (dx > 0 ? previous.value : next.value) ? dx : dx / 4
+}
+
+function onPointerUp(event: PointerEvent) {
+  pointers.delete(event.pointerId)
+  if (!swiping) {
+    return
+  }
+  swiping = false
+  swipeOffset.value = 0
+  const dx = event.clientX - downAt.x
+  const dy = event.clientY - downAt.y
+  if (event.type !== 'pointerup' || Math.abs(dx) < SWIPE_DISTANCE || Math.abs(dx) < Math.abs(dy)) {
+    return
+  }
+  const target = dx > 0 ? previous.value : next.value
+  if (target) {
+    emit('navigate', target)
+  }
 }
 
 function onClick(event: MouseEvent) {
@@ -285,7 +328,11 @@ onBeforeUnmount(() => {
       ref="stage"
       class="stage"
       :class="{ zoomable, zoomed }"
+      :style="swipeOffset ? { transform: `translateX(${swipeOffset}px)`, transition: 'none' } : undefined"
       @pointerdown="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerUp"
       @click="onClick"
       @wheel.prevent="onWheel"
     >
@@ -307,12 +354,6 @@ onBeforeUnmount(() => {
       <div class="info">
         <div class="name">{{ photo.name }}</div>
         <div class="details">{{ details }}</div>
-        <div v-if="camera || location" class="details" data-testid="camera">
-          {{ camera }}<template v-if="camera && location"> · </template>
-          <a v-if="location" :href="location.url" target="_blank" rel="noopener noreferrer" class="location">{{
-            location.text
-          }}</a>
-        </div>
       </div>
       <v-btn v-if="canTag" icon="mdi-tag-outline" variant="text" aria-label="Tags" @click="emit('tags', photo)" />
       <template v-if="canManage">
@@ -321,6 +362,15 @@ onBeforeUnmount(() => {
       </template>
       <v-btn :href="originalUrl(photo.id)" icon="mdi-download" variant="text" aria-label="Download the original" />
       <v-btn icon="mdi-close" variant="text" aria-label="Close" @click="emit('close')" />
+    </div>
+
+    <div v-if="camera || location" class="bar bottom">
+      <div class="details" data-testid="camera">
+        {{ camera }}<template v-if="camera && location"> · </template>
+        <a v-if="location" :href="location.url" target="_blank" rel="noopener noreferrer" class="location">{{
+          location.text
+        }}</a>
+      </div>
     </div>
 
     <v-btn
@@ -363,6 +413,9 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  /* Swipes and pinches are the viewer's, not the browser's. */
+  touch-action: none;
+  transition: transform 0.2s ease-out;
 }
 
 .stage.zoomable {
@@ -397,9 +450,33 @@ onBeforeUnmount(() => {
   background: linear-gradient(rgba(0, 0, 0, 0.7), transparent);
 }
 
+.bar.bottom {
+  top: auto;
+  bottom: 0;
+  display: block;
+  padding: 24px 16px 12px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+}
+
 .info {
   flex: 1;
   min-width: 0;
+}
+
+/* On a narrow screen the buttons take a row of their own above the name and
+   the date, so that neither squeezes the other. */
+@media (max-width: 599.98px) {
+  .bar {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    padding-left: 8px;
+  }
+
+  .info {
+    flex-basis: 100%;
+    order: 1;
+    padding: 0 8px;
+  }
 }
 
 .name {

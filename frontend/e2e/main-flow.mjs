@@ -219,6 +219,21 @@ const steps = {
     const viewer = page.getByTestId('viewer')
     await viewer.waitFor()
 
+    // A swipe to the left shows the next photo, one to the right the previous.
+    const swipe = (dx) =>
+      page.getByTestId('viewer-image').evaluate((image, dx) => {
+        const at = (type, x) =>
+          image.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 7, pointerType: 'touch', isPrimary: true, clientX: x, clientY: 400 }))
+        at('pointerdown', 640)
+        at('pointermove', 640 + dx / 2)
+        at('pointerup', 640 + dx)
+      }, dx)
+    const first = await viewer.getAttribute('aria-label')
+    await swipe(-200)
+    await waitFor('the next photo', (name) => document.querySelector('[data-testid=viewer]')?.ariaLabel !== name, first)
+    await swipe(200)
+    await waitFor('the first photo again', (name) => document.querySelector('[data-testid=viewer]')?.ariaLabel === name, first)
+
     // Escape closes a dialog over the viewer, not the viewer itself.
     await button('Tags').click()
     await closeWithEscape(page.getByLabel('Add tags'))

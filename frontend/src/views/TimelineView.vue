@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useDisplay } from 'vuetify'
 
 import EmptyState from '../components/EmptyState.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
@@ -16,6 +17,9 @@ const uploads = useUploadsStore()
 
 const dragging = ref(false)
 
+// On a phone the dates hide behind a button, so the filters take one row.
+const { xs } = useDisplay()
+
 // The address holds the filters, so that they survive a reload and a tag page can link to them.
 const tagIds = computed(() => {
   const value = route.query.tag
@@ -24,6 +28,10 @@ const tagIds = computed(() => {
 })
 const fromDate = computed(() => (typeof route.query.from === 'string' ? route.query.from : ''))
 const toDate = computed(() => (typeof route.query.to === 'string' ? route.query.to : ''))
+const dateFields = computed(() => [
+  { key: 'from', label: 'From', value: fromDate.value },
+  { key: 'to', label: 'To', value: toDate.value },
+])
 const filtered = computed(() => tagIds.value.length > 0 || Boolean(fromDate.value || toDate.value))
 
 function setFilter(change: { tag?: number[]; from?: string | null; to?: string | null }) {
@@ -96,25 +104,44 @@ function onDrop(event: DragEvent) {
             class="tag-filter"
             @update:model-value="setFilter({ tag: $event })"
           />
-          <v-text-field
-            :model-value="fromDate"
-            type="date"
-            label="From"
-            density="compact"
-            hide-details
-            class="date-filter"
-            @update:model-value="setFilter({ from: $event })"
-          />
-          <v-text-field
-            :model-value="toDate"
-            type="date"
-            label="To"
-            density="compact"
-            hide-details
-            class="date-filter"
-            @update:model-value="setFilter({ to: $event })"
-          />
-          <v-btn v-if="filtered" text="Clear" variant="text" @click="router.replace({ query: {} })" />
+          <v-menu v-if="xs" :close-on-content-click="false">
+            <template #activator="{ props: menu }">
+              <v-btn
+                v-bind="menu"
+                icon="mdi-calendar-range"
+                :color="fromDate || toDate ? 'primary' : undefined"
+                variant="text"
+                aria-label="Dates"
+              />
+            </template>
+            <v-card class="date-menu">
+              <v-text-field
+                v-for="field in dateFields"
+                :key="field.key"
+                :model-value="field.value"
+                type="date"
+                :label="field.label"
+                density="compact"
+                hide-details
+                @update:model-value="setFilter({ [field.key]: $event })"
+              />
+            </v-card>
+          </v-menu>
+          <template v-else>
+            <v-text-field
+              v-for="field in dateFields"
+              :key="field.key"
+              :model-value="field.value"
+              type="date"
+              :label="field.label"
+              density="compact"
+              hide-details
+              class="date-filter"
+              @update:model-value="setFilter({ [field.key]: $event })"
+            />
+          </template>
+          <v-btn v-if="filtered && xs" icon="mdi-filter-remove-outline" variant="text" aria-label="Clear" @click="router.replace({ query: {} })" />
+          <v-btn v-else-if="filtered" text="Clear" variant="text" @click="router.replace({ query: {} })" />
         </div>
       </template>
       <template #empty>
@@ -147,6 +174,26 @@ function onDrop(event: DragEvent) {
 
 .date-filter {
   flex: 0 1 170px;
+}
+
+.date-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 220px;
+  padding: 12px;
+}
+
+@media (max-width: 599.98px) {
+  .filters {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .tag-filter {
+    flex-basis: 0;
+    min-width: 0;
+  }
 }
 
 .drop-hint {

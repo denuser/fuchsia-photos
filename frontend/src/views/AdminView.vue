@@ -176,7 +176,7 @@ async function save() {
 
 <style scoped>
 .admin {
-  height: calc(100vh - var(--v-layout-top, 0px));
+  height: calc(100dvh - var(--v-layout-top, 0px));
   overflow-y: auto;
   max-width: 600px;
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useDisplay } from 'vuetify'
 
 import logo from './assets/logo.png'
 import UploadPanel from './components/UploadPanel.vue'
@@ -12,6 +13,8 @@ const auth = useAuthStore()
 const photos = usePhotosStore()
 const uploads = useUploadsStore()
 const router = useRouter()
+// On a phone the upload button is an icon, to leave room in the app bar.
+const { xs } = useDisplay()
 
 const navExpanded = ref(localStorage.getItem('navExpanded') === 'true')
 
@@ -67,7 +70,14 @@ window.addEventListener('beforeunload', (event) => {
         Processing {{ photos.pending }}
       </v-chip>
 
-      <v-btn color="primary" variant="flat" prepend-icon="mdi-upload" class="mr-2" @click="fileInput?.click()">
+      <v-btn
+        v-if="xs"
+        color="primary"
+        icon="mdi-upload"
+        aria-label="Upload"
+        @click="fileInput?.click()"
+      />
+      <v-btn v-else color="primary" variant="flat" prepend-icon="mdi-upload" class="mr-2" @click="fileInput?.click()">
         Upload
       </v-btn>
       <input
