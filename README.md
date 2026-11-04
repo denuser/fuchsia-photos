@@ -55,6 +55,9 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | Viewer source | The viewer preview by default. Each user can switch the viewer to originals in the profile, which is off by default. An original the browser cannot decode, such as HEIC outside Safari, falls back to the preview | Originals can be many times larger than previews, which matters on a phone or a slow connection |
 | Photo details in the viewer | Each user chooses in the profile which camera details and whether the location the viewer shows. All are shown by default. The interface hides them, and the API still returns them | A display preference, not a privacy setting: whether locations are returned at all stays with the administrator |
 | Zooming in the viewer | A photo larger than the screen zooms to its own resolution with a click, the wheel or a pinch, and loads its original for that. Panning and zooming use `@panzoom/panzoom` | A small library without dependencies. It handles the mouse, the wheel and touch, including pinch, which would take a lot of custom code |
+| Timeline loading | Lists sorted by date load month by month. The server first counts the photos of each month in the browser's time zone. The grid lays out every month from these counts and loads the photos of the months near the screen, at most three at a time. The trash, sorted by deletion time, loads page by page as it scrolls | The scroll bar covers the whole library, and any year is reachable without loading everything newer first |
+| Timeline navigation | Month titles in the grid and a scrubber with the years on the right. On a touch screen the scrubber shows while the list scrolls; with a mouse it stays | The right edge is where the thumb is and where phones put such a scrubber |
+| Menu on a phone | Hidden until the menu button opens it over the page. Each user can keep the permanent rail in the profile instead | The rail takes a sixth of a phone's width |
 | Preview settings | Stored in the database and edited on an administration page. They apply to new photos only. Purely technical settings, such as the number of workers, stay in the environment | Regenerating the previews of a library takes hours and needs its own progress and safeguards |
 | Administrator | A page with all users' photos and an owner filter, where the administrator can change sharing and move photos to the trash. Other users' albums are read-only and tags stay hidden. Restoring and permanently deleting stay with the owner | An administrator cannot lose someone's photos by accident |
 | Tags | Personal to each user. A search with several tags finds photos with any of them | Other users' tag names stay private |
@@ -105,7 +108,7 @@ The built frontend is embedded in the binary with `go:embed`. The image is built
 
 ### Data model
 
-- `users` (login, argon2id password hash, admin/user role, disabled flag, whether "Shared with me" includes album photos, whether the viewer shows originals, which photo details it hides), `sessions`
+- `users` (login, argon2id password hash, admin/user role, disabled flag, whether "Shared with me" includes album photos, whether the viewer shows originals, which photo details it hides, whether the menu hides on a phone), `sessions`
 - `photos` (`bigint` id, owner, SHA-256, MIME type, size, dimensions, `taken_at`, EXIF as JSONB, status, private/all visibility, `deleted_at`, `purged_at`). A `bigint` id also fits future FAISS ids (int64).
 - `photo_shares`, `albums` (with private/all visibility), `album_photos`, `album_shares`
 - `tags` (owner, name), `photo_tags`

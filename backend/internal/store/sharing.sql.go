@@ -10,6 +10,92 @@ import (
 	"time"
 )
 
+const countAllMonths = `-- name: CountAllMonths :many
+SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE $1::text), 'YYYY-MM')::text AS month,
+       count(*) AS count
+FROM photos p
+WHERE p.deleted_at IS NULL
+  AND ($2::bigint IS NULL OR p.owner_id = $2::bigint)
+GROUP BY 1
+ORDER BY 1 DESC
+`
+
+type CountAllMonthsParams struct {
+	Tz      string
+	OwnerID *int64
+}
+
+type CountAllMonthsRow struct {
+	Month string
+	Count int64
+}
+
+// Counts the photos of ListAllPhotos by month, like CountTimelineMonths.
+func (q *Queries) CountAllMonths(ctx context.Context, arg CountAllMonthsParams) ([]CountAllMonthsRow, error) {
+	rows, err := q.db.Query(ctx, countAllMonths, arg.Tz, arg.OwnerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountAllMonthsRow
+	for rows.Next() {
+		var i CountAllMonthsRow
+		if err := rows.Scan(&i.Month, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countSharedMonths = `-- name: CountSharedMonths :many
+SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE $1::text), 'YYYY-MM')::text AS month,
+       count(*) AS count
+FROM photos p
+WHERE p.owner_id <> $2::bigint
+  AND p.deleted_at IS NULL
+  AND p.status = 'ready'
+  AND (photo_shared_directly(p, $2::bigint)
+       OR ($3::boolean AND photo_in_visible_album(p, $2::bigint)))
+GROUP BY 1
+ORDER BY 1 DESC
+`
+
+type CountSharedMonthsParams struct {
+	Tz            string
+	ViewerID      int64
+	IncludeAlbums bool
+}
+
+type CountSharedMonthsRow struct {
+	Month string
+	Count int64
+}
+
+// Counts the photos of ListSharedPhotos by month, like CountTimelineMonths.
+func (q *Queries) CountSharedMonths(ctx context.Context, arg CountSharedMonthsParams) ([]CountSharedMonthsRow, error) {
+	rows, err := q.db.Query(ctx, countSharedMonths, arg.Tz, arg.ViewerID, arg.IncludeAlbums)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountSharedMonthsRow
+	for rows.Next() {
+		var i CountSharedMonthsRow
+		if err := rows.Scan(&i.Month, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getManagedPhotoVisibility = `-- name: GetManagedPhotoVisibility :one
 SELECT visibility
 FROM photos
@@ -84,14 +170,18 @@ SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at
 FROM photos p
 WHERE p.deleted_at IS NULL
   AND ($1::bigint IS NULL OR p.owner_id = $1::bigint)
-  AND ($2::timestamptz IS NULL
-       OR (p.sort_at, p.id) < ($2::timestamptz, $3::bigint))
+  AND ($2::timestamptz IS NULL OR p.sort_at >= $2::timestamptz)
+  AND ($3::timestamptz IS NULL OR p.sort_at < $3::timestamptz)
+  AND ($4::timestamptz IS NULL
+       OR (p.sort_at, p.id) < ($4::timestamptz, $5::bigint))
 ORDER BY p.sort_at DESC, p.id DESC
-LIMIT $4
+LIMIT $6
 `
 
 type ListAllPhotosParams struct {
 	OwnerID     *int64
+	FromTime    *time.Time
+	ToTime      *time.Time
 	AfterSortAt *time.Time
 	AfterID     *int64
 	MaxRows     int32
@@ -101,6 +191,8 @@ type ListAllPhotosParams struct {
 func (q *Queries) ListAllPhotos(ctx context.Context, arg ListAllPhotosParams) ([]Photo, error) {
 	rows, err := q.db.Query(ctx, listAllPhotos,
 		arg.OwnerID,
+		arg.FromTime,
+		arg.ToTime,
 		arg.AfterSortAt,
 		arg.AfterID,
 		arg.MaxRows,
@@ -183,15 +275,19 @@ WHERE p.owner_id <> $1::bigint
   AND p.status = 'ready'
   AND (photo_shared_directly(p, $1::bigint)
        OR ($2::boolean AND photo_in_visible_album(p, $1::bigint)))
-  AND ($3::timestamptz IS NULL
-       OR (p.sort_at, p.id) < ($3::timestamptz, $4::bigint))
+  AND ($3::timestamptz IS NULL OR p.sort_at >= $3::timestamptz)
+  AND ($4::timestamptz IS NULL OR p.sort_at < $4::timestamptz)
+  AND ($5::timestamptz IS NULL
+       OR (p.sort_at, p.id) < ($5::timestamptz, $6::bigint))
 ORDER BY p.sort_at DESC, p.id DESC
-LIMIT $5
+LIMIT $7
 `
 
 type ListSharedPhotosParams struct {
 	ViewerID      int64
 	IncludeAlbums bool
+	FromTime      *time.Time
+	ToTime        *time.Time
 	AfterSortAt   *time.Time
 	AfterID       *int64
 	MaxRows       int32
@@ -203,6 +299,8 @@ func (q *Queries) ListSharedPhotos(ctx context.Context, arg ListSharedPhotosPara
 	rows, err := q.db.Query(ctx, listSharedPhotos,
 		arg.ViewerID,
 		arg.IncludeAlbums,
+		arg.FromTime,
+		arg.ToTime,
 		arg.AfterSortAt,
 		arg.AfterID,
 		arg.MaxRows,

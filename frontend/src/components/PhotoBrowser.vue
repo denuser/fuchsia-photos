@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 
 import type { Photo } from '../api/client'
 import { usePhotosStore } from '../stores/photos'
@@ -39,6 +39,16 @@ const selectedIds = computed(() => [...selected.value])
 const tagTargets = computed(() => (viewerTargets.value.length > 0 ? viewerTargets.value : selectedIds.value))
 const dialogOpen = computed(() => tagDialog.value || albumDialog.value || purgeDialog.value || shareDialog.value)
 const canManage = computed(() => props.mode === 'library' || props.mode === 'admin')
+
+// The viewer steps through the loaded photos around the open one, and the
+// months next to it load as it gets there.
+const viewerPhotos = computed(() => (opened.value ? photos.around(opened.value) : []))
+
+watch(opened, (photo) => {
+  if (photo) {
+    photos.loadAround(photo)
+  }
+})
 
 onMounted(() => {
   photos.connect()
@@ -150,7 +160,7 @@ function onAddedToAlbum(album: string) {
 
 // Stays in the viewer on a neighbouring photo, if there is one.
 async function trashOpened(photo: Photo) {
-  const ready = photos.photos.filter((p) => p.status === 'ready')
+  const ready = viewerPhotos.value.filter((p) => p.status === 'ready')
   const index = ready.findIndex((p) => p.id === photo.id)
   const neighbour = ready[index + 1] ?? ready[index - 1] ?? null
   try {
@@ -187,22 +197,28 @@ defineExpose({ clearSelection, say })
     <slot v-else name="toolbar" />
 
     <div class="content">
-      <slot v-if="photos.loadedOnce && photos.photos.length === 0" name="empty" />
+      <div v-if="photos.failedToOpen" class="failed">
+        <v-icon icon="mdi-cloud-alert-outline" size="64" class="mb-4" />
+        <div class="text-h6 mb-2">The photos could not be loaded</div>
+        <v-btn text="Retry" variant="tonal" color="primary" @click="photos.reload()" />
+      </div>
+      <slot v-else-if="photos.empty" name="empty" />
       <PhotoGrid
         v-else
-        :photos="photos.photos"
-        :has-more="photos.hasMore"
+        :sections="photos.sections"
+        :by-month="photos.byMonth"
         :selected="selected"
         :selectable="props.mode !== 'shared'"
         @open="opened = $event"
         @toggle="toggle"
-        @load-more="photos.loadMore()"
+        @want="photos.want"
+        @retry="photos.retry"
       />
     </div>
 
     <PhotoViewer
       v-if="opened"
-      :photos="photos.photos"
+      :photos="viewerPhotos"
       :photo="opened"
       :can-tag="props.mode === 'library'"
       :can-manage="canManage"
@@ -239,5 +255,13 @@ defineExpose({ clearSelection, say })
 .content {
   flex: 1;
   min-height: 0;
+}
+
+.failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
 }
 </style>

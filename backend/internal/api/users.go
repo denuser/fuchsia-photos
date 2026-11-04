@@ -28,6 +28,8 @@ type userJSON struct {
 	ViewerShowsOriginals bool `json:"viewerShowsOriginals"`
 	// ViewerHiddenFields are the photo details the viewer leaves out.
 	ViewerHiddenFields []string `json:"viewerHiddenFields"`
+	// NavigationHiddenOnPhones hides the navigation drawer on a phone until the menu button opens it.
+	NavigationHiddenOnPhones bool `json:"navigationHiddenOnPhones"`
 }
 
 type userRefJSON struct {
@@ -49,6 +51,8 @@ func toUserJSON(u store.User) userJSON {
 		SharedIncludesAlbums: u.SharedIncludesAlbums,
 		ViewerShowsOriginals: u.ViewerShowsOriginals,
 		ViewerHiddenFields:   hidden,
+
+		NavigationHiddenOnPhones: u.NavigationHiddenOnPhones,
 	}
 }
 

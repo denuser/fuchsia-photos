@@ -134,6 +134,8 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 		SharedIncludesAlbums *bool     `json:"sharedIncludesAlbums"`
 		ViewerShowsOriginals *bool     `json:"viewerShowsOriginals"`
 		ViewerHiddenFields   *[]string `json:"viewerHiddenFields"`
+
+		NavigationHiddenOnPhones *bool `json:"navigationHiddenOnPhones"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -174,6 +176,17 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 		user, err = s.Queries.SetUserViewerHiddenFields(r.Context(), store.SetUserViewerHiddenFieldsParams{
 			ID:                 user.ID,
 			ViewerHiddenFields: hidden,
+		})
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+	}
+	if req.NavigationHiddenOnPhones != nil {
+		var err error
+		user, err = s.Queries.SetUserNavigationHiddenOnPhones(r.Context(), store.SetUserNavigationHiddenOnPhonesParams{
+			ID:                       user.ID,
+			NavigationHiddenOnPhones: *req.NavigationHiddenOnPhones,
 		})
 		if err != nil {
 			internalError(w, r, err)

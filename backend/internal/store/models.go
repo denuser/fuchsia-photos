@@ -121,13 +121,14 @@ type Tag struct {
 }
 
 type User struct {
-	ID                   int64
-	Login                string
-	PasswordHash         string
-	Role                 string
-	Disabled             bool
-	CreatedAt            time.Time
-	SharedIncludesAlbums bool
-	ViewerShowsOriginals bool
-	ViewerHiddenFields   []string
+	ID                       int64
+	Login                    string
+	PasswordHash             string
+	Role                     string
+	Disabled                 bool
+	CreatedAt                time.Time
+	SharedIncludesAlbums     bool
+	ViewerShowsOriginals     bool
+	ViewerHiddenFields       []string
+	NavigationHiddenOnPhones bool
 }

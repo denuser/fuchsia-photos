@@ -11,6 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	// Time zones are checked against the copy built into the binary, as the
+	// image has no time zone database.
+	_ "time/tzdata"
 
 	"github.com/jackc/pgx/v5"
 
@@ -87,28 +90,65 @@ func (s *server) showLocation(ctx context.Context) (bool, error) {
 }
 
 func (s *server) listPhotos(w http.ResponseWriter, r *http.Request) {
-	params := store.ListTimelineParams{OwnerID: currentUser(r).ID}
-	query := r.URL.Query()
-
-	maxRows, ok := pageSize(w, r)
+	params, ok := s.timelineFilter(w, r)
 	if !ok {
 		return
 	}
-	params.MaxRows = maxRows
+	if params.MaxRows, ok = pageSize(w, r); !ok {
+		return
+	}
 	if params.AfterSortAt, params.AfterID, ok = pageCursor(w, r); !ok {
 		return
 	}
-	if params.FromTime, ok = timeParam(w, r, "from"); !ok {
+	photos, err := s.Queries.ListTimeline(r.Context(), params)
+	if err != nil {
+		internalError(w, r, err)
 		return
 	}
-	if params.ToTime, ok = timeParam(w, r, "to"); !ok {
+	s.writePhotoPage(w, r, photos, params.MaxRows)
+}
+
+func (s *server) countPhotoMonths(w http.ResponseWriter, r *http.Request) {
+	tz, ok := timeZoneParam(w, r)
+	if !ok {
 		return
+	}
+	filter, ok := s.timelineFilter(w, r)
+	if !ok {
+		return
+	}
+	rows, err := s.Queries.CountTimelineMonths(r.Context(), store.CountTimelineMonthsParams{
+		Tz:       tz,
+		OwnerID:  filter.OwnerID,
+		FromTime: filter.FromTime,
+		ToTime:   filter.ToTime,
+		AlbumID:  filter.AlbumID,
+		TagIds:   filter.TagIds,
+	})
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeMonths(w, rows, func(row store.CountTimelineMonthsRow) monthJSON { return monthJSON(row) })
+}
+
+// timelineFilter reads the filters of the current user's list of photos, which
+// listPhotos and countPhotoMonths share. It leaves out the page.
+func (s *server) timelineFilter(w http.ResponseWriter, r *http.Request) (store.ListTimelineParams, bool) {
+	params := store.ListTimelineParams{OwnerID: currentUser(r).ID}
+	query := r.URL.Query()
+	var ok bool
+	if params.FromTime, ok = timeParam(w, r, "from"); !ok {
+		return params, false
+	}
+	if params.ToTime, ok = timeParam(w, r, "to"); !ok {
+		return params, false
 	}
 	for _, text := range query["tag"] {
 		id, err := strconv.ParseInt(text, 10, 64)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid tag")
-			return
+			return params, false
 		}
 		params.TagIds = append(params.TagIds, id)
 	}
@@ -116,28 +156,47 @@ func (s *server) listPhotos(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(text, 10, 64)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid album")
-			return
+			return params, false
 		}
 		album, ok := s.visibleAlbum(w, r, id)
 		if !ok {
-			return
+			return params, false
 		}
 		// Tags are personal: filtering another user's album by tag would reveal
 		// how that user grouped its photos.
 		if album.OwnerID != params.OwnerID && len(params.TagIds) > 0 {
 			writeError(w, http.StatusBadRequest, "another user's album cannot be filtered by tag")
-			return
+			return params, false
 		}
 		params.OwnerID = album.OwnerID
 		params.AlbumID = &id
 	}
+	return params, true
+}
 
-	photos, err := s.Queries.ListTimeline(r.Context(), params)
-	if err != nil {
-		internalError(w, r, err)
-		return
+// monthJSON is the number of photos a list has in one month, such as "2024-05".
+type monthJSON struct {
+	Month string `json:"month"`
+	Count int64  `json:"count"`
+}
+
+func writeMonths[T any](w http.ResponseWriter, rows []T, convert func(T) monthJSON) {
+	out := make([]monthJSON, len(rows))
+	for i, row := range rows {
+		out[i] = convert(row)
 	}
-	s.writePhotoPage(w, r, photos, params.MaxRows)
+	writeJSON(w, http.StatusOK, out)
+}
+
+// timeZoneParam reads the time zone that months are counted in: the browser's,
+// so that they match the dates the interface shows.
+func timeZoneParam(w http.ResponseWriter, r *http.Request) (string, bool) {
+	name := r.URL.Query().Get("tz")
+	if _, err := time.LoadLocation(name); err != nil || name == "" || name == "Local" {
+		writeError(w, http.StatusBadRequest, "invalid tz")
+		return "", false
+	}
+	return name, true
 }
 
 // writePhotoPage answers with a page of a list ordered by sort time.

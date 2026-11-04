@@ -31,3 +31,6 @@ UPDATE users SET viewer_shows_originals = @viewer_shows_originals WHERE id = @id
 
 -- name: SetUserViewerHiddenFields :one
 UPDATE users SET viewer_hidden_fields = @viewer_hidden_fields WHERE id = @id RETURNING *;
+
+-- name: SetUserNavigationHiddenOnPhones :one
+UPDATE users SET navigation_hidden_on_phones = @navigation_hidden_on_phones WHERE id = @id RETURNING *;

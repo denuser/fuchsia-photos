@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -46,10 +47,16 @@ func (s *server) listSharedPhotos(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	from, to, ok := timeRange(w, r)
+	if !ok {
+		return
+	}
 	user := currentUser(r)
 	photos, err := s.Queries.ListSharedPhotos(r.Context(), store.ListSharedPhotosParams{
 		ViewerID:      user.ID,
 		IncludeAlbums: user.SharedIncludesAlbums,
+		FromTime:      from,
+		ToTime:        to,
 		AfterSortAt:   afterSortAt,
 		AfterID:       afterID,
 		MaxRows:       maxRows,
@@ -61,6 +68,24 @@ func (s *server) listSharedPhotos(w http.ResponseWriter, r *http.Request) {
 	s.writePhotoPage(w, r, photos, maxRows)
 }
 
+func (s *server) countSharedMonths(w http.ResponseWriter, r *http.Request) {
+	tz, ok := timeZoneParam(w, r)
+	if !ok {
+		return
+	}
+	user := currentUser(r)
+	rows, err := s.Queries.CountSharedMonths(r.Context(), store.CountSharedMonthsParams{
+		Tz:            tz,
+		ViewerID:      user.ID,
+		IncludeAlbums: user.SharedIncludesAlbums,
+	})
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeMonths(w, rows, func(row store.CountSharedMonthsRow) monthJSON { return monthJSON(row) })
+}
+
 func (s *server) listAllPhotos(w http.ResponseWriter, r *http.Request) {
 	maxRows, ok := pageSize(w, r)
 	if !ok {
@@ -70,17 +95,18 @@ func (s *server) listAllPhotos(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var owner *int64
-	if text := r.URL.Query().Get("owner"); text != "" {
-		id, err := strconv.ParseInt(text, 10, 64)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid owner")
-			return
-		}
-		owner = &id
+	owner, ok := ownerParam(w, r)
+	if !ok {
+		return
+	}
+	from, to, ok := timeRange(w, r)
+	if !ok {
+		return
 	}
 	photos, err := s.Queries.ListAllPhotos(r.Context(), store.ListAllPhotosParams{
 		OwnerID:     owner,
+		FromTime:    from,
+		ToTime:      to,
 		AfterSortAt: afterSortAt,
 		AfterID:     afterID,
 		MaxRows:     maxRows,
@@ -90,6 +116,47 @@ func (s *server) listAllPhotos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writePhotoPage(w, r, photos, maxRows)
+}
+
+func (s *server) countAllMonths(w http.ResponseWriter, r *http.Request) {
+	tz, ok := timeZoneParam(w, r)
+	if !ok {
+		return
+	}
+	owner, ok := ownerParam(w, r)
+	if !ok {
+		return
+	}
+	rows, err := s.Queries.CountAllMonths(r.Context(), store.CountAllMonthsParams{Tz: tz, OwnerID: owner})
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeMonths(w, rows, func(row store.CountAllMonthsRow) monthJSON { return monthJSON(row) })
+}
+
+func ownerParam(w http.ResponseWriter, r *http.Request) (*int64, bool) {
+	text := r.URL.Query().Get("owner")
+	if text == "" {
+		return nil, true
+	}
+	id, err := strconv.ParseInt(text, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid owner")
+		return nil, false
+	}
+	return &id, true
+}
+
+// timeRange reads the from and to parameters, which months are loaded by.
+func timeRange(w http.ResponseWriter, r *http.Request) (from, to *time.Time, ok bool) {
+	if from, ok = timeParam(w, r, "from"); !ok {
+		return nil, nil, false
+	}
+	if to, ok = timeParam(w, r, "to"); !ok {
+		return nil, nil, false
+	}
+	return from, to, true
 }
 
 func (s *server) listSharedAlbums(w http.ResponseWriter, r *http.Request) {

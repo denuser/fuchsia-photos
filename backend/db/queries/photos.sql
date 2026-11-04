@@ -33,6 +33,23 @@ WHERE p.owner_id = @owner_id
 ORDER BY p.sort_at DESC, p.id DESC
 LIMIT @max_rows;
 
+-- Counts the photos of ListTimeline by month in the viewer's time zone, so
+-- that the timeline can lay out months it has not loaded yet.
+-- name: CountTimelineMonths :many
+SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE @tz::text), 'YYYY-MM')::text AS month,
+       count(*) AS count
+FROM photos p
+WHERE p.owner_id = @owner_id
+  AND p.deleted_at IS NULL
+  AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
+  AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
+  AND (sqlc.narg(album_id)::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = sqlc.narg(album_id)::bigint))
+  AND (sqlc.narg(tag_ids)::bigint[] IS NULL
+       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[])))
+GROUP BY 1
+ORDER BY 1 DESC;
+
 -- name: ListTrash :many
 SELECT *
 FROM photos

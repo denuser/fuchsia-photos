@@ -10,7 +10,7 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (login, password_hash, role) VALUES ($1, $2, $3) RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields
+INSERT INTO users (login, password_hash, role) VALUES ($1, $2, $3) RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones
 `
 
 type CreateUserParams struct {
@@ -32,12 +32,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.SharedIncludesAlbums,
 		&i.ViewerShowsOriginals,
 		&i.ViewerHiddenFields,
+		&i.NavigationHiddenOnPhones,
 	)
 	return i, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields FROM users WHERE id = $1
+SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
@@ -53,12 +54,13 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.SharedIncludesAlbums,
 		&i.ViewerShowsOriginals,
 		&i.ViewerHiddenFields,
+		&i.NavigationHiddenOnPhones,
 	)
 	return i, err
 }
 
 const getUserByLogin = `-- name: GetUserByLogin :one
-SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields FROM users WHERE lower(login) = lower($1)
+SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones FROM users WHERE lower(login) = lower($1)
 `
 
 func (q *Queries) GetUserByLogin(ctx context.Context, login string) (User, error) {
@@ -74,6 +76,7 @@ func (q *Queries) GetUserByLogin(ctx context.Context, login string) (User, error
 		&i.SharedIncludesAlbums,
 		&i.ViewerShowsOriginals,
 		&i.ViewerHiddenFields,
+		&i.NavigationHiddenOnPhones,
 	)
 	return i, err
 }
@@ -109,7 +112,7 @@ func (q *Queries) ListActiveUserLogins(ctx context.Context) ([]ListActiveUserLog
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields FROM users ORDER BY lower(login)
+SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones FROM users ORDER BY lower(login)
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -131,6 +134,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.SharedIncludesAlbums,
 			&i.ViewerShowsOriginals,
 			&i.ViewerHiddenFields,
+			&i.NavigationHiddenOnPhones,
 		); err != nil {
 			return nil, err
 		}
@@ -154,6 +158,33 @@ type SetUserDisabledParams struct {
 func (q *Queries) SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) error {
 	_, err := q.db.Exec(ctx, setUserDisabled, arg.Disabled, arg.ID)
 	return err
+}
+
+const setUserNavigationHiddenOnPhones = `-- name: SetUserNavigationHiddenOnPhones :one
+UPDATE users SET navigation_hidden_on_phones = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones
+`
+
+type SetUserNavigationHiddenOnPhonesParams struct {
+	NavigationHiddenOnPhones bool
+	ID                       int64
+}
+
+func (q *Queries) SetUserNavigationHiddenOnPhones(ctx context.Context, arg SetUserNavigationHiddenOnPhonesParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserNavigationHiddenOnPhones, arg.NavigationHiddenOnPhones, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Login,
+		&i.PasswordHash,
+		&i.Role,
+		&i.Disabled,
+		&i.CreatedAt,
+		&i.SharedIncludesAlbums,
+		&i.ViewerShowsOriginals,
+		&i.ViewerHiddenFields,
+		&i.NavigationHiddenOnPhones,
+	)
+	return i, err
 }
 
 const setUserPassword = `-- name: SetUserPassword :exec
@@ -185,7 +216,7 @@ func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) error 
 }
 
 const setUserSharedIncludesAlbums = `-- name: SetUserSharedIncludesAlbums :one
-UPDATE users SET shared_includes_albums = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields
+UPDATE users SET shared_includes_albums = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones
 `
 
 type SetUserSharedIncludesAlbumsParams struct {
@@ -206,12 +237,13 @@ func (q *Queries) SetUserSharedIncludesAlbums(ctx context.Context, arg SetUserSh
 		&i.SharedIncludesAlbums,
 		&i.ViewerShowsOriginals,
 		&i.ViewerHiddenFields,
+		&i.NavigationHiddenOnPhones,
 	)
 	return i, err
 }
 
 const setUserViewerHiddenFields = `-- name: SetUserViewerHiddenFields :one
-UPDATE users SET viewer_hidden_fields = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields
+UPDATE users SET viewer_hidden_fields = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones
 `
 
 type SetUserViewerHiddenFieldsParams struct {
@@ -232,12 +264,13 @@ func (q *Queries) SetUserViewerHiddenFields(ctx context.Context, arg SetUserView
 		&i.SharedIncludesAlbums,
 		&i.ViewerShowsOriginals,
 		&i.ViewerHiddenFields,
+		&i.NavigationHiddenOnPhones,
 	)
 	return i, err
 }
 
 const setUserViewerShowsOriginals = `-- name: SetUserViewerShowsOriginals :one
-UPDATE users SET viewer_shows_originals = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields
+UPDATE users SET viewer_shows_originals = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones
 `
 
 type SetUserViewerShowsOriginalsParams struct {
@@ -258,6 +291,7 @@ func (q *Queries) SetUserViewerShowsOriginals(ctx context.Context, arg SetUserVi
 		&i.SharedIncludesAlbums,
 		&i.ViewerShowsOriginals,
 		&i.ViewerHiddenFields,
+		&i.NavigationHiddenOnPhones,
 	)
 	return i, err
 }

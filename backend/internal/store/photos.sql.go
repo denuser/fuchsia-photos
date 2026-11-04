@@ -29,6 +29,65 @@ func (q *Queries) CountPhotosByStatus(ctx context.Context, ownerID int64) (Count
 	return i, err
 }
 
+const countTimelineMonths = `-- name: CountTimelineMonths :many
+SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE $1::text), 'YYYY-MM')::text AS month,
+       count(*) AS count
+FROM photos p
+WHERE p.owner_id = $2
+  AND p.deleted_at IS NULL
+  AND ($3::timestamptz IS NULL OR p.sort_at >= $3::timestamptz)
+  AND ($4::timestamptz IS NULL OR p.sort_at < $4::timestamptz)
+  AND ($5::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $5::bigint))
+  AND ($6::bigint[] IS NULL
+       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($6::bigint[])))
+GROUP BY 1
+ORDER BY 1 DESC
+`
+
+type CountTimelineMonthsParams struct {
+	Tz       string
+	OwnerID  int64
+	FromTime *time.Time
+	ToTime   *time.Time
+	AlbumID  *int64
+	TagIds   []int64
+}
+
+type CountTimelineMonthsRow struct {
+	Month string
+	Count int64
+}
+
+// Counts the photos of ListTimeline by month in the viewer's time zone, so
+// that the timeline can lay out months it has not loaded yet.
+func (q *Queries) CountTimelineMonths(ctx context.Context, arg CountTimelineMonthsParams) ([]CountTimelineMonthsRow, error) {
+	rows, err := q.db.Query(ctx, countTimelineMonths,
+		arg.Tz,
+		arg.OwnerID,
+		arg.FromTime,
+		arg.ToTime,
+		arg.AlbumID,
+		arg.TagIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountTimelineMonthsRow
+	for rows.Next() {
+		var i CountTimelineMonthsRow
+		if err := rows.Scan(&i.Month, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deletePhotoLinks = `-- name: DeletePhotoLinks :exec
 WITH albums_removed AS (DELETE FROM album_photos ap WHERE ap.photo_id = $1),
      tags_removed AS (DELETE FROM photo_tags pt WHERE pt.photo_id = $1),

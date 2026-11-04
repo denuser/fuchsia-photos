@@ -109,6 +109,8 @@ const steps = {
   'upload photos and get previews': async () => {
     await page.locator('input[type=file]').setInputFiles(PHOTOS)
     await previews(5)
+    // The timeline groups photos by month, after reading the dates from EXIF.
+    await page.getByTestId('month').first().waitFor()
   },
   'select a range': async () => {
     await select(0)
@@ -353,6 +355,28 @@ const steps = {
     await source('original')
     if ((await page.getByTestId('viewer').getByRole('link', { name: '59.93000, 30.33000' }).count()) > 0) {
       throw new Error('the viewer shows the location the user hid')
+    }
+  },
+  'on a phone the menu opens over the page': async () => {
+    await page.setViewportSize({ width: 375, height: 740 })
+    try {
+      await page.goto(BASE)
+      await previews(3)
+      // A closed menu stays in the page, moved off the left edge of the screen.
+      const albums = page.getByRole('link', { name: 'Albums' })
+      const menu = (shown) =>
+        waitFor(shown ? 'the menu' : 'the menu to hide', (want) => {
+          const box = [...document.querySelectorAll('a')].find((a) => a.ariaLabel === 'Albums')?.getBoundingClientRect()
+          return box && box.right > 0 === want
+        }, shown)
+      await menu(false)
+      await button('Expand menu').click()
+      await menu(true)
+      await albums.click()
+      await page.waitForURL(`${BASE}/albums`)
+      await menu(false)
+    } finally {
+      await page.setViewportSize({ width: 1280, height: 800 })
     }
   },
   'the server agrees with the screen': async () => {

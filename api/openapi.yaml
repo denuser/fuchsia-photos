@@ -88,6 +88,8 @@ paths:
                   type: array
                   items:
                     $ref: "#/components/schemas/ViewerField"
+                navigationHiddenOnPhones:
+                  type: boolean
       responses:
         "200":
           description: The changed user
@@ -395,6 +397,55 @@ paths:
           description: The tags are changed
         "400":
           $ref: "#/components/responses/Error"
+  /photos/months:
+    get:
+      operationId: countPhotoMonths
+      summary: Count the photos of listPhotos by month
+      description: Takes the filters of listPhotos. The timeline lays out months it has not loaded yet from these counts.
+      parameters:
+        - name: tz
+          in: query
+          required: true
+          description: The IANA time zone that months are counted in, such as `Europe/Moscow`
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Only photos sorted at or after this time
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Only photos sorted before this time
+          schema:
+            type: string
+            format: date-time
+        - name: tag
+          in: query
+          description: Only photos with at least one of these tags
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - name: album
+          in: query
+          description: Only photos of this album
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Photos by month
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthCounts"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /photos/events:
     get:
       operationId: photoEvents
@@ -423,6 +474,18 @@ paths:
           in: query
           schema:
             type: string
+        - name: from
+          in: query
+          description: Only photos sorted at or after this time
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Only photos sorted before this time
+          schema:
+            type: string
+            format: date-time
       responses:
         "200":
           description: A page of photos, newest first
@@ -430,6 +493,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PhotoPage"
+        "400":
+          $ref: "#/components/responses/Error"
+  /photos/shared/months:
+    get:
+      operationId: countSharedMonths
+      summary: Count the photos of listSharedPhotos by month
+      parameters:
+        - name: tz
+          in: query
+          required: true
+          description: The IANA time zone that months are counted in, such as `Europe/Moscow`
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Photos by month
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthCounts"
         "400":
           $ref: "#/components/responses/Error"
   /photos/all:
@@ -454,6 +537,18 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: from
+          in: query
+          description: Only photos sorted at or after this time
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Only photos sorted before this time
+          schema:
+            type: string
+            format: date-time
       responses:
         "200":
           description: A page of photos, newest first
@@ -461,6 +556,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PhotoPage"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /photos/all/months:
+    get:
+      operationId: countAllMonths
+      summary: Count the photos of listAllPhotos by month
+      description: Administrators only.
+      parameters:
+        - name: tz
+          in: query
+          required: true
+          description: The IANA time zone that months are counted in, such as `Europe/Moscow`
+          schema:
+            type: string
+        - name: owner
+          in: query
+          description: Only the photos of this user
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Photos by month
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthCounts"
         "400":
           $ref: "#/components/responses/Error"
         "403":
@@ -1143,7 +1267,7 @@ components:
       enum: [admin, user]
     User:
       type: object
-      required: [id, login, role, disabled, createdAt, sharedIncludesAlbums, viewerShowsOriginals, viewerHiddenFields]
+      required: [id, login, role, disabled, createdAt, sharedIncludesAlbums, viewerShowsOriginals, viewerHiddenFields, navigationHiddenOnPhones]
       properties:
         id:
           type: integer
@@ -1168,6 +1292,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ViewerField"
+        navigationHiddenOnPhones:
+          description: Whether the navigation drawer stays hidden on a phone until the menu button opens it. On by default
+          type: boolean
     ViewerField:
       description: A photo detail the viewer can show. `camera` is the make and model, `location` is shown only if an administrator allows it
       type: string
@@ -1299,6 +1426,20 @@ components:
         longitude:
           description: Degrees, negative to the west
           type: number
+    MonthCounts:
+      description: The number of photos a list has in each month, newest first. Months without photos are left out
+      type: array
+      items:
+        type: object
+        required: [month, count]
+        properties:
+          month:
+            description: The month in the requested time zone, such as `2024-05`
+            type: string
+            pattern: "^[0-9]{4}-[0-9]{2}$"
+          count:
+            type: integer
+            format: int64
     PhotoPage:
       type: object
       required: [items, nextCursor]

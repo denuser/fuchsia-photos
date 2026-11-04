@@ -14,7 +14,7 @@ const error = ref('')
 
 const shown = computed(() => viewerFields.map((f) => f.value).filter((f) => !auth.user?.viewerHiddenFields.includes(f)))
 
-type Changes = { viewerShowsOriginals?: boolean; viewerHiddenFields?: ViewerField[] }
+type Changes = { viewerShowsOriginals?: boolean; viewerHiddenFields?: ViewerField[]; navigationHiddenOnPhones?: boolean }
 
 // Each change is saved at once, like the switch on the "Shared with me" page.
 async function save(body: Changes) {
@@ -72,6 +72,19 @@ function setShown(value: ViewerField[] | null) {
         @update:model-value="setShown"
       />
     </div>
+
+    <h2 class="text-h6 mb-2">Phone</h2>
+    <v-switch
+      :model-value="auth.user.navigationHiddenOnPhones"
+      :disabled="saving"
+      label="Hide the menu on a phone"
+      hint="The menu button opens it over the page, so the photos take the whole width of the screen."
+      persistent-hint
+      color="primary"
+      density="compact"
+      class="mb-6"
+      @update:model-value="save({ navigationHiddenOnPhones: Boolean($event) })"
+    />
 
     <h2 class="text-h6 mb-2">Password</h2>
     <v-btn prepend-icon="mdi-lock-reset" variant="tonal" text="Change password" @click="passwordDialog = true" />

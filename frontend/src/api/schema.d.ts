@@ -258,6 +258,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/photos/months": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count the photos of listPhotos by month
+         * @description Takes the filters of listPhotos. The timeline lays out months it has not loaded yet from these counts.
+         */
+        get: operations["countPhotoMonths"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/photos/events": {
         parameters: {
             query?: never;
@@ -298,6 +318,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/photos/shared/months": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Count the photos of listSharedPhotos by month */
+        get: operations["countSharedMonths"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/photos/all": {
         parameters: {
             query?: never;
@@ -310,6 +347,26 @@ export interface paths {
          * @description Administrators only.
          */
         get: operations["listAllPhotos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/all/months": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count the photos of listAllPhotos by month
+         * @description Administrators only.
+         */
+        get: operations["countAllMonths"];
         put?: never;
         post?: never;
         delete?: never;
@@ -818,6 +875,8 @@ export interface components {
             viewerShowsOriginals: boolean;
             /** @description Photo details the viewer leaves out, in the viewer's order. The API still returns them */
             viewerHiddenFields: components["schemas"]["ViewerField"][];
+            /** @description Whether the navigation drawer stays hidden on a phone until the menu button opens it. On by default */
+            navigationHiddenOnPhones: boolean;
         };
         /**
          * @description A photo detail the viewer can show. `camera` is the make and model, `location` is shown only if an administrator allows it
@@ -897,6 +956,13 @@ export interface components {
             /** @description Degrees, negative to the west */
             longitude: number;
         };
+        /** @description The number of photos a list has in each month, newest first. Months without photos are left out */
+        MonthCounts: {
+            /** @description The month in the requested time zone, such as `2024-05` */
+            month: string;
+            /** Format: int64 */
+            count: number;
+        }[];
         PhotoPage: {
             items: components["schemas"]["Photo"][];
             nextCursor: string | null;
@@ -1095,6 +1161,7 @@ export interface operations {
                     sharedIncludesAlbums?: boolean;
                     viewerShowsOriginals?: boolean;
                     viewerHiddenFields?: components["schemas"]["ViewerField"][];
+                    navigationHiddenOnPhones?: boolean;
                 };
             };
         };
@@ -1442,6 +1509,39 @@ export interface operations {
             400: components["responses"]["Error"];
         };
     };
+    countPhotoMonths: {
+        parameters: {
+            query: {
+                /** @description The IANA time zone that months are counted in, such as `Europe/Moscow` */
+                tz: string;
+                /** @description Only photos sorted at or after this time */
+                from?: string;
+                /** @description Only photos sorted before this time */
+                to?: string;
+                /** @description Only photos with at least one of these tags */
+                tag?: number[];
+                /** @description Only photos of this album */
+                album?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Photos by month */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthCounts"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
     photoEvents: {
         parameters: {
             query?: never;
@@ -1467,6 +1567,10 @@ export interface operations {
             query?: {
                 limit?: number;
                 cursor?: string;
+                /** @description Only photos sorted at or after this time */
+                from?: string;
+                /** @description Only photos sorted before this time */
+                to?: string;
             };
             header?: never;
             path?: never;
@@ -1486,6 +1590,30 @@ export interface operations {
             400: components["responses"]["Error"];
         };
     };
+    countSharedMonths: {
+        parameters: {
+            query: {
+                /** @description The IANA time zone that months are counted in, such as `Europe/Moscow` */
+                tz: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Photos by month */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthCounts"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
     listAllPhotos: {
         parameters: {
             query?: {
@@ -1493,6 +1621,10 @@ export interface operations {
                 cursor?: string;
                 /** @description Only the photos of this user */
                 owner?: number;
+                /** @description Only photos sorted at or after this time */
+                from?: string;
+                /** @description Only photos sorted before this time */
+                to?: string;
             };
             header?: never;
             path?: never;
@@ -1507,6 +1639,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PhotoPage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    countAllMonths: {
+        parameters: {
+            query: {
+                /** @description The IANA time zone that months are counted in, such as `Europe/Moscow` */
+                tz: string;
+                /** @description Only the photos of this user */
+                owner?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Photos by month */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthCounts"];
                 };
             };
             400: components["responses"]["Error"];

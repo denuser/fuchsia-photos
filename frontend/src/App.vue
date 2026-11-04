@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 
 import logo from './assets/logo.png'
@@ -12,6 +12,7 @@ import { useUploadsStore } from './stores/uploads'
 const auth = useAuthStore()
 const photos = usePhotosStore()
 const uploads = useUploadsStore()
+const route = useRoute()
 const router = useRouter()
 // On a phone the upload button is an icon, to leave room in the app bar.
 const { xs } = useDisplay()
@@ -19,6 +20,26 @@ const { xs } = useDisplay()
 const navExpanded = ref(localStorage.getItem('navExpanded') === 'true')
 
 watch(navExpanded, (value) => localStorage.setItem('navExpanded', String(value)))
+
+// On a phone the navigation can stay hidden until the menu button opens it
+// over the page, as a profile setting chooses. Elsewhere it is a permanent rail.
+const navOverlay = computed(() => xs.value && (auth.user?.navigationHiddenOnPhones ?? true))
+const navOpen = ref(false)
+
+watch(
+  () => route.fullPath,
+  () => (navOpen.value = false),
+)
+
+function toggleNav() {
+  if (navOverlay.value) {
+    navOpen.value = !navOpen.value
+  } else {
+    navExpanded.value = !navExpanded.value
+  }
+}
+
+const navShownInFull = computed(() => (navOverlay.value ? navOpen.value : navExpanded.value))
 
 const navItems = computed(() => [
   { to: '/', icon: 'mdi-image-multiple-outline', title: 'Photos', exact: true },
@@ -54,9 +75,9 @@ window.addEventListener('beforeunload', (event) => {
     <v-app-bar v-if="auth.user" density="comfortable" flat border="b">
       <template #prepend>
         <v-app-bar-nav-icon
-          :aria-label="navExpanded ? 'Collapse menu' : 'Expand menu'"
-          :aria-expanded="navExpanded"
-          @click="navExpanded = !navExpanded"
+          :aria-label="navShownInFull ? 'Collapse menu' : 'Expand menu'"
+          :aria-expanded="navShownInFull"
+          @click="toggleNav"
         />
       </template>
       <v-app-bar-title>
@@ -105,7 +126,14 @@ window.addEventListener('beforeunload', (event) => {
       </v-menu>
     </v-app-bar>
 
-    <v-navigation-drawer v-if="auth.user" permanent :rail="!navExpanded">
+    <v-navigation-drawer
+      v-if="auth.user"
+      :model-value="navOverlay ? navOpen : true"
+      :permanent="!navOverlay"
+      :temporary="navOverlay"
+      :rail="!navOverlay && !navExpanded"
+      @update:model-value="navOpen = $event"
+    >
       <v-list nav density="compact">
         <v-list-item
           v-for="item in navItems"
@@ -116,7 +144,7 @@ window.addEventListener('beforeunload', (event) => {
           :title="item.title"
           :aria-label="item.title"
         >
-          <v-tooltip activator="parent" location="end" :disabled="navExpanded">{{ item.title }}</v-tooltip>
+          <v-tooltip activator="parent" location="end" :disabled="navShownInFull">{{ item.title }}</v-tooltip>
         </v-list-item>
       </v-list>
     </v-navigation-drawer>

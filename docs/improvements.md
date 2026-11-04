@@ -20,3 +20,11 @@ A page for administrators at `/admin`, with the image processing settings. They 
 Purely technical settings stay in the environment, such as the number of workers. Stripping metadata, auto-rotation and sRGB conversion are not configurable. Users and folder imports remain separate pages.
 
 Settings apply to new photos only. Regenerating existing previews would be a separate improvement, since it is a background task that takes hours and needs progress and protection from running twice.
+
+## 2. Timeline for large libraries
+
+**Status:** done.
+
+The timeline loads month by month from counts the server gives first, with month titles and a scrubber with the years. A month near the screen loads all of its pages; months far from it are only counted. The trash keeps loading page by page, with a spinner at the end of the list and a retry button when a page fails. Decisions are in the [README](../README.md#decisions).
+
+Loaded months stay in memory. Unloading the months far from the screen is left for when a library makes it necessary.
