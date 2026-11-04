@@ -235,21 +235,30 @@ function onWheel(event: WheelEvent) {
 
 // A click zooms to the photo's own resolution at the clicked point, or back.
 // Dragging the photo also ends in a click, which must not zoom.
+// The stage takes pointerdown while it captures, because Panzoom stops it on
+// the photo's slide.
 let downAt = { x: 0, y: 0 }
 
 // A horizontal swipe with one finger steps to the neighbouring photo, unless
-// the photo is zoomed in, when the finger moves the photo instead. The photo
-// follows the finger, and a second finger, for a pinch, ends the swipe.
+// the photo is zoomed in, when the finger moves the photo instead. The photos
+// lie in a row, and the row follows the finger, so the neighbour comes in from
+// the side. A second finger, for a pinch, ends the swipe.
+//
+// On release the row slides either back or on to the neighbour, and only once
+// the neighbour is in place does it become the viewer's photo.
 const SWIPE_DISTANCE = 50
+const SLIDE_GAP = 16
 const pointers = new Set<number>()
 let swiping = false
 const swipeOffset = ref(0)
+const sliding = ref(false)
+let slideTarget: Photo | null = null
+let slideFallback = 0
 
 function onPointerDown(event: PointerEvent) {
   downAt = { x: event.clientX, y: event.clientY }
   pointers.add(event.pointerId)
-  swiping = event.pointerType !== 'mouse' && pointers.size === 1 && !zoomed.value
-  swipeOffset.value = 0
+  swiping = event.pointerType !== 'mouse' && pointers.size === 1 && !zoomed.value && !sliding.value
 }
 
 function onPointerMove(event: PointerEvent) {
@@ -258,7 +267,7 @@ function onPointerMove(event: PointerEvent) {
   }
   if (pointers.size > 1 || zoomed.value) {
     swiping = false
-    swipeOffset.value = 0
+    slideTo(0, null)
     return
   }
   const dx = event.clientX - downAt.x
@@ -272,17 +281,59 @@ function onPointerUp(event: PointerEvent) {
     return
   }
   swiping = false
-  swipeOffset.value = 0
   const dx = event.clientX - downAt.x
   const dy = event.clientY - downAt.y
-  if (event.type !== 'pointerup' || Math.abs(dx) < SWIPE_DISTANCE || Math.abs(dx) < Math.abs(dy)) {
+  const target = dx > 0 ? previous.value : next.value
+  if (event.type !== 'pointerup' || Math.abs(dx) < SWIPE_DISTANCE || Math.abs(dx) < Math.abs(dy) || !target) {
+    slideTo(0, null)
     return
   }
-  const target = dx > 0 ? previous.value : next.value
-  if (target) {
-    emit('navigate', target)
+  slideTo(Math.sign(dx) * (stageSize.value.width + SLIDE_GAP), target)
+}
+
+function slideTo(offset: number, target: Photo | null) {
+  if (swipeOffset.value === offset) {
+    finishSlide(target)
+    return
+  }
+  slideTarget = target
+  sliding.value = true
+  swipeOffset.value = offset
+  // In case transitionend never comes, such as in a hidden tab.
+  clearTimeout(slideFallback)
+  slideFallback = window.setTimeout(() => finishSlide(slideTarget), 500)
+}
+
+function onSlideEnd(event: TransitionEvent) {
+  if (sliding.value && event.target === event.currentTarget && event.propertyName === 'transform') {
+    finishSlide(slideTarget)
   }
 }
+
+function finishSlide(target: Photo | null) {
+  clearTimeout(slideFallback)
+  slideTarget = null
+  if (target) {
+    // The row jumps back to the middle in the same update that makes the
+    // neighbour the viewer's photo, see the watch on the photo below.
+    emit('navigate', target)
+  } else {
+    sliding.value = false
+    swipeOffset.value = 0
+  }
+}
+
+watch(
+  () => props.photo.id,
+  () => {
+    clearTimeout(slideFallback)
+    slideTarget = null
+    sliding.value = false
+    swipeOffset.value = 0
+  },
+)
+
+onBeforeUnmount(() => clearTimeout(slideFallback))
 
 function onClick(event: MouseEvent) {
   const instance = panzoom.value
@@ -328,26 +379,40 @@ onBeforeUnmount(() => {
       ref="stage"
       class="stage"
       :class="{ zoomable, zoomed }"
-      :style="swipeOffset ? { transform: `translateX(${swipeOffset}px)`, transition: 'none' } : undefined"
-      @pointerdown="onPointerDown"
+      @pointerdown.capture="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
       @pointercancel="onPointerUp"
       @click="onClick"
       @wheel.prevent="onWheel"
     >
-      <img
-        ref="image"
-        :key="photo.id"
-        :src="source"
-        :alt="photo.name"
-        :data-source="originalShown ? 'original' : 'preview'"
-        :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
-        class="image"
-        data-testid="viewer-image"
-        draggable="false"
-        @load="onImageLoad"
-      />
+      <div
+        class="track"
+        :class="{ sliding }"
+        :style="swipeOffset ? { transform: `translateX(${swipeOffset}px)` } : undefined"
+        @transitionend="onSlideEnd"
+      >
+        <div v-if="previous" :key="previous.id" class="slide neighbour" :style="{ left: `calc(-100% - ${SLIDE_GAP}px)` }">
+          <img :src="previewUrl(previous.id, 'viewer')" alt="" class="image" draggable="false" />
+        </div>
+        <div class="slide">
+          <img
+            ref="image"
+            :key="photo.id"
+            :src="source"
+            :alt="photo.name"
+            :data-source="originalShown ? 'original' : 'preview'"
+            :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
+            class="image"
+            data-testid="viewer-image"
+            draggable="false"
+            @load="onImageLoad"
+          />
+        </div>
+        <div v-if="next" :key="next.id" class="slide neighbour" :style="{ left: `calc(100% + ${SLIDE_GAP}px)` }">
+          <img :src="previewUrl(next.id, 'viewer')" alt="" class="image" draggable="false" />
+        </div>
+      </div>
     </div>
 
     <div class="bar">
@@ -415,7 +480,37 @@ onBeforeUnmount(() => {
   overflow: hidden;
   /* Swipes and pinches are the viewer's, not the browser's. */
   touch-action: none;
-  transition: transform 0.2s ease-out;
+}
+
+/* The photo and its neighbours in a row, moved by a swipe. The row follows
+   the finger directly and animates only when it slides on release. */
+.track {
+  position: absolute;
+  inset: 0;
+}
+
+.track.sliding {
+  transition: transform 0.25s ease-out;
+}
+
+.slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.neighbour {
+  pointer-events: none;
+}
+
+.neighbour .image {
+  width: 100%;
+  height: 100%;
 }
 
 .stage.zoomable {
