@@ -2,7 +2,7 @@
 import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 
-import { api, originalUrl, previewUrl, type Camera, type Photo } from '../api/client'
+import { originalUrl, previewUrl, type Camera, type Photo, type ViewerField } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import { useUsersStore } from '../stores/users'
 
@@ -26,11 +26,13 @@ const details = computed(() => {
     .join(' · ')
 })
 
+const hidden = computed(() => new Set<ViewerField>(auth.user?.viewerHiddenFields ?? []))
+
 const camera = computed(() => (props.photo.camera ? describeCamera(props.photo.camera) : ''))
 
 const location = computed(() => {
   const l = props.photo.location
-  if (!l) {
+  if (!l || hidden.value.has('location')) {
     return null
   }
   const lat = l.latitude.toFixed(5)
@@ -39,19 +41,22 @@ const location = computed(() => {
 })
 
 // Formats the shooting details the way cameras show them, such as
-// "Canon EOS R5 · 35 mm · ƒ/2.8 · 1/250 s · ISO 100".
+// "Canon EOS R5 · 35 mm · ƒ/2.8 · 1/250 s · ISO 100", leaving out the fields
+// the user hid in the profile.
 function describeCamera(c: Camera) {
-  return [
-    cameraName(c),
-    c.lens,
-    c.focalLength && focalLength(c.focalLength, c.focalLength35mm),
-    c.fNumber && `ƒ/${round(c.fNumber)}`,
-    c.exposureTime && exposureTime(c.exposureTime),
-    c.iso && `ISO ${c.iso}`,
-    c.exposureCompensation && `${c.exposureCompensation > 0 ? '+' : '−'}${round(Math.abs(c.exposureCompensation))} EV`,
-    c.flash && 'Flash',
+  const parts: [ViewerField, unknown][] = [
+    ['camera', cameraName(c)],
+    ['lens', c.lens],
+    ['focalLength', c.focalLength && focalLength(c.focalLength, c.focalLength35mm)],
+    ['aperture', c.fNumber && `ƒ/${round(c.fNumber)}`],
+    ['exposureTime', c.exposureTime && exposureTime(c.exposureTime)],
+    ['iso', c.iso && `ISO ${c.iso}`],
+    ['exposureCompensation', c.exposureCompensation && `${c.exposureCompensation > 0 ? '+' : '−'}${round(Math.abs(c.exposureCompensation))} EV`],
+    ['flash', c.flash && 'Flash'],
   ]
-    .filter(Boolean)
+  return parts
+    .filter(([field, text]) => text && !hidden.value.has(field))
+    .map(([, text]) => text)
     .join(' · ')
 }
 
@@ -79,20 +84,8 @@ function round(n: number) {
   return String(Math.round(n * 10) / 10)
 }
 
+// Chosen in the profile.
 const showOriginals = computed(() => auth.user?.viewerShowsOriginals ?? false)
-const savingSetting = ref(false)
-const settingError = ref(false)
-
-async function toggleOriginals() {
-  savingSetting.value = true
-  const { data } = await api.PATCH('/me', { body: { viewerShowsOriginals: !showOriginals.value } })
-  savingSetting.value = false
-  if (data) {
-    auth.user = data
-  } else {
-    settingError.value = true
-  }
-}
 
 // Formats the browser failed to decode, such as HEIC outside Safari. Their
 // originals are not downloaded again, and the viewer keeps the preview.
@@ -326,15 +319,6 @@ onBeforeUnmount(() => {
         <v-btn icon="mdi-share-variant-outline" variant="text" aria-label="Share" @click="emit('share', photo)" />
         <v-btn icon="mdi-trash-can-outline" variant="text" aria-label="Move to trash" @click="emit('trash', photo)" />
       </template>
-      <v-btn
-        icon="mdi-quality-high"
-        :variant="showOriginals ? 'tonal' : 'text'"
-        :loading="savingSetting"
-        :aria-pressed="showOriginals"
-        aria-label="Show originals"
-        title="Show originals instead of previews"
-        @click="toggleOriginals"
-      />
       <v-btn :href="originalUrl(photo.id)" icon="mdi-download" variant="text" aria-label="Download the original" />
       <v-btn icon="mdi-close" variant="text" aria-label="Close" @click="emit('close')" />
     </div>
@@ -357,8 +341,6 @@ onBeforeUnmount(() => {
       aria-label="Next photo"
       @click="emit('navigate', next)"
     />
-
-    <v-snackbar v-model="settingError" text="The setting could not be saved" location="bottom left" />
   </div>
 </template>
 

@@ -18,6 +18,7 @@ export type UploadResult = components['schemas']['UploadResult']
 export type User = components['schemas']['User']
 export type UserRef = components['schemas']['UserRef']
 export type Visibility = components['schemas']['Visibility']
+export type ViewerField = components['schemas']['ViewerField']
 
 export const API_BASE = '/api/v1'
 

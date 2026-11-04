@@ -131,11 +131,20 @@ func (s *server) getMe(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SharedIncludesAlbums *bool `json:"sharedIncludesAlbums"`
-		ViewerShowsOriginals *bool `json:"viewerShowsOriginals"`
+		SharedIncludesAlbums *bool     `json:"sharedIncludesAlbums"`
+		ViewerShowsOriginals *bool     `json:"viewerShowsOriginals"`
+		ViewerHiddenFields   *[]string `json:"viewerHiddenFields"`
 	}
 	if !readJSON(w, r, &req) {
 		return
+	}
+	var hidden []string
+	if req.ViewerHiddenFields != nil {
+		var err error
+		if hidden, err = normalizeViewerFields(*req.ViewerHiddenFields); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 	user := currentUser(r)
 	if req.SharedIncludesAlbums != nil {
@@ -154,6 +163,17 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 		user, err = s.Queries.SetUserViewerShowsOriginals(r.Context(), store.SetUserViewerShowsOriginalsParams{
 			ID:                   user.ID,
 			ViewerShowsOriginals: *req.ViewerShowsOriginals,
+		})
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+	}
+	if req.ViewerHiddenFields != nil {
+		var err error
+		user, err = s.Queries.SetUserViewerHiddenFields(r.Context(), store.SetUserViewerHiddenFieldsParams{
+			ID:                 user.ID,
+			ViewerHiddenFields: hidden,
 		})
 		if err != nil {
 			internalError(w, r, err)

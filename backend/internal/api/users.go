@@ -2,7 +2,9 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -24,6 +26,8 @@ type userJSON struct {
 	SharedIncludesAlbums bool `json:"sharedIncludesAlbums"`
 	// ViewerShowsOriginals makes the viewer show original files instead of viewer previews.
 	ViewerShowsOriginals bool `json:"viewerShowsOriginals"`
+	// ViewerHiddenFields are the photo details the viewer leaves out.
+	ViewerHiddenFields []string `json:"viewerHiddenFields"`
 }
 
 type userRefJSON struct {
@@ -32,6 +36,10 @@ type userRefJSON struct {
 }
 
 func toUserJSON(u store.User) userJSON {
+	hidden := u.ViewerHiddenFields
+	if hidden == nil {
+		hidden = []string{}
+	}
 	return userJSON{
 		ID:                   u.ID,
 		Login:                u.Login,
@@ -40,7 +48,30 @@ func toUserJSON(u store.User) userJSON {
 		CreatedAt:            u.CreatedAt,
 		SharedIncludesAlbums: u.SharedIncludesAlbums,
 		ViewerShowsOriginals: u.ViewerShowsOriginals,
+		ViewerHiddenFields:   hidden,
 	}
+}
+
+// viewerFields are the photo details the viewer can show, in the order it shows them.
+var viewerFields = []string{"camera", "lens", "focalLength", "aperture", "exposureTime", "iso", "exposureCompensation", "flash", "location"}
+
+// normalizeViewerFields checks a list of viewer fields and puts it in the
+// viewer's order without repeats.
+func normalizeViewerFields(fields []string) ([]string, error) {
+	chosen := make(map[string]bool, len(fields))
+	for _, f := range fields {
+		if !slices.Contains(viewerFields, f) {
+			return nil, fmt.Errorf("unknown viewer field %q", f)
+		}
+		chosen[f] = true
+	}
+	out := []string{}
+	for _, f := range viewerFields {
+		if chosen[f] {
+			out = append(out, f)
+		}
+	}
+	return out, nil
 }
 
 func isAdmin(u store.User) bool {

@@ -10,7 +10,7 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (login, password_hash, role) VALUES ($1, $2, $3) RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals
+INSERT INTO users (login, password_hash, role) VALUES ($1, $2, $3) RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields
 `
 
 type CreateUserParams struct {
@@ -31,12 +31,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.SharedIncludesAlbums,
 		&i.ViewerShowsOriginals,
+		&i.ViewerHiddenFields,
 	)
 	return i, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals FROM users WHERE id = $1
+SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
@@ -51,12 +52,13 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.CreatedAt,
 		&i.SharedIncludesAlbums,
 		&i.ViewerShowsOriginals,
+		&i.ViewerHiddenFields,
 	)
 	return i, err
 }
 
 const getUserByLogin = `-- name: GetUserByLogin :one
-SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals FROM users WHERE lower(login) = lower($1)
+SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields FROM users WHERE lower(login) = lower($1)
 `
 
 func (q *Queries) GetUserByLogin(ctx context.Context, login string) (User, error) {
@@ -71,6 +73,7 @@ func (q *Queries) GetUserByLogin(ctx context.Context, login string) (User, error
 		&i.CreatedAt,
 		&i.SharedIncludesAlbums,
 		&i.ViewerShowsOriginals,
+		&i.ViewerHiddenFields,
 	)
 	return i, err
 }
@@ -106,7 +109,7 @@ func (q *Queries) ListActiveUserLogins(ctx context.Context) ([]ListActiveUserLog
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals FROM users ORDER BY lower(login)
+SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields FROM users ORDER BY lower(login)
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -127,6 +130,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.CreatedAt,
 			&i.SharedIncludesAlbums,
 			&i.ViewerShowsOriginals,
+			&i.ViewerHiddenFields,
 		); err != nil {
 			return nil, err
 		}
@@ -181,7 +185,7 @@ func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) error 
 }
 
 const setUserSharedIncludesAlbums = `-- name: SetUserSharedIncludesAlbums :one
-UPDATE users SET shared_includes_albums = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals
+UPDATE users SET shared_includes_albums = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields
 `
 
 type SetUserSharedIncludesAlbumsParams struct {
@@ -201,12 +205,39 @@ func (q *Queries) SetUserSharedIncludesAlbums(ctx context.Context, arg SetUserSh
 		&i.CreatedAt,
 		&i.SharedIncludesAlbums,
 		&i.ViewerShowsOriginals,
+		&i.ViewerHiddenFields,
+	)
+	return i, err
+}
+
+const setUserViewerHiddenFields = `-- name: SetUserViewerHiddenFields :one
+UPDATE users SET viewer_hidden_fields = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields
+`
+
+type SetUserViewerHiddenFieldsParams struct {
+	ViewerHiddenFields []string
+	ID                 int64
+}
+
+func (q *Queries) SetUserViewerHiddenFields(ctx context.Context, arg SetUserViewerHiddenFieldsParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserViewerHiddenFields, arg.ViewerHiddenFields, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Login,
+		&i.PasswordHash,
+		&i.Role,
+		&i.Disabled,
+		&i.CreatedAt,
+		&i.SharedIncludesAlbums,
+		&i.ViewerShowsOriginals,
+		&i.ViewerHiddenFields,
 	)
 	return i, err
 }
 
 const setUserViewerShowsOriginals = `-- name: SetUserViewerShowsOriginals :one
-UPDATE users SET viewer_shows_originals = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals
+UPDATE users SET viewer_shows_originals = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields
 `
 
 type SetUserViewerShowsOriginalsParams struct {
@@ -226,6 +257,7 @@ func (q *Queries) SetUserViewerShowsOriginals(ctx context.Context, arg SetUserVi
 		&i.CreatedAt,
 		&i.SharedIncludesAlbums,
 		&i.ViewerShowsOriginals,
+		&i.ViewerHiddenFields,
 	)
 	return i, err
 }

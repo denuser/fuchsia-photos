@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import logo from './assets/logo.png'
-import ChangePasswordDialog from './components/ChangePasswordDialog.vue'
 import UploadPanel from './components/UploadPanel.vue'
 import { useAuthStore } from './stores/auth'
 import { usePhotosStore } from './stores/photos'
@@ -14,7 +13,6 @@ const photos = usePhotosStore()
 const uploads = useUploadsStore()
 const router = useRouter()
 
-const passwordDialog = ref(false)
 const navExpanded = ref(localStorage.getItem('navExpanded') === 'true')
 
 watch(navExpanded, (value) => localStorage.setItem('navExpanded', String(value)))
@@ -91,7 +89,7 @@ window.addEventListener('beforeunload', (event) => {
           <v-list-item v-if="auth.isAdmin" to="/users" prepend-icon="mdi-account-multiple" title="Users" />
           <v-list-item v-if="auth.isAdmin" to="/import" prepend-icon="mdi-folder-arrow-down-outline" title="Import from folder" />
           <v-list-item v-if="auth.isAdmin" to="/admin" prepend-icon="mdi-cog-outline" title="Administration" />
-          <v-list-item prepend-icon="mdi-lock-reset" title="Change password" @click="passwordDialog = true" />
+          <v-list-item to="/profile" prepend-icon="mdi-account-cog-outline" title="Profile" />
           <v-list-item prepend-icon="mdi-logout" title="Log out" @click="logout" />
         </v-list>
       </v-menu>
@@ -118,7 +116,6 @@ window.addEventListener('beforeunload', (event) => {
     </v-main>
 
     <UploadPanel v-if="auth.user" />
-    <ChangePasswordDialog v-model="passwordDialog" />
   </v-app>
 </template>
 

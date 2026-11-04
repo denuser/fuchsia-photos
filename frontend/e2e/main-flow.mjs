@@ -311,7 +311,7 @@ const steps = {
     await openRotated()
     await location.waitFor()
   },
-  'zoom a photo to its own resolution, then always show originals': async () => {
+  'zoom a photo to its own resolution, then choose originals and details in the profile': async () => {
     const image = page.getByTestId('viewer-image')
     const source = (want) =>
       waitFor(`the ${want} in the viewer`, (w) => document.querySelector('[data-testid=viewer-image]')?.dataset.source === w, want)
@@ -331,9 +331,14 @@ const steps = {
     await waitFor('the zoom to end', () => /^(none|matrix\(1, 0, 0, 1, 0, 0\))$/.test(getComputedStyle(document.querySelector('[data-testid=viewer-image]')).transform))
     await page.getByTestId('viewer').waitFor()
 
-    await expectRequest('/me', () => button('Show originals').click())
+    await page.goto(`${BASE}/profile`)
+    await expectRequest('/me', () => page.getByLabel('Show originals instead of previews').click())
+    await expectRequest('/me', () => page.getByLabel('Location', { exact: true }).click())
     await open('rotated.jpg')
     await source('original')
+    if ((await page.getByTestId('viewer').getByRole('link', { name: '59.93000, 30.33000' }).count()) > 0) {
+      throw new Error('the viewer shows the location the user hid')
+    }
   },
   'the server agrees with the screen': async () => {
     const [library, trash] = [await apiTotal('photos'), await apiTotal('photos/trash')]

@@ -52,7 +52,8 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | Rights of a recipient | View and download, read-only | A recipient cannot change, tag or pass on another user's photo, or add it to an album. Tags and albums of shared photos can be reconsidered later |
 | "Shared with me" | Albums and photos tabs. Each user chooses whether the photos tab includes the photos of shared albums, which is off by default | One large album would otherwise push everything else out of the list |
 | Choosing a recipient | Autocomplete from the logins of active users, available to every logged-in user | Convenient and free of typos. On a home NAS, users knowing each other's logins is not a concern |
-| Viewer source | The viewer preview by default. Each user can switch the viewer to originals, which is off by default. An original the browser cannot decode, such as HEIC outside Safari, falls back to the preview | Originals can be many times larger than previews, which matters on a phone or a slow connection |
+| Viewer source | The viewer preview by default. Each user can switch the viewer to originals in the profile, which is off by default. An original the browser cannot decode, such as HEIC outside Safari, falls back to the preview | Originals can be many times larger than previews, which matters on a phone or a slow connection |
+| Photo details in the viewer | Each user chooses in the profile which camera details and whether the location the viewer shows. All are shown by default. The interface hides them, and the API still returns them | A display preference, not a privacy setting: whether locations are returned at all stays with the administrator |
 | Zooming in the viewer | A photo larger than the screen zooms to its own resolution with a click, the wheel or a pinch, and loads its original for that. Panning and zooming use `@panzoom/panzoom` | A small library without dependencies. It handles the mouse, the wheel and touch, including pinch, which would take a lot of custom code |
 | Preview settings | Stored in the database and edited on an administration page. They apply to new photos only. Purely technical settings, such as the number of workers, stay in the environment | Regenerating the previews of a library takes hours and needs its own progress and safeguards |
 | Administrator | A page with all users' photos and an owner filter, where the administrator can change sharing and move photos to the trash. Other users' albums are read-only and tags stay hidden. Restoring and permanently deleting stay with the owner | An administrator cannot lose someone's photos by accident |
@@ -104,7 +105,7 @@ The built frontend is embedded in the binary with `go:embed`. The image is built
 
 ### Data model
 
-- `users` (login, argon2id password hash, admin/user role, disabled flag, whether "Shared with me" includes album photos, whether the viewer shows originals), `sessions`
+- `users` (login, argon2id password hash, admin/user role, disabled flag, whether "Shared with me" includes album photos, whether the viewer shows originals, which photo details it hides), `sessions`
 - `photos` (`bigint` id, owner, SHA-256, MIME type, size, dimensions, `taken_at`, EXIF as JSONB, status, private/all visibility, `deleted_at`, `purged_at`). A `bigint` id also fits future FAISS ids (int64).
 - `photo_shares`, `albums` (with private/all visibility), `album_photos`, `album_shares`
 - `tags` (owner, name), `photo_tags`

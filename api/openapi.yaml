@@ -84,6 +84,10 @@ paths:
                   type: boolean
                 viewerShowsOriginals:
                   type: boolean
+                viewerHiddenFields:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ViewerField"
       responses:
         "200":
           description: The changed user
@@ -1139,7 +1143,7 @@ components:
       enum: [admin, user]
     User:
       type: object
-      required: [id, login, role, disabled, createdAt, sharedIncludesAlbums, viewerShowsOriginals]
+      required: [id, login, role, disabled, createdAt, sharedIncludesAlbums, viewerShowsOriginals, viewerHiddenFields]
       properties:
         id:
           type: integer
@@ -1159,6 +1163,15 @@ components:
         viewerShowsOriginals:
           description: Whether the viewer shows original files instead of viewer previews. Originals the browser cannot display, such as HEIC in most browsers, fall back to the preview
           type: boolean
+        viewerHiddenFields:
+          description: Photo details the viewer leaves out, in the viewer's order. The API still returns them
+          type: array
+          items:
+            $ref: "#/components/schemas/ViewerField"
+    ViewerField:
+      description: A photo detail the viewer can show. `camera` is the make and model, `location` is shown only if an administrator allows it
+      type: string
+      enum: [camera, lens, focalLength, aperture, exposureTime, iso, exposureCompensation, flash, location]
     UserRef:
       type: object
       required: [id, login]

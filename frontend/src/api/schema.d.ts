@@ -816,7 +816,14 @@ export interface components {
             sharedIncludesAlbums: boolean;
             /** @description Whether the viewer shows original files instead of viewer previews. Originals the browser cannot display, such as HEIC in most browsers, fall back to the preview */
             viewerShowsOriginals: boolean;
+            /** @description Photo details the viewer leaves out, in the viewer's order. The API still returns them */
+            viewerHiddenFields: components["schemas"]["ViewerField"][];
         };
+        /**
+         * @description A photo detail the viewer can show. `camera` is the make and model, `location` is shown only if an administrator allows it
+         * @enum {string}
+         */
+        ViewerField: "camera" | "lens" | "focalLength" | "aperture" | "exposureTime" | "iso" | "exposureCompensation" | "flash" | "location";
         UserRef: {
             /** Format: int64 */
             id: number;
@@ -1087,6 +1094,7 @@ export interface operations {
                 "application/json": {
                     sharedIncludesAlbums?: boolean;
                     viewerShowsOriginals?: boolean;
+                    viewerHiddenFields?: components["schemas"]["ViewerField"][];
                 };
             };
         };

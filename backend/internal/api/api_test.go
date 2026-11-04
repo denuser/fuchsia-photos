@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -275,6 +276,35 @@ func TestViewerShowsOriginals(t *testing.T) {
 	}
 	if decode[userJSON](t, boris.get("/api/v1/me")).ViewerShowsOriginals {
 		t.Error("the setting changed for another user")
+	}
+}
+
+func TestViewerHiddenFields(t *testing.T) {
+	e := setup(t)
+	e.addUser("anna", auth.RoleUser)
+	anna := e.loggedIn("anna")
+
+	if got := decode[userJSON](t, anna.get("/api/v1/me")).ViewerHiddenFields; got == nil || len(got) != 0 {
+		t.Fatalf("hidden fields = %#v, want an empty list", got)
+	}
+
+	res := anna.json(http.MethodPatch, "/api/v1/me", map[string][]string{"viewerHiddenFields": {"location", "iso", "location"}})
+	wantStatus(t, res, http.StatusOK)
+	want := []string{"iso", "location"}
+	if got := decode[userJSON](t, res).ViewerHiddenFields; !slices.Equal(got, want) {
+		t.Errorf("hidden fields = %v, want %v in the viewer's order without repeats", got, want)
+	}
+
+	res = anna.json(http.MethodPatch, "/api/v1/me", map[string][]string{"viewerHiddenFields": {"iso", "password"}})
+	wantStatus(t, res, http.StatusBadRequest)
+	if got := decode[userJSON](t, anna.get("/api/v1/me")).ViewerHiddenFields; !slices.Equal(got, want) {
+		t.Errorf("an invalid request changed the hidden fields to %v", got)
+	}
+
+	// Changing another setting leaves the list alone.
+	wantStatus(t, anna.json(http.MethodPatch, "/api/v1/me", map[string]bool{"viewerShowsOriginals": true}), http.StatusOK)
+	if got := decode[userJSON](t, anna.get("/api/v1/me")).ViewerHiddenFields; !slices.Equal(got, want) {
+		t.Errorf("hidden fields = %v after another change, want %v", got, want)
 	}
 }
 

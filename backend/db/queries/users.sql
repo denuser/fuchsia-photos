@@ -28,3 +28,6 @@ SELECT id, login FROM users WHERE NOT disabled ORDER BY lower(login);
 
 -- name: SetUserViewerShowsOriginals :one
 UPDATE users SET viewer_shows_originals = @viewer_shows_originals WHERE id = @id RETURNING *;
+
+-- name: SetUserViewerHiddenFields :one
+UPDATE users SET viewer_hidden_fields = @viewer_hidden_fields WHERE id = @id RETURNING *;

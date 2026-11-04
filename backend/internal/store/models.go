@@ -129,4 +129,5 @@ type User struct {
 	CreatedAt            time.Time
 	SharedIncludesAlbums bool
 	ViewerShowsOriginals bool
+	ViewerHiddenFields   []string
 }
