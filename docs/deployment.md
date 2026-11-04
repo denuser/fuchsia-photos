@@ -130,3 +130,73 @@ docker compose up -d
 ```
 
 To run a specific build, set `IMAGE_TAG=sha-<commit>` in `.env`. Going back to an older build is safe only if no migrations were added since: migrations run forward only, so after a new one an older build may not start against the database.
+
+## Running on TrueNAS
+
+On TrueNAS, the image from [Running from an image without TLS](#running-from-an-image-without-tls) runs as a custom app, with the same trade-offs. TrueNAS does not read a `.env` file, so the values go into the YAML itself.
+
+Both containers run as the TrueNAS `apps` user and group, UID and GID 568. Create a dataset for the application, and inside it a dataset or folder for each of `library`, `cache`, `import` and `postgres`. In **Datasets**, select the parent dataset and choose **Edit** on the **Permissions** card. Set the owner and the owning group to `apps`, give `owner@` full control and `group@` modify, and apply the permissions to the child datasets. The application only reads `import`, so files copied there by other users need to be readable by `apps`.
+
+In **Apps**, choose **Discover Apps**, then **Install via YAML** from the menu, and paste this, with your paths and password:
+
+```yaml
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    user: '568:568'
+    environment:
+      POSTGRES_USER: photos
+      POSTGRES_DB: photos
+      POSTGRES_PASSWORD: change-me
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command: [postgres, -c, shared_buffers=1GB, -c, effective_cache_size=4GB]
+    volumes:
+      - /mnt/pool/fuchsia/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U photos -d photos]
+      interval: 15s
+      timeout: 30s
+      retries: 20
+      start_period: 60s
+
+  app:
+    image: ghcr.io/denuser/fuchsia-photos:latest
+    restart: unless-stopped
+    user: '568:568'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://photos:change-me@postgres:5432/photos
+      COOKIE_INSECURE: 'true'
+      WORKERS: 3
+      IMPORT_STABLE_SECONDS: 60
+    ports:
+      - '10303:8080'
+    volumes:
+      - /mnt/pool/fuchsia/library:/data/library
+      - /mnt/pool/fuchsia/cache:/data/cache
+      - /mnt/pool/fuchsia/import:/data/import:ro
+```
+
+The password appears twice, in `POSTGRES_PASSWORD` and in `DATABASE_URL`, and both must match. Use only URL-safe characters.
+
+Create the first administrator from the TrueNAS shell. Docker names the container after the app, so look it up first:
+
+```sh
+sudo docker ps --format '{{.Names}}' | grep app
+sudo docker exec -it <container> fuchsia-photos create-admin admin
+```
+
+### Updates
+
+TrueNAS compares the `latest` image on the NAS with the one in the registry and shows **Update** on the app when they differ. Updating pulls the new image and recreates the containers, and migrations run on start. A pinned tag such as `sha-<commit>` never shows an update.
+
+The check needs **Check for image updates** turned on in the **Apps** settings. It runs once a day and when the Docker service starts. To check right away, run this in the TrueNAS shell and then reload the Apps page:
+
+```sh
+sudo midclt call app.image.op.check_update
+```
+
+On newer TrueNAS releases the method is `app.image.check_update`.
