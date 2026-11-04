@@ -311,6 +311,30 @@ const steps = {
     await openRotated()
     await location.waitFor()
   },
+  'zoom a photo to its own resolution, then always show originals': async () => {
+    const image = page.getByTestId('viewer-image')
+    const source = (want) =>
+      waitFor(`the ${want} in the viewer`, (w) => document.querySelector('[data-testid=viewer-image]')?.dataset.source === w, want)
+    const open = async (name) => {
+      await page.goto(`${BASE}/all`)
+      await page.getByLabel(name, { exact: true }).first().click()
+      await image.waitFor()
+    }
+
+    // large.jpg is 2400 × 1800, more than the screen and the viewer preview.
+    await open('large.jpg')
+    await source('preview')
+    await image.click()
+    await source('original')
+    await waitFor('the zoom', () => getComputedStyle(document.querySelector('[data-testid=viewer-image]')).transform !== 'none')
+    await page.keyboard.press('Escape')
+    await waitFor('the zoom to end', () => /^(none|matrix\(1, 0, 0, 1, 0, 0\))$/.test(getComputedStyle(document.querySelector('[data-testid=viewer-image]')).transform))
+    await page.getByTestId('viewer').waitFor()
+
+    await expectRequest('/me', () => button('Show originals').click())
+    await open('rotated.jpg')
+    await source('original')
+  },
   'the server agrees with the screen': async () => {
     const [library, trash] = [await apiTotal('photos'), await apiTotal('photos/trash')]
     if (library !== 3 || trash !== 0) {

@@ -132,6 +132,7 @@ func (s *server) getMe(w http.ResponseWriter, r *http.Request) {
 func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SharedIncludesAlbums *bool `json:"sharedIncludesAlbums"`
+		ViewerShowsOriginals *bool `json:"viewerShowsOriginals"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -142,6 +143,17 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 		user, err = s.Queries.SetUserSharedIncludesAlbums(r.Context(), store.SetUserSharedIncludesAlbumsParams{
 			ID:                   user.ID,
 			SharedIncludesAlbums: *req.SharedIncludesAlbums,
+		})
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+	}
+	if req.ViewerShowsOriginals != nil {
+		var err error
+		user, err = s.Queries.SetUserViewerShowsOriginals(r.Context(), store.SetUserViewerShowsOriginalsParams{
+			ID:                   user.ID,
+			ViewerShowsOriginals: *req.ViewerShowsOriginals,
 		})
 		if err != nil {
 			internalError(w, r, err)

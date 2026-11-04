@@ -814,6 +814,8 @@ export interface components {
             createdAt: string;
             /** @description Whether the user's list of shared photos includes the photos of shared albums */
             sharedIncludesAlbums: boolean;
+            /** @description Whether the viewer shows original files instead of viewer previews. Originals the browser cannot display, such as HEIC in most browsers, fall back to the preview */
+            viewerShowsOriginals: boolean;
         };
         UserRef: {
             /** Format: int64 */
@@ -1084,6 +1086,7 @@ export interface operations {
             content: {
                 "application/json": {
                     sharedIncludesAlbums?: boolean;
+                    viewerShowsOriginals?: boolean;
                 };
             };
         };

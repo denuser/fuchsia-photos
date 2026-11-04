@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 
-import { originalUrl, previewUrl, type Camera, type Photo } from '../api/client'
+import { api, originalUrl, previewUrl, type Camera, type Photo } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import { useUsersStore } from '../stores/users'
 
@@ -78,6 +79,56 @@ function round(n: number) {
   return String(Math.round(n * 10) / 10)
 }
 
+const showOriginals = computed(() => auth.user?.viewerShowsOriginals ?? false)
+const savingSetting = ref(false)
+const settingError = ref(false)
+
+async function toggleOriginals() {
+  savingSetting.value = true
+  const { data } = await api.PATCH('/me', { body: { viewerShowsOriginals: !showOriginals.value } })
+  savingSetting.value = false
+  if (data) {
+    auth.user = data
+  } else {
+    settingError.value = true
+  }
+}
+
+// Formats the browser failed to decode, such as HEIC outside Safari. Their
+// originals are not downloaded again, and the viewer keeps the preview.
+const undecodable = new Set<string>()
+
+function canShowOriginal(photo: Photo) {
+  return !undecodable.has(photo.mime)
+}
+
+// The original replaces the preview only once it has been decoded, so the
+// preview stays on the screen while a large file loads.
+const originalShown = ref(false)
+let originalRequested = 0
+
+function loadOriginal() {
+  const photo = props.photo
+  if (originalShown.value || originalRequested === photo.id || !canShowOriginal(photo)) {
+    return
+  }
+  originalRequested = photo.id
+  const image = new Image()
+  image.src = originalUrl(photo.id)
+  image.decode().then(
+    () => {
+      if (props.photo.id === photo.id) {
+        originalShown.value = true
+      }
+    },
+    () => {
+      undecodable.add(photo.mime)
+    },
+  )
+}
+
+const source = computed(() => (originalShown.value ? originalUrl(props.photo.id) : previewUrl(props.photo.id, 'viewer')))
+
 // Loads the neighbours ahead of time, so that stepping through photos feels instant.
 watch(
   [previous, next],
@@ -85,17 +136,137 @@ watch(
     for (const photo of neighbours) {
       if (photo) {
         new Image().src = previewUrl(photo.id, 'viewer')
+        if (showOriginals.value && canShowOriginal(photo)) {
+          new Image().src = originalUrl(photo.id)
+        }
       }
     }
   },
   { immediate: true },
 )
 
+// The image is laid out at the size that fits the screen, and Panzoom scales
+// it up to the photo's own resolution, one image pixel per CSS pixel.
+const stage = ref<HTMLElement | null>(null)
+const image = ref<HTMLImageElement | null>(null)
+const stageSize = ref({ width: 0, height: 0 })
+const naturalSize = ref<{ width: number; height: number } | null>(null)
+const panzoom = shallowRef<PanzoomObject | null>(null)
+const scale = ref(1)
+
+const photoSize = computed(() =>
+  props.photo.width && props.photo.height ? { width: props.photo.width, height: props.photo.height } : naturalSize.value,
+)
+
+const fit = computed(() => {
+  const size = photoSize.value
+  if (!size || stageSize.value.width === 0) {
+    return null
+  }
+  const ratio = Math.min(1, stageSize.value.width / size.width, stageSize.value.height / size.height)
+  return { width: size.width * ratio, height: size.height * ratio, maxScale: 1 / ratio }
+})
+
+const zoomable = computed(() => (fit.value?.maxScale ?? 1) > 1.01)
+const zoomed = computed(() => scale.value > 1.001)
+
+watch(
+  () => props.photo.id,
+  () => {
+    originalShown.value = false
+    naturalSize.value = null
+    scale.value = 1
+  },
+)
+
+watch([() => props.photo.id, showOriginals, zoomed], () => {
+  if (showOriginals.value || zoomed.value) {
+    loadOriginal()
+  }
+}, { immediate: true })
+
+function measure() {
+  if (stage.value) {
+    stageSize.value = { width: stage.value.clientWidth, height: stage.value.clientHeight }
+  }
+}
+
+function onImageLoad() {
+  if (image.value && !naturalSize.value) {
+    naturalSize.value = { width: image.value.naturalWidth, height: image.value.naturalHeight }
+  }
+}
+
+function onScale(event: Event) {
+  scale.value = (event as CustomEvent<{ scale: number }>).detail.scale
+}
+
+// Recreates Panzoom for each photo and each screen size, zoomed out.
+watch(
+  [image, () => fit.value?.maxScale],
+  ([element, maxScale], _, onCleanup) => {
+    scale.value = 1
+    if (!element || !maxScale || maxScale <= 1.01) {
+      return
+    }
+    const instance = Panzoom(element, {
+      canvas: true,
+      maxScale,
+      minScale: 1,
+      startScale: 1,
+      panOnlyWhenZoomed: true,
+      cursor: '',
+      step: 0.3,
+    })
+    element.addEventListener('panzoomchange', onScale)
+    panzoom.value = instance
+    onCleanup(() => {
+      element.removeEventListener('panzoomchange', onScale)
+      instance.destroy()
+      instance.resetStyle()
+      panzoom.value = null
+    })
+  },
+  { flush: 'post' },
+)
+
+function onWheel(event: WheelEvent) {
+  if (panzoom.value) {
+    panzoom.value.zoomWithWheel(event)
+    // Zoomed all the way out, the photo goes back to the centre.
+    if (panzoom.value.getScale() <= 1.001) {
+      panzoom.value.reset({ animate: false })
+    }
+  }
+}
+
+// A click zooms to the photo's own resolution at the clicked point, or back.
+// Dragging the photo also ends in a click, which must not zoom.
+let downAt = { x: 0, y: 0 }
+
+function onPointerDown(event: PointerEvent) {
+  downAt = { x: event.clientX, y: event.clientY }
+}
+
+function onClick(event: MouseEvent) {
+  const instance = panzoom.value
+  if (!instance || !fit.value || Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 5) {
+    return
+  }
+  if (zoomed.value) {
+    instance.reset()
+  } else if (event.target === image.value) {
+    instance.zoomToPoint(fit.value.maxScale, event)
+  }
+}
+
 function onKey(event: KeyboardEvent) {
   if (props.paused) {
     return
   }
-  if (event.key === 'Escape') {
+  if (event.key === 'Escape' && zoomed.value) {
+    panzoom.value?.reset()
+  } else if (event.key === 'Escape') {
     emit('close')
   } else if (event.key === 'ArrowLeft' && previous.value) {
     emit('navigate', previous.value)
@@ -104,13 +275,40 @@ function onKey(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onMounted(() => {
+  measure()
+  window.addEventListener('keydown', onKey)
+  window.addEventListener('resize', measure)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  window.removeEventListener('resize', measure)
+})
 </script>
 
 <template>
   <div class="viewer" data-testid="viewer" role="dialog" aria-modal="true" :aria-label="photo.name">
-    <img :key="photo.id" :src="previewUrl(photo.id, 'viewer')" :alt="photo.name" class="image" />
+    <div
+      ref="stage"
+      class="stage"
+      :class="{ zoomable, zoomed }"
+      @pointerdown="onPointerDown"
+      @click="onClick"
+      @wheel.prevent="onWheel"
+    >
+      <img
+        ref="image"
+        :key="photo.id"
+        :src="source"
+        :alt="photo.name"
+        :data-source="originalShown ? 'original' : 'preview'"
+        :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
+        class="image"
+        data-testid="viewer-image"
+        draggable="false"
+        @load="onImageLoad"
+      />
+    </div>
 
     <div class="bar">
       <div class="info">
@@ -128,6 +326,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <v-btn icon="mdi-share-variant-outline" variant="text" aria-label="Share" @click="emit('share', photo)" />
         <v-btn icon="mdi-trash-can-outline" variant="text" aria-label="Move to trash" @click="emit('trash', photo)" />
       </template>
+      <v-btn
+        icon="mdi-quality-high"
+        :variant="showOriginals ? 'tonal' : 'text'"
+        :loading="savingSetting"
+        :aria-pressed="showOriginals"
+        aria-label="Show originals"
+        title="Show originals instead of previews"
+        @click="toggleOriginals"
+      />
       <v-btn :href="originalUrl(photo.id)" icon="mdi-download" variant="text" aria-label="Download the original" />
       <v-btn icon="mdi-close" variant="text" aria-label="Close" @click="emit('close')" />
     </div>
@@ -150,6 +357,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       aria-label="Next photo"
       @click="emit('navigate', next)"
     />
+
+    <v-snackbar v-model="settingError" text="The setting could not be saved" location="bottom left" />
   </div>
 </template>
 
@@ -165,10 +374,34 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   color: #fff;
 }
 
+.stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.stage.zoomable {
+  cursor: zoom-in;
+}
+
+.stage.zoomed {
+  cursor: grab;
+}
+
+.stage.zoomed:active {
+  cursor: grabbing;
+}
+
+/* Until the size is known, the image fits the screen the plain way. */
 .image {
+  flex: none;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  user-select: none;
 }
 
 .bar {

@@ -67,7 +67,7 @@ func (q *Queries) DeleteUserSessionsExcept(ctx context.Context, arg DeleteUserSe
 }
 
 const getSessionUser = `-- name: GetSessionUser :one
-SELECT u.id, u.login, u.password_hash, u.role, u.disabled, u.created_at, u.shared_includes_albums
+SELECT u.id, u.login, u.password_hash, u.role, u.disabled, u.created_at, u.shared_includes_albums, u.viewer_shows_originals
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT u.disabled
@@ -84,6 +84,7 @@ func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (User, e
 		&i.Disabled,
 		&i.CreatedAt,
 		&i.SharedIncludesAlbums,
+		&i.ViewerShowsOriginals,
 	)
 	return i, err
 }

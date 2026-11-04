@@ -22,6 +22,8 @@ type userJSON struct {
 	CreatedAt time.Time `json:"createdAt"`
 	// SharedIncludesAlbums adds photos of shared albums to the user's list of shared photos.
 	SharedIncludesAlbums bool `json:"sharedIncludesAlbums"`
+	// ViewerShowsOriginals makes the viewer show original files instead of viewer previews.
+	ViewerShowsOriginals bool `json:"viewerShowsOriginals"`
 }
 
 type userRefJSON struct {
@@ -37,6 +39,7 @@ func toUserJSON(u store.User) userJSON {
 		Disabled:             u.Disabled,
 		CreatedAt:            u.CreatedAt,
 		SharedIncludesAlbums: u.SharedIncludesAlbums,
+		ViewerShowsOriginals: u.ViewerShowsOriginals,
 	}
 }
 

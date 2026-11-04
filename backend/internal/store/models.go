@@ -128,4 +128,5 @@ type User struct {
 	Disabled             bool
 	CreatedAt            time.Time
 	SharedIncludesAlbums bool
+	ViewerShowsOriginals bool
 }

@@ -256,6 +256,28 @@ func TestSessionTokenIsNotStored(t *testing.T) {
 	}
 }
 
+func TestViewerShowsOriginals(t *testing.T) {
+	e := setup(t)
+	e.addUser("anna", auth.RoleUser)
+	e.addUser("boris", auth.RoleUser)
+	anna, boris := e.loggedIn("anna"), e.loggedIn("boris")
+
+	if decode[userJSON](t, anna.get("/api/v1/me")).ViewerShowsOriginals {
+		t.Fatal("the viewer shows originals before the user asks for it")
+	}
+	res := anna.json(http.MethodPatch, "/api/v1/me", map[string]bool{"viewerShowsOriginals": true})
+	wantStatus(t, res, http.StatusOK)
+	if !decode[userJSON](t, res).ViewerShowsOriginals {
+		t.Error("the response does not show the new setting")
+	}
+	if !decode[userJSON](t, anna.get("/api/v1/me")).ViewerShowsOriginals {
+		t.Error("the setting was not saved")
+	}
+	if decode[userJSON](t, boris.get("/api/v1/me")).ViewerShowsOriginals {
+		t.Error("the setting changed for another user")
+	}
+}
+
 func TestChangePassword(t *testing.T) {
 	e := setup(t)
 	e.addUser("anna", auth.RoleUser)

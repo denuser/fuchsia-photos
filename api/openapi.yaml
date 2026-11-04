@@ -82,6 +82,8 @@ paths:
               properties:
                 sharedIncludesAlbums:
                   type: boolean
+                viewerShowsOriginals:
+                  type: boolean
       responses:
         "200":
           description: The changed user
@@ -1137,7 +1139,7 @@ components:
       enum: [admin, user]
     User:
       type: object
-      required: [id, login, role, disabled, createdAt, sharedIncludesAlbums]
+      required: [id, login, role, disabled, createdAt, sharedIncludesAlbums, viewerShowsOriginals]
       properties:
         id:
           type: integer
@@ -1153,6 +1155,9 @@ components:
           format: date-time
         sharedIncludesAlbums:
           description: Whether the user's list of shared photos includes the photos of shared albums
+          type: boolean
+        viewerShowsOriginals:
+          description: Whether the viewer shows original files instead of viewer previews. Originals the browser cannot display, such as HEIC in most browsers, fall back to the preview
           type: boolean
     UserRef:
       type: object

@@ -25,3 +25,6 @@ UPDATE users SET shared_includes_albums = @shared_includes_albums WHERE id = @id
 -- The logins any user can choose from when sharing. Disabled users cannot log in, so they are left out.
 -- name: ListActiveUserLogins :many
 SELECT id, login FROM users WHERE NOT disabled ORDER BY lower(login);
+
+-- name: SetUserViewerShowsOriginals :one
+UPDATE users SET viewer_shows_originals = @viewer_shows_originals WHERE id = @id RETURNING *;
