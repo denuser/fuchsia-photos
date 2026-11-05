@@ -61,6 +61,7 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | Preview settings | Stored in the database and edited on an administration page. They apply to new photos only. Purely technical settings, such as the number of workers, stay in the environment | Regenerating the previews of a library takes hours and needs its own progress and safeguards |
 | Administrator | A page with all users' photos and an owner filter, where the administrator can change sharing and move photos to the trash. Other users' albums are read-only and tags stay hidden. Restoring and permanently deleting stay with the owner | An administrator cannot lose someone's photos by accident |
 | Tags | Personal to each user. A search with several tags finds photos with any of them | Other users' tag names stay private |
+| Camera and lens filters | The timeline filters the user's own photos by camera and by lens, choosing from those its photos have. Several cameras or several lenses find photos with any of them; different filters must all match. A camera is named by its make and model, without the make when the model repeats it. A lens is LensModel, or Lens or LensID for older cameras, leaving out numeric codes. PostgreSQL keeps both in generated columns of `photos`, and the viewer shows the same lens | Photos processed before the filters get them without reprocessing, and the filter and the viewer cannot disagree |
 | Album covers | The newest processed photo, unless the owner chooses one | Works without effort, and can still be set by hand |
 | Trash | Photos stay until the owner restores or permanently deletes them, with no automatic expiry | Nothing is lost by waiting. Emptying the trash is the way to free disk space |
 | Uploading a photo that is in the trash | Restores it, with its albums and tags | Uploading it again shows that the owner wants it back |
@@ -109,7 +110,7 @@ The built frontend is embedded in the binary with `go:embed`. The image is built
 ### Data model
 
 - `users` (login, argon2id password hash, admin/user role, disabled flag, whether "Shared with me" includes album photos, whether the viewer shows originals, which photo details it hides, whether the menu hides on a phone), `sessions`
-- `photos` (`bigint` id, owner, SHA-256, MIME type, size, dimensions, `taken_at`, EXIF as JSONB, status, private/all visibility, `deleted_at`, `purged_at`). A `bigint` id also fits future FAISS ids (int64).
+- `photos` (`bigint` id, owner, SHA-256, MIME type, size, dimensions, `taken_at`, EXIF as JSONB, the camera and lens generated from it, status, private/all visibility, `deleted_at`, `purged_at`). A `bigint` id also fits future FAISS ids (int64).
 - `photo_shares`, `albums` (with private/all visibility), `album_photos`, `album_shares`
 - `tags` (owner, name), `photo_tags`
 - `preview_settings` (one row: format, quality and preview sizes), `metadata_settings` (one row: whether the API returns locations)

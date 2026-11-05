@@ -125,7 +125,7 @@ func parseDate(value, offset string) (time.Time, bool) {
 type Camera struct {
 	Make                 *string  `json:"make,omitempty"`
 	Model                *string  `json:"model,omitempty"`
-	Lens                 *string  `json:"lens,omitempty"`
+	Lens                 *string  `json:"lens,omitempty"` // filled from the photos.lens column, not the tags
 	FocalLength          *float64 `json:"focalLength,omitempty"`
 	FocalLength35mm      *float64 `json:"focalLength35mm,omitempty"`
 	FNumber              *float64 `json:"fNumber,omitempty"`
@@ -159,7 +159,6 @@ func camera(fields map[string]any) *Camera {
 	c := Camera{
 		Make:                 text(fields["Make"]),
 		Model:                text(fields["Model"]),
-		Lens:                 text(fields["LensModel"]),
 		FocalLength:          positive(fields["FocalLength"]),
 		FocalLength35mm:      positive(fields["FocalLengthIn35mmFormat"]),
 		FNumber:              positive(fields["FNumber"]),

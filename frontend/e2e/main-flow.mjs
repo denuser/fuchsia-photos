@@ -148,6 +148,14 @@ const steps = {
     await button('Clear').click()
     await tiles(5)
   },
+  'filter by camera': async () => {
+    await page.getByLabel('Any of these cameras').click()
+    await page.getByRole('option', { name: /Canon EOS R5/ }).click()
+    await page.keyboard.press('Escape')
+    await tiles(1)
+    await button('Clear').click()
+    await tiles(5)
+  },
   'open the album and choose a cover': async () => {
     await page.goto(`${BASE}/albums`)
     await page.getByText('Trip').click()

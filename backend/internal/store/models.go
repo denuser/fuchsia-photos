@@ -83,6 +83,8 @@ type Photo struct {
 	SortAt        time.Time
 	UpdatedAt     time.Time
 	PurgedAt      *time.Time
+	Camera        *string
+	Lens          *string
 }
 
 type PhotoShare struct {

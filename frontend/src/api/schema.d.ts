@@ -298,6 +298,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/photos/cameras": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the cameras and lenses of the current user's photos
+         * @description For the camera and lens filters of listPhotos. Photos in the trash are left out
+         */
+        get: operations["listCameras"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/photos/shared": {
         parameters: {
             query?: never;
@@ -956,6 +976,15 @@ export interface components {
             /** @description Degrees, negative to the west */
             longitude: number;
         };
+        CameraLists: {
+            cameras: components["schemas"]["NameCount"][];
+            lenses: components["schemas"]["NameCount"][];
+        };
+        NameCount: {
+            name: string;
+            /** Format: int64 */
+            count: number;
+        };
         /** @description The number of photos a list has in each month, newest first. Months without photos are left out */
         MonthCounts: {
             /** @description The month in the requested time zone, such as `2024-05` */
@@ -1322,6 +1351,10 @@ export interface operations {
                 to?: string;
                 /** @description Only photos with at least one of these tags */
                 tag?: number[];
+                /** @description Only photos taken with one of these cameras, named as listCameras gives them */
+                camera?: string[];
+                /** @description Only photos taken with one of these lenses, named as listCameras gives them */
+                lens?: string[];
                 /** @description Only photos of this album */
                 album?: number;
             };
@@ -1520,6 +1553,10 @@ export interface operations {
                 to?: string;
                 /** @description Only photos with at least one of these tags */
                 tag?: number[];
+                /** @description Only photos taken with one of these cameras, named as listCameras gives them */
+                camera?: string[];
+                /** @description Only photos taken with one of these lenses, named as listCameras gives them */
+                lens?: string[];
                 /** @description Only photos of this album */
                 album?: number;
             };
@@ -1558,6 +1595,26 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": components["schemas"]["PhotoEvent"];
+                };
+            };
+        };
+    };
+    listCameras: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cameras and lenses by name, with the number of photos each took */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CameraLists"];
                 };
             };
         };

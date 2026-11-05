@@ -63,6 +63,7 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("POST /api/v1/photos", s.authenticated(s.uploadPhoto))
 	mux.HandleFunc("GET /api/v1/photos/events", s.authenticated(s.photoEvents))
 	mux.HandleFunc("GET /api/v1/photos/months", s.authenticated(s.countPhotoMonths))
+	mux.HandleFunc("GET /api/v1/photos/cameras", s.authenticated(s.listCameras))
 	mux.HandleFunc("GET /api/v1/photos/shared", s.authenticated(s.listSharedPhotos))
 	mux.HandleFunc("GET /api/v1/photos/shared/months", s.authenticated(s.countSharedMonths))
 	mux.HandleFunc("GET /api/v1/photos/all", s.admin(s.listAllPhotos))

@@ -73,8 +73,8 @@ func TestDetails(t *testing.T) {
 	if camera == nil {
 		t.Fatal("no camera details")
 	}
-	if *camera.Model != "Canon EOS R5" || *camera.Lens != "RF24-70mm F2.8 L IS USM" {
-		t.Errorf("model = %q, lens = %q", *camera.Model, *camera.Lens)
+	if *camera.Model != "Canon EOS R5" || camera.Lens != nil {
+		t.Errorf("model = %q, lens = %v", *camera.Model, camera.Lens)
 	}
 	if *camera.FNumber != 2.8 || *camera.ExposureTime != 0.004 || *camera.FocalLength != 35 {
 		t.Errorf("exposure = %+v", camera)

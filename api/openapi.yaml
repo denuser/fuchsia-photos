@@ -251,6 +251,20 @@ paths:
             items:
               type: integer
               format: int64
+        - name: camera
+          in: query
+          description: Only photos taken with one of these cameras, named as listCameras gives them
+          schema:
+            type: array
+            items:
+              type: string
+        - name: lens
+          in: query
+          description: Only photos taken with one of these lenses, named as listCameras gives them
+          schema:
+            type: array
+            items:
+              type: string
         - name: album
           in: query
           description: Only photos of this album
@@ -429,6 +443,20 @@ paths:
             items:
               type: integer
               format: int64
+        - name: camera
+          in: query
+          description: Only photos taken with one of these cameras, named as listCameras gives them
+          schema:
+            type: array
+            items:
+              type: string
+        - name: lens
+          in: query
+          description: Only photos taken with one of these lenses, named as listCameras gives them
+          schema:
+            type: array
+            items:
+              type: string
         - name: album
           in: query
           description: Only photos of this album
@@ -458,6 +486,18 @@ paths:
             text/event-stream:
               schema:
                 $ref: "#/components/schemas/PhotoEvent"
+  /photos/cameras:
+    get:
+      operationId: listCameras
+      summary: List the cameras and lenses of the current user's photos
+      description: For the camera and lens filters of listPhotos. Photos in the trash are left out
+      responses:
+        "200":
+          description: Cameras and lenses by name, with the number of photos each took
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CameraLists"
   /photos/shared:
     get:
       operationId: listSharedPhotos
@@ -1426,6 +1466,27 @@ components:
         longitude:
           description: Degrees, negative to the west
           type: number
+    CameraLists:
+      type: object
+      required: [cameras, lenses]
+      properties:
+        cameras:
+          type: array
+          items:
+            $ref: "#/components/schemas/NameCount"
+        lenses:
+          type: array
+          items:
+            $ref: "#/components/schemas/NameCount"
+    NameCount:
+      type: object
+      required: [name, count]
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+          format: int64
     MonthCounts:
       description: The number of photos a list has in each month, newest first. Months without photos are left out
       type: array

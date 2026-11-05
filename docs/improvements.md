@@ -28,3 +28,11 @@ Settings apply to new photos only. Regenerating existing previews would be a sep
 The timeline loads month by month from counts the server gives first, with month titles and a scrubber with the years. A month near the screen loads all of its pages; months far from it are only counted. The trash keeps loading page by page, with a spinner at the end of the list and a retry button when a page fails. Decisions are in the [README](../README.md#decisions).
 
 Loaded months stay in memory. Unloading the months far from the screen is left for when a library makes it necessary.
+
+## 3. Camera and lens filters
+
+**Status:** done.
+
+The timeline filters by camera and by lens, next to the tags and dates. On a phone they sit behind one button with the dates. Decisions are in the [README](../README.md#decisions).
+
+The lists offer only the user's own photos, and other pages, such as albums and "Shared with me", have no such filters yet.

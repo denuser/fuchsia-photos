@@ -15,6 +15,8 @@ export interface PhotoQuery {
   owner?: number
   album?: number
   tags?: number[]
+  cameras?: string[]
+  lenses?: string[]
   from?: string
   to?: string
 }
@@ -101,7 +103,7 @@ function earlier(a: string | undefined, b: string | undefined) {
 
 function fetchPage(query: PhotoQuery, section: Section) {
   const cursor = section.cursor ?? undefined
-  const { trash, shared, everyone, owner, album, tags } = query
+  const { trash, shared, everyone, owner, album } = query
   if (trash) {
     return api.GET('/photos/trash', { params: { query: { cursor } } })
   }
@@ -115,10 +117,11 @@ function fetchPage(query: PhotoQuery, section: Section) {
   if (everyone) {
     return api.GET('/photos/all', { params: { query: { cursor, limit, owner, from, to } } })
   }
-  return api.GET('/photos', { params: { query: { cursor, limit, album, tag: tags?.length ? tags : undefined, from, to } } })
+  return api.GET('/photos', { params: { query: { cursor, limit, album, ...listFilters(query), from, to } } })
 }
 
-function fetchMonths({ shared, everyone, owner, album, tags, from, to }: PhotoQuery) {
+function fetchMonths(query: PhotoQuery) {
+  const { shared, everyone, owner, album, from, to } = query
   const tz = timeZone()
   if (shared) {
     return api.GET('/photos/shared/months', { params: { query: { tz } } })
@@ -126,7 +129,16 @@ function fetchMonths({ shared, everyone, owner, album, tags, from, to }: PhotoQu
   if (everyone) {
     return api.GET('/photos/all/months', { params: { query: { tz, owner } } })
   }
-  return api.GET('/photos/months', { params: { query: { tz, album, tag: tags?.length ? tags : undefined, from, to } } })
+  return api.GET('/photos/months', { params: { query: { tz, album, ...listFilters(query), from, to } } })
+}
+
+// The filters of the user's own list that take several values. An empty one is left out.
+function listFilters({ tags, cameras, lenses }: PhotoQuery) {
+  return {
+    tag: tags?.length ? tags : undefined,
+    camera: cameras?.length ? cameras : undefined,
+    lens: lenses?.length ? lenses : undefined,
+  }
 }
 
 export const usePhotosStore = defineStore('photos', () => {
@@ -148,8 +160,8 @@ export const usePhotosStore = defineStore('photos', () => {
   // Only the whole library and the trash can tell from a photo alone that it
   // belongs in the list. Other lists learn about new members by loading.
   const unfiltered = computed(() => {
-    const { shared, everyone, album, tags, from, to } = query.value
-    return !shared && !everyone && album === undefined && !tags?.length && !from && !to
+    const { shared, everyone, album, tags, cameras, lenses, from, to } = query.value
+    return !shared && !everyone && album === undefined && !tags?.length && !cameras?.length && !lenses?.length && !from && !to
   })
 
   let events: EventSource | null = null

@@ -30,6 +30,8 @@ WHERE p.owner_id = @owner_id
        OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = sqlc.narg(album_id)::bigint))
   AND (sqlc.narg(tag_ids)::bigint[] IS NULL
        OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[])))
+  AND (sqlc.narg(cameras)::text[] IS NULL OR p.camera = ANY (sqlc.narg(cameras)::text[]))
+  AND (sqlc.narg(lenses)::text[] IS NULL OR p.lens = ANY (sqlc.narg(lenses)::text[]))
 ORDER BY p.sort_at DESC, p.id DESC
 LIMIT @max_rows;
 
@@ -47,8 +49,26 @@ WHERE p.owner_id = @owner_id
        OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = sqlc.narg(album_id)::bigint))
   AND (sqlc.narg(tag_ids)::bigint[] IS NULL
        OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[])))
+  AND (sqlc.narg(cameras)::text[] IS NULL OR p.camera = ANY (sqlc.narg(cameras)::text[]))
+  AND (sqlc.narg(lenses)::text[] IS NULL OR p.lens = ANY (sqlc.narg(lenses)::text[]))
 GROUP BY 1
 ORDER BY 1 DESC;
+
+-- The cameras and lenses of the current user's photos, with how many photos
+-- each took, for the filters of the timeline.
+-- name: ListCameras :many
+SELECT camera::text AS name, count(*) AS count
+FROM photos
+WHERE owner_id = @owner_id AND deleted_at IS NULL AND camera IS NOT NULL
+GROUP BY camera
+ORDER BY camera;
+
+-- name: ListLenses :many
+SELECT lens::text AS name, count(*) AS count
+FROM photos
+WHERE owner_id = @owner_id AND deleted_at IS NULL AND lens IS NOT NULL
+GROUP BY lens
+ORDER BY lens;
 
 -- name: ListTrash :many
 SELECT *

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 
+import { api, type NameCount } from '../api/client'
 import EmptyState from '../components/EmptyState.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
 import { usePhotosStore, type PhotoQuery } from '../stores/photos'
@@ -17,32 +18,68 @@ const uploads = useUploadsStore()
 
 const dragging = ref(false)
 
-// On a phone the dates hide behind a button, so the filters take one row.
+// On a phone the cameras, lenses and dates hide behind a button, so the filters take one row.
 const { xs } = useDisplay()
 
+// The cameras and lenses of the user's photos, with how many photos each took.
+const cameraList = shallowRef<NameCount[]>([])
+const lensList = shallowRef<NameCount[]>([])
+
 // The address holds the filters, so that they survive a reload and a tag page can link to them.
-const tagIds = computed(() => {
-  const value = route.query.tag
+function queryList(key: string) {
+  const value = route.query[key]
   const list = Array.isArray(value) ? value : value ? [value] : []
-  return list.map(Number).filter((id) => Number.isInteger(id))
-})
+  return list.filter((item): item is string => typeof item === 'string')
+}
+const tagIds = computed(() => queryList('tag').map(Number).filter((id) => Number.isInteger(id)))
+const cameras = computed(() => queryList('camera'))
+const lenses = computed(() => queryList('lens'))
 const fromDate = computed(() => (typeof route.query.from === 'string' ? route.query.from : ''))
 const toDate = computed(() => (typeof route.query.to === 'string' ? route.query.to : ''))
 const dateFields = computed(() => [
   { key: 'from', label: 'From', value: fromDate.value },
   { key: 'to', label: 'To', value: toDate.value },
 ])
-const filtered = computed(() => tagIds.value.length > 0 || Boolean(fromDate.value || toDate.value))
+// The filters a phone keeps behind the button.
+const moreFiltered = computed(() => cameras.value.length > 0 || lenses.value.length > 0 || Boolean(fromDate.value || toDate.value))
+const filtered = computed(() => tagIds.value.length > 0 || moreFiltered.value)
 
-function setFilter(change: { tag?: number[]; from?: string | null; to?: string | null }) {
-  const next = { tag: tagIds.value.map(String), from: fromDate.value, to: toDate.value, ...change }
+interface FilterChange {
+  tag?: number[]
+  camera?: string[]
+  lens?: string[]
+  from?: string | null
+  to?: string | null
+}
+
+function setFilter(change: FilterChange) {
+  const next = { tag: tagIds.value, camera: cameras.value, lens: lenses.value, from: fromDate.value, to: toDate.value, ...change }
   void router.replace({
     query: {
       ...(next.tag.length > 0 ? { tag: next.tag.map(String) } : {}),
+      ...(next.camera.length > 0 ? { camera: next.camera } : {}),
+      ...(next.lens.length > 0 ? { lens: next.lens } : {}),
       ...(next.from ? { from: next.from } : {}),
       ...(next.to ? { to: next.to } : {}),
     },
   })
+}
+
+const cameraFields = computed(() => [
+  { key: 'camera', label: 'Any of these cameras', items: cameraList.value, value: cameras.value },
+  { key: 'lens', label: 'Any of these lenses', items: lensList.value, value: lenses.value },
+])
+
+function photoCount(item: NameCount) {
+  return { subtitle: item.count === 1 ? '1 photo' : `${item.count} photos` }
+}
+
+async function loadCameras() {
+  const { data } = await api.GET('/photos/cameras')
+  if (data) {
+    cameraList.value = data.cameras
+    lensList.value = data.lenses
+  }
 }
 
 // The start of a day in the browser's time zone. The end of a range is exclusive, so it takes the next day.
@@ -58,6 +95,8 @@ function dayStart(date: string, addDays = 0) {
 function currentQuery(): PhotoQuery {
   return {
     tags: tagIds.value,
+    cameras: cameras.value,
+    lenses: lenses.value,
     from: fromDate.value ? dayStart(fromDate.value) : undefined,
     to: toDate.value ? dayStart(toDate.value, 1) : undefined,
   }
@@ -65,6 +104,7 @@ function currentQuery(): PhotoQuery {
 
 onMounted(() => {
   void tags.load()
+  void loadCameras()
   void photos.open(currentQuery())
 })
 
@@ -108,13 +148,29 @@ function onDrop(event: DragEvent) {
             <template #activator="{ props: menu }">
               <v-btn
                 v-bind="menu"
-                icon="mdi-calendar-range"
-                :color="fromDate || toDate ? 'primary' : undefined"
+                icon="mdi-tune-variant"
+                :color="moreFiltered ? 'primary' : undefined"
                 variant="text"
-                aria-label="Dates"
+                aria-label="More filters"
               />
             </template>
-            <v-card class="date-menu">
+            <v-card class="filter-menu">
+              <v-autocomplete
+                v-for="field in cameraFields"
+                :key="field.key"
+                :model-value="field.value"
+                :items="field.items"
+                item-title="name"
+                item-value="name"
+                :item-props="photoCount"
+                :label="field.label"
+                density="compact"
+                hide-details
+                multiple
+                chips
+                closable-chips
+                @update:model-value="setFilter({ [field.key]: $event })"
+              />
               <v-text-field
                 v-for="field in dateFields"
                 :key="field.key"
@@ -128,6 +184,23 @@ function onDrop(event: DragEvent) {
             </v-card>
           </v-menu>
           <template v-else>
+            <v-autocomplete
+              v-for="field in cameraFields"
+              :key="field.key"
+              :model-value="field.value"
+              :items="field.items"
+              item-title="name"
+              item-value="name"
+              :item-props="photoCount"
+              :label="field.label"
+              density="compact"
+              hide-details
+              multiple
+              chips
+              closable-chips
+              class="camera-filter"
+              @update:model-value="setFilter({ [field.key]: $event })"
+            />
             <v-text-field
               v-for="field in dateFields"
               :key="field.key"
@@ -172,15 +245,20 @@ function onDrop(event: DragEvent) {
   max-width: 480px;
 }
 
+.camera-filter {
+  flex: 1 1 200px;
+  max-width: 360px;
+}
+
 .date-filter {
   flex: 0 1 170px;
 }
 
-.date-menu {
+.filter-menu {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 220px;
+  width: min(320px, calc(100vw - 24px));
   padding: 12px;
 }
 

@@ -23,6 +23,8 @@ vips copy "$tmp/landscape.v" 'landscape.heic[compression=hevc,Q=50]'
 image 2400 1800 "$tmp/large.v"
 vips copy "$tmp/large.v" 'large.jpg[Q=40]'
 
-# Stored as landscape, shown as portrait, and carries GPS that must not leak.
+# Stored as landscape, shown as portrait, carries GPS that must not leak, and
+# names a camera and a lens for the filters.
 cp landscape.jpg rotated.jpg
-exiftool -q -overwrite_original -n -Orientation=6 -GPSLatitude=59.93 -GPSLongitude=30.33 rotated.jpg
+exiftool -q -overwrite_original -n -Orientation=6 -GPSLatitude=59.93 -GPSLongitude=30.33 \
+    -Make=Canon '-Model=Canon EOS R5' '-LensModel=RF24-70mm F2.8 L IS USM' rotated.jpg

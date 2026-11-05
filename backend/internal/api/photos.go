@@ -54,6 +54,14 @@ type photoJSON struct {
 
 func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 	camera, location := metadata.Details(p.Exif)
+	// The lens comes from the column the timeline filters by, so that the
+	// viewer shows the same name.
+	if p.Lens != nil {
+		if camera == nil {
+			camera = &metadata.Camera{}
+		}
+		camera.Lens = p.Lens
+	}
 	if !showLocation {
 		location = nil
 	}
@@ -124,6 +132,8 @@ func (s *server) countPhotoMonths(w http.ResponseWriter, r *http.Request) {
 		ToTime:   filter.ToTime,
 		AlbumID:  filter.AlbumID,
 		TagIds:   filter.TagIds,
+		Cameras:  filter.Cameras,
+		Lenses:   filter.Lenses,
 	})
 	if err != nil {
 		internalError(w, r, err)
@@ -152,6 +162,9 @@ func (s *server) timelineFilter(w http.ResponseWriter, r *http.Request) (store.L
 		}
 		params.TagIds = append(params.TagIds, id)
 	}
+	// Names as listCameras gives them. A name no photo has matches nothing.
+	params.Cameras = query["camera"]
+	params.Lenses = query["lens"]
 	if text := query.Get("album"); text != "" {
 		id, err := strconv.ParseInt(text, 10, 64)
 		if err != nil {
@@ -172,6 +185,39 @@ func (s *server) timelineFilter(w http.ResponseWriter, r *http.Request) (store.L
 		params.AlbumID = &id
 	}
 	return params, true
+}
+
+// nameCountJSON is a camera or a lens and the number of photos taken with it.
+type nameCountJSON struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+// listCameras gives the cameras and lenses of the current user's photos, which
+// the timeline filters by.
+func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
+	owner := currentUser(r).ID
+	cameras, err := s.Queries.ListCameras(r.Context(), owner)
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	lenses, err := s.Queries.ListLenses(r.Context(), owner)
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	out := struct {
+		Cameras []nameCountJSON `json:"cameras"`
+		Lenses  []nameCountJSON `json:"lenses"`
+	}{make([]nameCountJSON, len(cameras)), make([]nameCountJSON, len(lenses))}
+	for i, row := range cameras {
+		out.Cameras[i] = nameCountJSON(row)
+	}
+	for i, row := range lenses {
+		out.Lenses[i] = nameCountJSON(row)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // monthJSON is the number of photos a list has in one month, such as "2024-05".
