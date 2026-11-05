@@ -1280,7 +1280,7 @@ components:
           type: integer
           minimum: 200
           maximum: 800
-          description: Longest side of a grid preview, in pixels
+          description: Shortest side of a grid preview, in pixels. A panorama is limited by the viewer preview size instead
         viewerEdge:
           type: integer
           minimum: 1024
@@ -1448,7 +1448,7 @@ components:
             format: int64
     Photo:
       type: object
-      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, camera, location]
+      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, camera, location]
       properties:
         id:
           type: integer
@@ -1483,6 +1483,9 @@ components:
           description: When the photo was moved to the trash
           type: [string, "null"]
           format: date-time
+        previewVersion:
+          description: Changes when the previews are made again. Previews are cached for a long time, so their address carries it
+          type: integer
         camera:
           description: Shooting details from EXIF. Null when the photo has none
           oneOf:

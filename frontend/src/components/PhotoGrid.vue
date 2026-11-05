@@ -249,7 +249,7 @@ onBeforeUnmount(() => {
             :aria-label="photo.name"
             @click="onTileClick(photo, $event)"
           >
-            <img v-if="photo.status === 'ready'" :src="previewUrl(photo.id, 'grid')" :alt="photo.name" decoding="async" />
+            <img v-if="photo.status === 'ready'" :src="previewUrl(photo.id, 'grid', photo.previewVersion)" :alt="photo.name" decoding="async" />
             <v-progress-circular v-else-if="photo.status === 'pending'" indeterminate size="24" width="2" />
             <v-tooltip v-else :text="`${photo.name} could not be processed`" location="top">
               <template #activator="{ props: tooltip }">

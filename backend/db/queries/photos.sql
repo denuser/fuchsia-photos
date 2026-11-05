@@ -191,3 +191,13 @@ SELECT pg_advisory_xact_lock(hashtextextended(format('%s/%s', @owner_id::bigint,
 
 -- name: GetTrashedPhoto :one
 SELECT * FROM photos WHERE id = @id AND owner_id = @owner_id AND deleted_at IS NOT NULL AND purged_at IS NULL;
+
+-- name: ListReadyPhotoIDs :many
+SELECT id FROM photos WHERE status = 'ready' AND purged_at IS NULL ORDER BY id;
+
+-- Moves updated_at too, so that open pages load the new preview.
+-- name: BumpPreviewVersion :exec
+UPDATE photos
+SET preview_version = preview_version + 1,
+    updated_at = now()
+WHERE id = @id AND status = 'ready' AND purged_at IS NULL;

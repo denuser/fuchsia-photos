@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivertype"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/media"
 	"github.com/denuser/fuchsia-photos/backend/internal/metadata"
@@ -150,6 +151,103 @@ type unreadableError struct{ err error }
 func (e *unreadableError) Error() string { return e.err.Error() }
 func (e *unreadableError) Unwrap() error { return e.err }
 
+// RenderGridArgs queues making the grid preview of a ready photo again, from
+// its viewer preview, with the current grid preview size.
+type RenderGridArgs struct {
+	PhotoID int64 `json:"photo_id"`
+}
+
+// Kind implements river.JobArgs.
+func (RenderGridArgs) Kind() string { return "render_grid" }
+
+// InsertOpts implements river.JobArgsWithInsertOpts. New photos go first, and a
+// photo already waiting is not queued twice.
+func (RenderGridArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{
+		MaxAttempts: 3,
+		Priority:    4,
+		UniqueOpts: river.UniqueOpts{
+			ByArgs: true,
+			ByState: []rivertype.JobState{
+				rivertype.JobStateAvailable, rivertype.JobStatePending, rivertype.JobStateRetryable,
+				rivertype.JobStateRunning, rivertype.JobStateScheduled,
+			},
+		},
+	}
+}
+
+type renderGridWorker struct {
+	river.WorkerDefaults[RenderGridArgs]
+	queries *store.Queries
+	layout  storage.Layout
+}
+
+func (w *renderGridWorker) Work(ctx context.Context, job *river.Job[RenderGridArgs]) error {
+	photo, err := w.queries.GetPhoto(ctx, job.Args.PhotoID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("load photo: %w", err)
+	}
+	if photo.Status != "ready" || photo.PurgedAt != nil || photo.PreviewFormat == nil {
+		return nil // Processing makes its previews, or it has none.
+	}
+	format := *photo.PreviewFormat
+
+	viewer, err := os.ReadFile(w.layout.Preview(photo.ID, storage.PreviewViewer, format))
+	if err != nil {
+		return fmt.Errorf("read viewer preview: %w", err)
+	}
+	settings, err := w.queries.GetPreviewSettings(ctx)
+	if err != nil {
+		return fmt.Errorf("load preview settings: %w", err)
+	}
+	// The photo keeps the format of its viewer preview, which the database
+	// records for both previews.
+	grid, err := media.RenderGrid(viewer, media.Settings{
+		Format:      media.Format(format),
+		WebPQuality: int(settings.WebpQuality),
+		WebPEffort:  int(settings.WebpEffort),
+		JPEGQuality: int(settings.JpegQuality),
+		GridEdge:    int(settings.GridEdge),
+	})
+	if err != nil {
+		return fmt.Errorf("render grid preview of photo %d: %w", photo.ID, err)
+	}
+	if err := storage.WriteFileAtomic(w.layout.Preview(photo.ID, storage.PreviewGrid, format), grid.Data); err != nil {
+		return fmt.Errorf("write grid preview: %w", err)
+	}
+	if err := w.queries.BumpPreviewVersion(ctx, photo.ID); err != nil {
+		return fmt.Errorf("update photo: %w", err)
+	}
+	return nil
+}
+
+// QueueGridRenders queues a new grid preview for every ready photo and returns
+// how many were queued. Running jobs are left to the server.
+func QueueGridRenders(ctx context.Context, pool *pgxpool.Pool) (int, error) {
+	ids, err := store.New(pool).ListReadyPhotoIDs(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("list photos: %w", err)
+	}
+	client, err := NewInsertClient(pool)
+	if err != nil {
+		return 0, err
+	}
+	const batch = 1000
+	for start := 0; start < len(ids); start += batch {
+		params := make([]river.InsertManyParams, 0, batch)
+		for _, id := range ids[start:min(start+batch, len(ids))] {
+			params = append(params, river.InsertManyParams{Args: RenderGridArgs{PhotoID: id}})
+		}
+		if _, err := client.InsertMany(ctx, params); err != nil {
+			return start, fmt.Errorf("queue jobs: %w", err)
+		}
+	}
+	return len(ids), nil
+}
+
 // CleanupArgs queues routine housekeeping.
 type CleanupArgs struct{}
 
@@ -208,6 +306,7 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 
 	workers := river.NewWorkers()
 	river.AddWorker(workers, &processPhotoWorker{queries: queries, layout: cfg.Layout, metadata: cfg.Metadata})
+	river.AddWorker(workers, &renderGridWorker{queries: queries, layout: cfg.Layout})
 	river.AddWorker(workers, &cleanupWorker{queries: queries, layout: cfg.Layout})
 	if cfg.Register != nil {
 		cfg.Register(workers)

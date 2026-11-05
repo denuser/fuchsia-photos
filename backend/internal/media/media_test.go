@@ -25,12 +25,12 @@ func TestRender(t *testing.T) {
 		viewerWidth, viewerHeight int
 		gridWidth, gridHeight     int
 	}{
-		{"landscape.jpg", 800, 600, 400, 300},
-		{"landscape.png", 800, 600, 400, 300},
-		{"landscape.webp", 800, 600, 400, 300},
-		{"landscape.heic", 800, 600, 400, 300},
-		{"large.jpg", 2048, 1536, 400, 300},
-		{"rotated.jpg", 600, 800, 300, 400},
+		{"landscape.jpg", 800, 600, 533, 400},
+		{"landscape.png", 800, 600, 533, 400},
+		{"landscape.webp", 800, 600, 533, 400},
+		{"landscape.heic", 800, 600, 533, 400},
+		{"large.jpg", 2048, 1536, 533, 400},
+		{"rotated.jpg", 600, 800, 400, 533},
 	}
 	for _, tt := range tests {
 		for _, format := range []Format{WebP, JPEG} {
@@ -99,7 +99,7 @@ func TestRenderUsesSettings(t *testing.T) {
 				t.Fatal(err)
 			}
 			check(t, small.Viewer, 1024, 768)
-			check(t, small.Grid, 200, 150)
+			check(t, small.Grid, 267, 200)
 
 			large, err := Render(path, high)
 			if err != nil {
@@ -110,6 +110,17 @@ func TestRenderUsesSettings(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A viewer preview whose shortest side is below the grid size is not scaled up.
+func TestRenderGridKeepsSmallPreview(t *testing.T) {
+	settings := DefaultSettings()
+	settings.GridEdge = 800
+	previews, err := Render(filepath.Join("testdata", "landscape.jpg"), settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, previews.Grid, 800, 600)
 }
 
 func TestValidateSettings(t *testing.T) {

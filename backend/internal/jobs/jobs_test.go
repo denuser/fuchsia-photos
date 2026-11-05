@@ -167,7 +167,7 @@ func TestProcessPhotoUsesCurrentSettings(t *testing.T) {
 	if *after.PreviewFormat != string(media.JPEG) {
 		t.Errorf("format = %s, want jpeg", *after.PreviewFormat)
 	}
-	for kind, width := range map[string]int{storage.PreviewViewer: 1024, storage.PreviewGrid: 200} {
+	for kind, width := range map[string]int{storage.PreviewViewer: 1024, storage.PreviewGrid: 267} {
 		image, err := vips.NewImageFromFile(e.layout.Preview(after.ID, kind, *after.PreviewFormat))
 		if err != nil {
 			t.Fatal(err)
@@ -181,6 +181,54 @@ func TestProcessPhotoUsesCurrentSettings(t *testing.T) {
 	// The earlier photo keeps its previews, in the format recorded for it.
 	if _, err := os.Stat(e.layout.Preview(before.ID, storage.PreviewViewer, *before.PreviewFormat)); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestRenderGrid(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	data, err := os.ReadFile(filepath.Join("..", "media", "testdata", "landscape.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.ingest.Ingest(ctx, e.owner, bytes.NewReader(data), "landscape.jpg", ingest.PriorityInteractive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo := waitForStatus(t, e, res.Photo.ID, "ready")
+
+	// A new format applies to new photos only: this one keeps WebP.
+	_, err = e.queries.UpdatePreviewSettings(ctx, store.UpdatePreviewSettingsParams{
+		Format: string(media.JPEG), WebpQuality: 75, WebpEffort: 2, JpegQuality: 80, GridEdge: 300, ViewerEdge: 2048,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := jobs.QueueGridRenders(ctx, e.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("queued %d photos, want 1", count)
+	}
+
+	deadline := time.Now().Add(30 * time.Second)
+	for photo.PreviewVersion == 0 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+		if photo, err = e.queries.GetPhoto(ctx, photo.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if photo.PreviewVersion != 1 {
+		t.Fatalf("preview version = %d, want 1", photo.PreviewVersion)
+	}
+	image, err := vips.NewImageFromFile(e.layout.Preview(photo.ID, storage.PreviewGrid, *photo.PreviewFormat))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer image.Close()
+	if image.Width() != 400 || image.Height() != 300 || image.Format() != vips.ImageTypeWEBP {
+		t.Errorf("grid preview = %dx%d %v, want 400x300 WebP", image.Width(), image.Height(), image.Format())
 	}
 }
 

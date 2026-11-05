@@ -36,7 +36,9 @@ const usage = `usage: fuchsia-photos <command>
 commands:
   serve                 apply pending migrations and start the server
   migrate               apply pending migrations and exit
-  create-admin <login>  create an administrator, reading the password from stdin`
+  create-admin <login>  create an administrator, reading the password from stdin
+  render-grid           queue new grid previews of all photos with the current
+                        settings; a running server makes them`
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -54,6 +56,7 @@ func run(args []string) error {
 	case command == "serve" && len(args) == 1:
 	case command == "migrate" && len(args) == 1:
 	case command == "create-admin" && len(args) == 2:
+	case command == "render-grid" && len(args) == 1:
 	default:
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
@@ -82,6 +85,12 @@ func run(args []string) error {
 		return serve(ctx, cfg, pool)
 	case "create-admin":
 		return createAdmin(ctx, pool, args[1])
+	case "render-grid":
+		count, err := jobs.QueueGridRenders(ctx, pool)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "Queued new grid previews of %d photos\n", count)
 	}
 	return nil
 }

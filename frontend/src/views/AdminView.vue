@@ -137,7 +137,7 @@ async function save() {
         type="number"
         label="Grid preview size"
         suffix="px"
-        hint="Longest side, from 200 to 800 pixels."
+        hint="Shortest side, from 200 to 800 pixels."
         persistent-hint
         density="compact"
         class="mb-2"

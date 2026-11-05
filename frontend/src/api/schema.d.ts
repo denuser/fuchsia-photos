@@ -824,7 +824,7 @@ export interface components {
             webpQuality: number;
             webpEffort: number;
             jpegQuality: number;
-            /** @description Longest side of a grid preview, in pixels */
+            /** @description Shortest side of a grid preview, in pixels. A panorama is limited by the viewer preview size instead */
             gridEdge: number;
             /** @description Longest side of a viewer preview, in pixels */
             viewerEdge: number;
@@ -966,6 +966,8 @@ export interface components {
              * @description When the photo was moved to the trash
              */
             deletedAt: string | null;
+            /** @description Changes when the previews are made again. Previews are cached for a long time, so their address carries it */
+            previewVersion: number;
             /** @description Shooting details from EXIF. Null when the photo has none */
             camera: components["schemas"]["Camera"] | null;
             /** @description Where the photo was taken. Null when it has no location or an administrator hides locations */

@@ -44,8 +44,11 @@ api.use({
   },
 })
 
-export function previewUrl(id: number, kind: 'grid' | 'viewer') {
-  return `${API_BASE}/photos/${id}/previews/${kind}`
+// Previews are cached for a long time. The version changes when they are made
+// again, so that the browser loads the new ones.
+export function previewUrl(id: number, kind: 'grid' | 'viewer', version = 0) {
+  const url = `${API_BASE}/photos/${id}/previews/${kind}`
+  return version ? `${url}?v=${version}` : url
 }
 
 export function originalUrl(id: number) {

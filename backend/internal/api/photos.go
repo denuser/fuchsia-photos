@@ -47,6 +47,8 @@ type photoJSON struct {
 	SortAt    time.Time  `json:"sortAt"`
 	CreatedAt time.Time  `json:"createdAt"`
 	DeletedAt *time.Time `json:"deletedAt"`
+	// Previews are cached for a long time, so their address carries it.
+	PreviewVersion int32 `json:"previewVersion"`
 
 	Camera   *metadata.Camera   `json:"camera"`
 	Location *metadata.Location `json:"location"`
@@ -66,20 +68,21 @@ func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 		location = nil
 	}
 	return photoJSON{
-		ID:        p.ID,
-		OwnerID:   p.OwnerID,
-		Status:    p.Status,
-		Name:      p.OriginalName,
-		Mime:      p.Mime,
-		Size:      p.Size,
-		Width:     p.Width,
-		Height:    p.Height,
-		TakenAt:   p.TakenAt,
-		SortAt:    p.SortAt,
-		CreatedAt: p.CreatedAt,
-		DeletedAt: p.DeletedAt,
-		Camera:    camera,
-		Location:  location,
+		ID:             p.ID,
+		OwnerID:        p.OwnerID,
+		Status:         p.Status,
+		Name:           p.OriginalName,
+		Mime:           p.Mime,
+		Size:           p.Size,
+		Width:          p.Width,
+		Height:         p.Height,
+		TakenAt:        p.TakenAt,
+		SortAt:         p.SortAt,
+		CreatedAt:      p.CreatedAt,
+		DeletedAt:      p.DeletedAt,
+		Camera:         camera,
+		PreviewVersion: p.PreviewVersion,
+		Location:       location,
 	}
 }
 

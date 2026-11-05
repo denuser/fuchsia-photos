@@ -61,6 +61,16 @@ Migrations are also applied automatically each time the application starts.
 
 Processing continues after a restart. A job that was running during a clean stop runs again shortly after the next start. A job that was running during a crash or power loss resumes after about 3 minutes.
 
+### Making grid previews again
+
+Preview settings apply to new photos. After changing the grid preview size, or after an update that changes how grid previews are made, queue new grid previews of all photos:
+
+```sh
+docker compose -f deploy/compose.yaml exec app fuchsia-photos render-grid
+```
+
+The running server makes them in the background, from the viewer previews, after any new photos waiting for processing. Each photo keeps its preview format. Running the command again while jobs are waiting does not queue a photo twice. An open timeline picks up the new previews without reloading.
+
 ## Importing from a folder
 
 For large collections, this is faster than uploading through the browser.

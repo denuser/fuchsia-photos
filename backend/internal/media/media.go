@@ -7,8 +7,8 @@ import (
 	"github.com/davidbyttow/govips/v2/vips"
 )
 
-// Limits of the settings. The preview size ranges do not overlap, so a grid
-// preview, which is made from the viewer preview, is always the smaller one.
+// Limits of the settings. A grid preview is made from the viewer preview and
+// never scaled up, so it is never larger than the viewer preview.
 const (
 	MinQuality    = 1
 	MaxQuality    = 100
@@ -29,8 +29,9 @@ const (
 	JPEG Format = "jpeg"
 )
 
-// Settings control how previews are generated. Edges are the longest side of a
-// preview in pixels.
+// Settings control how previews are generated. ViewerEdge is the longest side of
+// the viewer preview in pixels. GridEdge is the shortest side of the grid
+// preview, so that a square cut from it for the grid keeps full resolution.
 type Settings struct {
 	Format      Format
 	WebPQuality int
@@ -126,17 +127,41 @@ func Render(path string, settings Settings) (Previews, error) {
 		return Previews{}, fmt.Errorf("encode viewer preview of %s: %w", path, err)
 	}
 
-	gridImage, err := vips.NewThumbnailWithSizeFromBuffer(viewer.Data, settings.GridEdge, settings.GridEdge, vips.InterestingNone, vips.SizeDown)
+	grid, err := RenderGrid(viewer.Data, settings)
 	if err != nil {
-		return Previews{}, fmt.Errorf("resize %s: %w", path, err)
-	}
-	defer gridImage.Close()
-
-	grid, err := encode(gridImage, settings)
-	if err != nil {
-		return Previews{}, fmt.Errorf("encode grid preview of %s: %w", path, err)
+		return Previews{}, fmt.Errorf("grid preview of %s: %w", path, err)
 	}
 	return Previews{Viewer: viewer, Grid: grid}, nil
+}
+
+// RenderGrid makes the grid preview from the data of a viewer preview. The
+// shortest side becomes GridEdge, and a viewer preview smaller than that keeps
+// its size, so a panorama is limited by the viewer preview size.
+func RenderGrid(viewer []byte, settings Settings) (Preview, error) {
+	source, err := vips.NewImageFromBuffer(viewer)
+	if err != nil {
+		return Preview{}, fmt.Errorf("load viewer preview: %w", err)
+	}
+	width, height := source.Width(), source.Height()
+	source.Close()
+
+	// The thumbnail fits a box, and the side that must become GridEdge sets it.
+	if width >= height {
+		height = settings.GridEdge
+	} else {
+		width = settings.GridEdge
+	}
+	image, err := vips.NewThumbnailWithSizeFromBuffer(viewer, width, height, vips.InterestingNone, vips.SizeDown)
+	if err != nil {
+		return Preview{}, fmt.Errorf("resize: %w", err)
+	}
+	defer image.Close()
+
+	grid, err := encode(image, settings)
+	if err != nil {
+		return Preview{}, fmt.Errorf("encode: %w", err)
+	}
+	return grid, nil
 }
 
 func encode(image *vips.ImageRef, settings Settings) (Preview, error) {
