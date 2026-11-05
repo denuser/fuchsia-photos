@@ -193,16 +193,34 @@ type nameCountJSON struct {
 	Count int64  `json:"count"`
 }
 
-// listCameras gives the cameras and lenses of the current user's photos, which
-// the timeline filters by.
+// listCameras gives the cameras and lenses of the photos listPhotos gives for
+// the same filters. Each list leaves out its own filter, so that the timeline
+// can show how many photos another camera or lens would add.
 func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
-	owner := currentUser(r).ID
-	cameras, err := s.Queries.ListCameras(r.Context(), owner)
+	filter, ok := s.timelineFilter(w, r)
+	if !ok {
+		return
+	}
+	cameras, err := s.Queries.ListCameras(r.Context(), store.ListCamerasParams{
+		OwnerID:  filter.OwnerID,
+		FromTime: filter.FromTime,
+		ToTime:   filter.ToTime,
+		AlbumID:  filter.AlbumID,
+		TagIds:   filter.TagIds,
+		Lenses:   filter.Lenses,
+	})
 	if err != nil {
 		internalError(w, r, err)
 		return
 	}
-	lenses, err := s.Queries.ListLenses(r.Context(), owner)
+	lenses, err := s.Queries.ListLenses(r.Context(), store.ListLensesParams{
+		OwnerID:  filter.OwnerID,
+		FromTime: filter.FromTime,
+		ToTime:   filter.ToTime,
+		AlbumID:  filter.AlbumID,
+		TagIds:   filter.TagIds,
+		Cameras:  filter.Cameras,
+	})
 	if err != nil {
 		internalError(w, r, err)
 		return

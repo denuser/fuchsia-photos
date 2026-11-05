@@ -306,8 +306,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the cameras and lenses of the current user's photos
-         * @description For the camera and lens filters of listPhotos. Photos in the trash are left out
+         * List the cameras and lenses of the photos listPhotos gives
+         * @description For the camera and lens filters of listPhotos, and takes its filters. Each list leaves out its own filter, so that its counts are the photos each name would add. Photos in the trash are left out
          */
         get: operations["listCameras"];
         put?: never;
@@ -1601,7 +1601,20 @@ export interface operations {
     };
     listCameras: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only photos sorted at or after this time */
+                from?: string;
+                /** @description Only photos sorted before this time */
+                to?: string;
+                /** @description Only photos with at least one of these tags */
+                tag?: number[];
+                /** @description Only photos taken with one of these cameras, named as listCameras gives them */
+                camera?: string[];
+                /** @description Only photos taken with one of these lenses, named as listCameras gives them */
+                lens?: string[];
+                /** @description Only photos of this album */
+                album?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1617,6 +1630,8 @@ export interface operations {
                     "application/json": components["schemas"]["CameraLists"];
                 };
             };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     listSharedPhotos: {

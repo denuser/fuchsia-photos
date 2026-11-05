@@ -319,22 +319,49 @@ func (q *Queries) InsertPhoto(ctx context.Context, arg InsertPhotoParams) (Photo
 }
 
 const listCameras = `-- name: ListCameras :many
-SELECT camera::text AS name, count(*) AS count
-FROM photos
-WHERE owner_id = $1 AND deleted_at IS NULL AND camera IS NOT NULL
-GROUP BY camera
-ORDER BY camera
+SELECT p.camera::text AS name, count(*) AS count
+FROM photos p
+WHERE p.owner_id = $1
+  AND p.deleted_at IS NULL
+  AND p.camera IS NOT NULL
+  AND ($2::timestamptz IS NULL OR p.sort_at >= $2::timestamptz)
+  AND ($3::timestamptz IS NULL OR p.sort_at < $3::timestamptz)
+  AND ($4::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $4::bigint))
+  AND ($5::bigint[] IS NULL
+       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($5::bigint[])))
+  AND ($6::text[] IS NULL OR p.lens = ANY ($6::text[]))
+GROUP BY p.camera
+ORDER BY p.camera
 `
+
+type ListCamerasParams struct {
+	OwnerID  int64
+	FromTime *time.Time
+	ToTime   *time.Time
+	AlbumID  *int64
+	TagIds   []int64
+	Lenses   []string
+}
 
 type ListCamerasRow struct {
 	Name  string
 	Count int64
 }
 
-// The cameras and lenses of the current user's photos, with how many photos
-// each took, for the filters of the timeline.
-func (q *Queries) ListCameras(ctx context.Context, ownerID int64) ([]ListCamerasRow, error) {
-	rows, err := q.db.Query(ctx, listCameras, ownerID)
+// The cameras and lenses of the photos ListTimeline filters, with how many
+// photos each took, for the filters of the timeline. Each list takes every
+// filter but its own: the filter keeps any of its names, so a name not chosen
+// yet counts the photos it would add.
+func (q *Queries) ListCameras(ctx context.Context, arg ListCamerasParams) ([]ListCamerasRow, error) {
+	rows, err := q.db.Query(ctx, listCameras,
+		arg.OwnerID,
+		arg.FromTime,
+		arg.ToTime,
+		arg.AlbumID,
+		arg.TagIds,
+		arg.Lenses,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -411,20 +438,45 @@ func (q *Queries) ListChangedPhotos(ctx context.Context, arg ListChangedPhotosPa
 }
 
 const listLenses = `-- name: ListLenses :many
-SELECT lens::text AS name, count(*) AS count
-FROM photos
-WHERE owner_id = $1 AND deleted_at IS NULL AND lens IS NOT NULL
-GROUP BY lens
-ORDER BY lens
+SELECT p.lens::text AS name, count(*) AS count
+FROM photos p
+WHERE p.owner_id = $1
+  AND p.deleted_at IS NULL
+  AND p.lens IS NOT NULL
+  AND ($2::timestamptz IS NULL OR p.sort_at >= $2::timestamptz)
+  AND ($3::timestamptz IS NULL OR p.sort_at < $3::timestamptz)
+  AND ($4::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $4::bigint))
+  AND ($5::bigint[] IS NULL
+       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($5::bigint[])))
+  AND ($6::text[] IS NULL OR p.camera = ANY ($6::text[]))
+GROUP BY p.lens
+ORDER BY p.lens
 `
+
+type ListLensesParams struct {
+	OwnerID  int64
+	FromTime *time.Time
+	ToTime   *time.Time
+	AlbumID  *int64
+	TagIds   []int64
+	Cameras  []string
+}
 
 type ListLensesRow struct {
 	Name  string
 	Count int64
 }
 
-func (q *Queries) ListLenses(ctx context.Context, ownerID int64) ([]ListLensesRow, error) {
-	rows, err := q.db.Query(ctx, listLenses, ownerID)
+func (q *Queries) ListLenses(ctx context.Context, arg ListLensesParams) ([]ListLensesRow, error) {
+	rows, err := q.db.Query(ctx, listLenses,
+		arg.OwnerID,
+		arg.FromTime,
+		arg.ToTime,
+		arg.AlbumID,
+		arg.TagIds,
+		arg.Cameras,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -153,6 +153,12 @@ const steps = {
     await page.getByRole('option', { name: /Canon EOS R5/ }).click()
     await page.keyboard.press('Escape')
     await tiles(1)
+    // The other filters leave the chosen camera no photos, and it stays in its list to be removed.
+    await page.getByLabel('From', { exact: true }).fill('2000-01-01')
+    await page.getByLabel('To', { exact: true }).fill('2000-01-02')
+    await page.getByRole('combobox', { name: 'Any of these cameras' }).click()
+    await page.getByRole('option', { name: /Canon EOS R5.*0 photos/ }).waitFor()
+    await page.keyboard.press('Escape')
     await button('Clear').click()
     await tiles(5)
   },

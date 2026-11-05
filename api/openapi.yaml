@@ -489,8 +489,49 @@ paths:
   /photos/cameras:
     get:
       operationId: listCameras
-      summary: List the cameras and lenses of the current user's photos
-      description: For the camera and lens filters of listPhotos. Photos in the trash are left out
+      summary: List the cameras and lenses of the photos listPhotos gives
+      description: For the camera and lens filters of listPhotos, and takes its filters. Each list leaves out its own filter, so that its counts are the photos each name would add. Photos in the trash are left out
+      parameters:
+        - name: from
+          in: query
+          description: Only photos sorted at or after this time
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Only photos sorted before this time
+          schema:
+            type: string
+            format: date-time
+        - name: tag
+          in: query
+          description: Only photos with at least one of these tags
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+        - name: camera
+          in: query
+          description: Only photos taken with one of these cameras, named as listCameras gives them
+          schema:
+            type: array
+            items:
+              type: string
+        - name: lens
+          in: query
+          description: Only photos taken with one of these lenses, named as listCameras gives them
+          schema:
+            type: array
+            items:
+              type: string
+        - name: album
+          in: query
+          description: Only photos of this album
+          schema:
+            type: integer
+            format: int64
       responses:
         "200":
           description: Cameras and lenses by name, with the number of photos each took
@@ -498,6 +539,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CameraLists"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /photos/shared:
     get:
       operationId: listSharedPhotos

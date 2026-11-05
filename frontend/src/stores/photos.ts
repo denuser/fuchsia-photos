@@ -133,7 +133,7 @@ function fetchMonths(query: PhotoQuery) {
 }
 
 // The filters of the user's own list that take several values. An empty one is left out.
-function listFilters({ tags, cameras, lenses }: PhotoQuery) {
+export function listFilters({ tags, cameras, lenses }: PhotoQuery) {
   return {
     tag: tags?.length ? tags : undefined,
     camera: cameras?.length ? cameras : undefined,

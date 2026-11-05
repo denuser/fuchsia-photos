@@ -54,21 +54,41 @@ WHERE p.owner_id = @owner_id
 GROUP BY 1
 ORDER BY 1 DESC;
 
--- The cameras and lenses of the current user's photos, with how many photos
--- each took, for the filters of the timeline.
+-- The cameras and lenses of the photos ListTimeline filters, with how many
+-- photos each took, for the filters of the timeline. Each list takes every
+-- filter but its own: the filter keeps any of its names, so a name not chosen
+-- yet counts the photos it would add.
 -- name: ListCameras :many
-SELECT camera::text AS name, count(*) AS count
-FROM photos
-WHERE owner_id = @owner_id AND deleted_at IS NULL AND camera IS NOT NULL
-GROUP BY camera
-ORDER BY camera;
+SELECT p.camera::text AS name, count(*) AS count
+FROM photos p
+WHERE p.owner_id = @owner_id
+  AND p.deleted_at IS NULL
+  AND p.camera IS NOT NULL
+  AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
+  AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
+  AND (sqlc.narg(album_id)::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = sqlc.narg(album_id)::bigint))
+  AND (sqlc.narg(tag_ids)::bigint[] IS NULL
+       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[])))
+  AND (sqlc.narg(lenses)::text[] IS NULL OR p.lens = ANY (sqlc.narg(lenses)::text[]))
+GROUP BY p.camera
+ORDER BY p.camera;
 
 -- name: ListLenses :many
-SELECT lens::text AS name, count(*) AS count
-FROM photos
-WHERE owner_id = @owner_id AND deleted_at IS NULL AND lens IS NOT NULL
-GROUP BY lens
-ORDER BY lens;
+SELECT p.lens::text AS name, count(*) AS count
+FROM photos p
+WHERE p.owner_id = @owner_id
+  AND p.deleted_at IS NULL
+  AND p.lens IS NOT NULL
+  AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
+  AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
+  AND (sqlc.narg(album_id)::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = sqlc.narg(album_id)::bigint))
+  AND (sqlc.narg(tag_ids)::bigint[] IS NULL
+       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[])))
+  AND (sqlc.narg(cameras)::text[] IS NULL OR p.camera = ANY (sqlc.narg(cameras)::text[]))
+GROUP BY p.lens
+ORDER BY p.lens;
 
 -- name: ListTrash :many
 SELECT *

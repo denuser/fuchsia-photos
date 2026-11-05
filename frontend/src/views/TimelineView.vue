@@ -6,7 +6,7 @@ import { useDisplay } from 'vuetify'
 import { api, type NameCount } from '../api/client'
 import EmptyState from '../components/EmptyState.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
-import { usePhotosStore, type PhotoQuery } from '../stores/photos'
+import { listFilters, usePhotosStore, type PhotoQuery } from '../stores/photos'
 import { useTagsStore } from '../stores/tags'
 import { useUploadsStore } from '../stores/uploads'
 
@@ -21,7 +21,7 @@ const dragging = ref(false)
 // On a phone the cameras, lenses and dates hide behind a button, so the filters take one row.
 const { xs } = useDisplay()
 
-// The cameras and lenses of the user's photos, with how many photos each took.
+// The cameras and lenses of the photos the other filters keep, with how many photos each would add.
 const cameraList = shallowRef<NameCount[]>([])
 const lensList = shallowRef<NameCount[]>([])
 
@@ -65,18 +65,31 @@ function setFilter(change: FilterChange) {
   })
 }
 
+// A chosen name the other filters leave no photos stays at the top of its list, so that it can be removed.
+function withChosen(items: NameCount[], chosen: string[]) {
+  const missing = chosen.filter((name) => !items.some((item) => item.name === name))
+  if (missing.length === 0) {
+    return items
+  }
+  return [...missing.map((name) => ({ name, count: 0 })), ...items]
+}
+
 const cameraFields = computed(() => [
-  { key: 'camera', label: 'Any of these cameras', items: cameraList.value, value: cameras.value },
-  { key: 'lens', label: 'Any of these lenses', items: lensList.value, value: lenses.value },
+  { key: 'camera', label: 'Any of these cameras', items: withChosen(cameraList.value, cameras.value), value: cameras.value },
+  { key: 'lens', label: 'Any of these lenses', items: withChosen(lensList.value, lenses.value), value: lenses.value },
 ])
 
 function photoCount(item: NameCount) {
   return { subtitle: item.count === 1 ? '1 photo' : `${item.count} photos` }
 }
 
-async function loadCameras() {
-  const { data } = await api.GET('/photos/cameras')
-  if (data) {
+// Counts the request of the latest filters, so that an earlier answer arriving late is dropped.
+let camerasRequest = 0
+
+async function loadCameras(query: PhotoQuery) {
+  const request = ++camerasRequest
+  const { data } = await api.GET('/photos/cameras', { params: { query: { ...listFilters(query), from: query.from, to: query.to } } })
+  if (data && request === camerasRequest) {
     cameraList.value = data.cameras
     lensList.value = data.lenses
   }
@@ -104,14 +117,23 @@ function currentQuery(): PhotoQuery {
 
 onMounted(() => {
   void tags.load()
-  void loadCameras()
-  void photos.open(currentQuery())
+  const query = currentQuery()
+  void loadCameras(query)
+  void photos.open(query)
 })
 
-watch(() => route.query, () => void photos.open(currentQuery()))
+watch(
+  () => route.query,
+  () => {
+    const query = currentQuery()
+    void loadCameras(query)
+    void photos.open(query)
+  },
+)
 
 function onTagged() {
   if (tagIds.value.length > 0) {
+    void loadCameras(currentQuery())
     void photos.reload()
   }
 }

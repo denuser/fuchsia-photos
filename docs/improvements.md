@@ -33,6 +33,6 @@ Loaded months stay in memory. Unloading the months far from the screen is left f
 
 **Status:** done.
 
-The timeline filters by camera and by lens, next to the tags and dates. On a phone they sit behind one button with the dates. Decisions are in the [README](../README.md#decisions).
+The timeline filters by camera and by lens, next to the tags and dates. On a phone they sit behind one button with the dates. The counts in each list take the other filters into account. Decisions are in the [README](../README.md#decisions).
 
 The lists offer only the user's own photos, and other pages, such as albums and "Shared with me", have no such filters yet.

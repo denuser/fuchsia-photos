@@ -72,6 +72,32 @@ func TestCameraFilters(t *testing.T) {
 			monthJSON{"2024-05", 2})
 	})
 
+	t.Run("counts each list with the other filters", func(t *testing.T) {
+		olympusName := url.QueryEscape("OLYMPUS CORPORATION E-M10 Mark III")
+		got := decode[camerasJSON](t, s.anna.get("/api/v1/photos/cameras?camera="+olympusName+"&lens=OM+45mm+F1.8"))
+		want := camerasJSON{
+			// Only the chosen lens took photos with the Olympus, but other cameras still count the photos they would add.
+			Cameras: []nameCountJSON{{"OLYMPUS CORPORATION E-M10 Mark III", 1}},
+			Lenses:  []nameCountJSON{{"OM 17mm F1.8 II", 1}, {"OM 45mm F1.8", 1}},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("cameras = %+v, want %+v", got, want)
+		}
+		got = decode[camerasJSON](t, s.anna.get("/api/v1/photos/cameras?camera=NIKON+D700"))
+		want = camerasJSON{
+			Cameras: []nameCountJSON{{"Canon IXUS 132", 1}, {"NIKON D700", 1}, {"OLYMPUS CORPORATION E-M10 Mark III", 2}},
+			Lenses:  []nameCountJSON{{"AF-S Zoom-Nikkor 24-70mm f/2.8G ED", 1}},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("cameras = %+v, want %+v", got, want)
+		}
+		got = decode[camerasJSON](t, s.anna.get("/api/v1/photos/cameras?to=2024-01-01T00:00:00Z"))
+		if len(got.Cameras) != 0 || len(got.Lenses) != 0 {
+			t.Errorf("cameras before 2024 = %+v", got)
+		}
+		wantStatus(t, s.anna.get("/api/v1/photos/cameras?tag=x"), http.StatusBadRequest)
+	})
+
 	t.Run("the viewer shows the lens the filter uses", func(t *testing.T) {
 		res := s.anna.get("/api/v1/photos/" + itoa(nikon))
 		wantStatus(t, res, http.StatusOK)
