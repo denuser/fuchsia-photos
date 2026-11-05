@@ -90,6 +90,8 @@ paths:
                     $ref: "#/components/schemas/ViewerField"
                 navigationHiddenOnPhones:
                   type: boolean
+                gridSquares:
+                  type: boolean
       responses:
         "200":
           description: The changed user
@@ -1121,6 +1123,22 @@ paths:
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
+  /settings/grid:
+    get:
+      operationId: getGridSettings
+      summary: The grid preview size, for laying out square tiles (any user)
+      responses:
+        "200":
+          description: The current grid preview size
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [gridEdge]
+                properties:
+                  gridEdge:
+                    description: The longest side of a grid preview in pixels
+                    type: integer
   /settings/previews:
     get:
       operationId: getPreviewSettings
@@ -1352,7 +1370,7 @@ components:
       enum: [admin, user]
     User:
       type: object
-      required: [id, login, role, disabled, createdAt, sharedIncludesAlbums, viewerShowsOriginals, viewerHiddenFields, navigationHiddenOnPhones]
+      required: [id, login, role, disabled, createdAt, sharedIncludesAlbums, viewerShowsOriginals, viewerHiddenFields, navigationHiddenOnPhones, gridSquares]
       properties:
         id:
           type: integer
@@ -1379,6 +1397,9 @@ components:
             $ref: "#/components/schemas/ViewerField"
         navigationHiddenOnPhones:
           description: Whether the navigation drawer stays hidden on a phone until the menu button opens it. On by default
+          type: boolean
+        gridSquares:
+          description: Whether photo grids show square tiles of one size, set by the grid preview size, instead of rows that keep each photo's shape. Off by default
           type: boolean
     ViewerField:
       description: A photo detail the viewer can show. `camera` is the make and model, `location` is shown only if an administrator allows it

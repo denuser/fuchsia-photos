@@ -1,6 +1,6 @@
 import type { Photo } from '../api/client'
 import type { Section } from '../stores/photos'
-import { justify, type Row } from './justify'
+import { justify, squareColumns, squares, type Row } from './justify'
 
 export const TARGET_HEIGHT = 200
 export const GAP = 4
@@ -30,44 +30,59 @@ export interface TimelineLayout {
   height: number
 }
 
-// Rows of a section are reused while its photos and the width stay the same,
-// so loading one month does not lay out all the others again.
-const rowCache = new WeakMap<Photo[], { width: number; rows: Row[]; height: number }>()
+// Rows of a section are reused while its photos, the width and the square size
+// stay the same, so loading one month does not lay out all the others again.
+const rowCache = new WeakMap<Photo[], { width: number; square: number | null; rows: Row[]; height: number }>()
 
-function rowsOf(photos: Photo[], width: number) {
+function rowsOf(photos: Photo[], width: number, square: number | null) {
   const cached = rowCache.get(photos)
-  if (cached && cached.width === width) {
+  if (cached && cached.width === width && cached.square === square) {
     return cached
   }
-  const { rows, height } = justify(
-    photos.map((p) => ({ aspect: p.width && p.height ? p.width / p.height : 1 })),
-    width,
-    TARGET_HEIGHT,
-    GAP,
-  )
-  const entry = { width, rows, height }
+  const { rows, height } = square
+    ? squares(photos.length, width, square, GAP)
+    : justify(
+        photos.map((p) => ({ aspect: p.width && p.height ? p.width / p.height : 1 })),
+        width,
+        TARGET_HEIGHT,
+        GAP,
+      )
+  const entry = { width, square, rows, height }
   rowCache.set(photos, entry)
   return entry
 }
 
-// The height that n photos not loaded yet will take, roughly.
-function estimate(n: number, width: number) {
-  const perRow = Math.max(1, Math.floor((width + GAP) / (ASPECT_GUESS * TARGET_HEIGHT + GAP)))
-  return Math.ceil(n / perRow) * (TARGET_HEIGHT + GAP) - GAP
+// The height of a row of photos, roughly when they are not square.
+export function rowHeight(width: number, square: number | null) {
+  if (!square) {
+    return TARGET_HEIGHT
+  }
+  const columns = squareColumns(width, square, GAP)
+  return (width - GAP * (columns - 1)) / columns
 }
 
-function pendingHeight(section: Section, width: number) {
+// The height that n photos not loaded yet will take, roughly.
+function estimate(n: number, width: number, square: number | null) {
+  const perRow = square
+    ? squareColumns(width, square, GAP)
+    : Math.max(1, Math.floor((width + GAP) / (ASPECT_GUESS * TARGET_HEIGHT + GAP)))
+  return Math.ceil(n / perRow) * (rowHeight(width, square) + GAP) - GAP
+}
+
+function pendingHeight(section: Section, width: number, square: number | null) {
   if (section.complete) {
     return 0
   }
   const missing = section.count - section.photos.length
   if (section.month && missing > 0) {
-    return Math.max(STATUS_HEIGHT, estimate(missing, width))
+    return Math.max(STATUS_HEIGHT, estimate(missing, width, square))
   }
   return STATUS_HEIGHT
 }
 
-export function layoutTimeline(sections: Section[], width: number, withHeaders: boolean): TimelineLayout {
+// Lays the sections out in rows that keep each photo's shape, or, if square
+// is set, in squares of about that many pixels.
+export function layoutTimeline(sections: Section[], width: number, withHeaders: boolean, square: number | null = null): TimelineLayout {
   const out: SectionLayout[] = []
   if (width <= 0) {
     return { sections: out, height: 0 }
@@ -75,8 +90,8 @@ export function layoutTimeline(sections: Section[], width: number, withHeaders: 
   let y = 0
   for (const section of sections) {
     const header = withHeaders ? HEADER_HEIGHT : 0
-    const rows = rowsOf(section.photos, width)
-    const pending = pendingHeight(section, width)
+    const rows = rowsOf(section.photos, width, square)
+    const pending = pendingHeight(section, width, square)
     const pendingY = header + rows.height + (rows.height > 0 && pending > 0 ? GAP : 0)
     const height = pendingY + pending
     out.push({ section, y, height, header, rows: rows.rows, pendingY, pendingHeight: pending })

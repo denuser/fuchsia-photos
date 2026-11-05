@@ -438,6 +438,18 @@ const steps = {
       await page.setViewportSize({ width: 1280, height: 800 })
     }
   },
+  'square previews from the profile take the grid preview size': async () => {
+    await page.goto(`${BASE}/profile`)
+    await expectRequest('/me', () => page.getByLabel('Show square previews').click())
+    await page.goto(BASE)
+    await previews(3)
+    // The administrator set the grid preview size to 300 pixels.
+    await waitFor('square tiles no larger than the preview', () => {
+      const boxes = [...document.querySelectorAll('[data-testid=tile]')].map((t) => t.getBoundingClientRect())
+      const side = 300 / window.devicePixelRatio
+      return boxes.length > 0 && boxes.every((b) => Math.abs(b.width - b.height) < 1 && b.width <= side && b.width > side / 2)
+    })
+  },
   'the server agrees with the screen': async () => {
     const [library, trash] = [await apiTotal('photos'), await apiTotal('photos/trash')]
     if (library !== 3 || trash !== 0) {

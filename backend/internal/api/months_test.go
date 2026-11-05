@@ -113,3 +113,33 @@ func TestNavigationHiddenOnPhones(t *testing.T) {
 		t.Error("the setting was not saved")
 	}
 }
+
+func TestGridSquares(t *testing.T) {
+	e := setup(t)
+	e.addUser("root", auth.RoleAdmin)
+	e.addUser("anna", auth.RoleUser)
+	root, anna := e.loggedIn("root"), e.loggedIn("anna")
+
+	if decode[userJSON](t, anna.get("/api/v1/me")).GridSquares {
+		t.Fatal("square tiles are on by default")
+	}
+	res := anna.json(http.MethodPatch, "/api/v1/me", map[string]bool{"gridSquares": true})
+	wantStatus(t, res, http.StatusOK)
+	if !decode[userJSON](t, anna.get("/api/v1/me")).GridSquares {
+		t.Error("the setting was not saved")
+	}
+	if decode[userJSON](t, root.get("/api/v1/me")).GridSquares {
+		t.Error("the setting changed another user")
+	}
+
+	// Any user can read the grid preview size; it follows the preview settings.
+	if got := decode[gridSettingsJSON](t, anna.get("/api/v1/settings/grid")).GridEdge; got != 400 {
+		t.Errorf("grid edge = %d, want 400", got)
+	}
+	settings := decode[previewSettingsJSON](t, root.get("/api/v1/settings/previews"))
+	settings.GridEdge = 300
+	wantStatus(t, root.json(http.MethodPut, "/api/v1/settings/previews", settings), http.StatusOK)
+	if got := decode[gridSettingsJSON](t, anna.get("/api/v1/settings/grid")).GridEdge; got != 300 {
+		t.Errorf("grid edge = %d, want 300", got)
+	}
+}

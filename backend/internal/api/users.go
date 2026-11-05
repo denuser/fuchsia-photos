@@ -30,6 +30,8 @@ type userJSON struct {
 	ViewerHiddenFields []string `json:"viewerHiddenFields"`
 	// NavigationHiddenOnPhones hides the navigation drawer on a phone until the menu button opens it.
 	NavigationHiddenOnPhones bool `json:"navigationHiddenOnPhones"`
+	// GridSquares makes photo grids show square tiles of one size.
+	GridSquares bool `json:"gridSquares"`
 }
 
 type userRefJSON struct {
@@ -53,6 +55,7 @@ func toUserJSON(u store.User) userJSON {
 		ViewerHiddenFields:   hidden,
 
 		NavigationHiddenOnPhones: u.NavigationHiddenOnPhones,
+		GridSquares:              u.GridSquares,
 	}
 }
 

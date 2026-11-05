@@ -136,6 +136,7 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 		ViewerHiddenFields   *[]string `json:"viewerHiddenFields"`
 
 		NavigationHiddenOnPhones *bool `json:"navigationHiddenOnPhones"`
+		GridSquares              *bool `json:"gridSquares"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -187,6 +188,17 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 		user, err = s.Queries.SetUserNavigationHiddenOnPhones(r.Context(), store.SetUserNavigationHiddenOnPhonesParams{
 			ID:                       user.ID,
 			NavigationHiddenOnPhones: *req.NavigationHiddenOnPhones,
+		})
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+	}
+	if req.GridSquares != nil {
+		var err error
+		user, err = s.Queries.SetUserGridSquares(r.Context(), store.SetUserGridSquaresParams{
+			ID:          user.ID,
+			GridSquares: *req.GridSquares,
 		})
 		if err != nil {
 			internalError(w, r, err)

@@ -68,6 +68,21 @@ func (s *server) updatePreviewSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toPreviewSettingsJSON(settings))
 }
 
+type gridSettingsJSON struct {
+	GridEdge int `json:"gridEdge"`
+}
+
+// getGridSettings gives any user the grid preview size, which sets the size
+// of square tiles.
+func (s *server) getGridSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.Queries.GetPreviewSettings(r.Context())
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, gridSettingsJSON{GridEdge: int(settings.GridEdge)})
+}
+
 type metadataSettingsJSON struct {
 	ShowLocation bool `json:"showLocation"`
 }

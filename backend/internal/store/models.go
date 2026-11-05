@@ -133,4 +133,5 @@ type User struct {
 	ViewerShowsOriginals     bool
 	ViewerHiddenFields       []string
 	NavigationHiddenOnPhones bool
+	GridSquares              bool
 }

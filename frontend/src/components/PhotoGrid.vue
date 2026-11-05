@@ -2,8 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { previewUrl, type Photo } from '../api/client'
+import { useGridEdge } from '../lib/gridEdge'
 import { visibleRows } from '../lib/justify'
-import { layoutTimeline, monthTitle, visibleSections, type SectionLayout } from '../lib/timeline'
+import { layoutTimeline, monthTitle, rowHeight, visibleSections, type SectionLayout } from '../lib/timeline'
+import { useAuthStore } from '../stores/auth'
 import type { Section } from '../stores/photos'
 import TimelineScrubber from './TimelineScrubber.vue'
 
@@ -25,9 +27,21 @@ const scroller = ref<HTMLElement>()
 const width = ref(0)
 const viewportHeight = ref(0)
 const scrollTop = ref(0)
+const pixelRatio = ref(window.devicePixelRatio || 1)
 
-const layout = computed(() => layoutTimeline(props.sections, width.value - PADDING * 2, props.byMonth))
+const auth = useAuthStore()
+const gridEdge = useGridEdge()
+
+// Square tiles show a grid preview at its own resolution: as many CSS pixels
+// as the preview has pixels on this screen.
+const square = computed(() => (auth.user?.gridSquares ? gridEdge.value / pixelRatio.value : null))
+
+const layout = computed(() => layoutTimeline(props.sections, width.value - PADDING * 2, props.byMonth, square.value))
 const canvasHeight = computed(() => layout.value.height + PADDING * 2)
+const canvasStyle = computed(() => ({
+  height: `${canvasHeight.value}px`,
+  '--row-height': `${rowHeight(width.value - PADDING * 2, square.value)}px`,
+}))
 
 const selecting = computed(() => props.selected.size > 0)
 
@@ -192,6 +206,8 @@ function seek(top: number) {
 const resizeObserver = new ResizeObserver(([entry]) => {
   width.value = entry!.contentRect.width
   viewportHeight.value = entry!.contentRect.height
+  // Zooming the page changes the ratio and resizes the grid.
+  pixelRatio.value = window.devicePixelRatio || 1
 })
 
 onMounted(() => resizeObserver.observe(scroller.value!))
@@ -204,7 +220,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="grid">
     <div ref="scroller" class="scroller" :class="{ scrubbed: scrubber }" @scroll.passive="onScroll">
-      <div class="canvas" :style="{ height: `${canvasHeight}px` }">
+      <div class="canvas" :style="canvasStyle">
         <h2 v-for="header in headers" :key="header.key" class="month" data-testid="month" :style="header.style">
           {{ header.title }}
         </h2>
@@ -308,8 +324,8 @@ onBeforeUnmount(() => {
 .pending.estimate {
   background: repeating-linear-gradient(
     to bottom,
-    rgba(128, 128, 128, 0.12) 0 200px,
-    transparent 200px 204px
+    rgba(128, 128, 128, 0.12) 0 var(--row-height),
+    transparent var(--row-height) calc(var(--row-height) + 4px)
   );
 }
 

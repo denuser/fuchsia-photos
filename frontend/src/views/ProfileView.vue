@@ -14,7 +14,7 @@ const error = ref('')
 
 const shown = computed(() => viewerFields.map((f) => f.value).filter((f) => !auth.user?.viewerHiddenFields.includes(f)))
 
-type Changes = { viewerShowsOriginals?: boolean; viewerHiddenFields?: ViewerField[]; navigationHiddenOnPhones?: boolean }
+type Changes = { viewerShowsOriginals?: boolean; viewerHiddenFields?: ViewerField[]; navigationHiddenOnPhones?: boolean; gridSquares?: boolean }
 
 // Each change is saved at once, like the switch on the "Shared with me" page.
 async function save(body: Changes) {
@@ -41,6 +41,19 @@ function setShown(value: ViewerField[] | null) {
     <div class="text-medium-emphasis mb-6">{{ auth.isAdmin ? 'Administrator' : 'User' }}</div>
 
     <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
+
+    <h2 class="text-h6 mb-2">Photo grid</h2>
+    <v-switch
+      :model-value="auth.user.gridSquares"
+      :disabled="saving"
+      label="Show square previews"
+      hint="All previews are the same size, cropped to a square. The size follows the grid preview size an administrator sets."
+      persistent-hint
+      color="primary"
+      density="compact"
+      class="mb-6"
+      @update:model-value="save({ gridSquares: Boolean($event) })"
+    />
 
     <h2 class="text-h6 mb-2">Viewer</h2>
     <v-switch

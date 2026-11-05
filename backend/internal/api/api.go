@@ -104,6 +104,7 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/imports/{id}", s.admin(s.getImport))
 	mux.HandleFunc("POST /api/v1/imports/{id}/stop", s.admin(s.stopImport))
 
+	mux.HandleFunc("GET /api/v1/settings/grid", s.authenticated(s.getGridSettings))
 	mux.HandleFunc("GET /api/v1/settings/previews", s.admin(s.getPreviewSettings))
 	mux.HandleFunc("PUT /api/v1/settings/previews", s.admin(s.updatePreviewSettings))
 	mux.HandleFunc("GET /api/v1/settings/metadata", s.admin(s.getMetadataSettings))

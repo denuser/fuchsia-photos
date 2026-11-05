@@ -757,6 +757,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The grid preview size, for laying out square tiles (any user) */
+        get: operations["getGridSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/previews": {
         parameters: {
             query?: never;
@@ -897,6 +914,8 @@ export interface components {
             viewerHiddenFields: components["schemas"]["ViewerField"][];
             /** @description Whether the navigation drawer stays hidden on a phone until the menu button opens it. On by default */
             navigationHiddenOnPhones: boolean;
+            /** @description Whether photo grids show square tiles of one size, set by the grid preview size, instead of rows that keep each photo's shape. Off by default */
+            gridSquares: boolean;
         };
         /**
          * @description A photo detail the viewer can show. `camera` is the make and model, `location` is shown only if an administrator allows it
@@ -1191,6 +1210,7 @@ export interface operations {
                     viewerShowsOriginals?: boolean;
                     viewerHiddenFields?: components["schemas"]["ViewerField"][];
                     navigationHiddenOnPhones?: boolean;
+                    gridSquares?: boolean;
                 };
             };
         };
@@ -2354,6 +2374,29 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    getGridSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current grid preview size */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description The longest side of a grid preview in pixels */
+                        gridEdge: number;
+                    };
+                };
+            };
         };
     };
     getPreviewSettings: {
