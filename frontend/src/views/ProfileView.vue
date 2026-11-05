@@ -59,8 +59,8 @@ function setShown(value: ViewerField[] | null) {
     <v-switch
       :model-value="auth.user.viewerShowsOriginals"
       :disabled="saving"
-      label="Show originals instead of previews"
-      hint="Originals can be much larger. Photos the browser cannot show, such as HEIC outside Safari, keep their previews."
+      label="Load originals when zooming in"
+      hint="Zooming in then shows the photo at full resolution, otherwise it enlarges the preview. Originals can be much larger. Photos the browser cannot show, such as HEIC outside Safari, keep their previews."
       persistent-hint
       color="primary"
       density="compact"

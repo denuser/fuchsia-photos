@@ -342,7 +342,7 @@ const steps = {
     await openRotated()
     await location.waitFor()
   },
-  'zoom a photo to its own resolution, then choose originals and details in the profile': async () => {
+  'zoom a photo to its own resolution, then choose originals for zooming and details in the profile': async () => {
     const image = page.getByTestId('viewer-image')
     const source = (want) =>
       waitFor(`the ${want} in the viewer`, (w) => document.querySelector('[data-testid=viewer-image]')?.dataset.source === w, want)
@@ -352,12 +352,22 @@ const steps = {
       await image.waitFor()
     }
 
-    // large.jpg is 2400 × 1800, more than the screen and the viewer preview.
+    // Without the profile setting, zooming enlarges the preview and never asks
+    // for the original. large.jpg is 2400 × 1800, more than the screen and the
+    // viewer preview.
+    const originals = []
+    const countOriginals = (request) => request.url().endsWith('/original') && originals.push(request.url())
+    page.on('request', countOriginals)
     await open('large.jpg')
     await source('preview')
     await image.click()
-    await source('original')
     await waitFor('the zoom', () => getComputedStyle(document.querySelector('[data-testid=viewer-image]')).transform !== 'none')
+    await page.waitForTimeout(500)
+    page.off('request', countOriginals)
+    if (originals.length > 0) {
+      throw new Error(`the viewer loaded originals the user did not ask for: ${originals.join(', ')}`)
+    }
+    await source('preview')
     await page.keyboard.press('Escape')
     await waitFor('the zoom to end', () => /^(none|matrix\(1, 0, 0, 1, 0, 0\))$/.test(getComputedStyle(document.querySelector('[data-testid=viewer-image]')).transform))
     await page.getByTestId('viewer').waitFor()
@@ -408,10 +418,16 @@ const steps = {
     }
 
     await page.goto(`${BASE}/profile`)
-    await expectRequest('/me', () => page.getByLabel('Show originals instead of previews').click())
+    await expectRequest('/me', () => page.getByLabel('Load originals when zooming in').click())
     await expectRequest('/me', () => page.getByLabel('Location', { exact: true }).click())
-    await open('rotated.jpg')
+    // The setting loads the original only for zooming.
+    await open('large.jpg')
+    await page.waitForTimeout(500)
+    await source('preview')
+    await image.click()
     await source('original')
+    await open('rotated.jpg')
+    await source('preview')
     if ((await page.getByTestId('viewer').getByRole('link', { name: '59.93000, 30.33000' }).count()) > 0) {
       throw new Error('the viewer shows the location the user hid')
     }

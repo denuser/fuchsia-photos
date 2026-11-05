@@ -83,7 +83,8 @@ function round(n: number) {
   return String(Math.round(n * 10) / 10)
 }
 
-// Chosen in the profile.
+// Chosen in the profile: whether zooming in loads the original. Otherwise the
+// viewer zooms the preview.
 const showOriginals = computed(() => auth.user?.viewerShowsOriginals ?? false)
 
 // Formats the browser failed to decode, such as HEIC outside Safari. Their
@@ -128,9 +129,6 @@ watch(
     for (const photo of neighbours) {
       if (photo) {
         new Image().src = previewUrl(photo.id, 'viewer')
-        if (showOriginals.value && canShowOriginal(photo)) {
-          new Image().src = originalUrl(photo.id)
-        }
       }
     }
   },
@@ -226,7 +224,7 @@ watch(
 )
 
 watch([() => props.photo.id, showOriginals, zoomed], () => {
-  if (showOriginals.value || zoomed.value) {
+  if (showOriginals.value && zoomed.value) {
     loadOriginal()
   }
 }, { immediate: true })
