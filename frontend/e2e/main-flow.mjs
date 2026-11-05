@@ -348,6 +348,51 @@ const steps = {
     await waitFor('the zoom to end', () => /^(none|matrix\(1, 0, 0, 1, 0, 0\))$/.test(getComputedStyle(document.querySelector('[data-testid=viewer-image]')).transform))
     await page.getByTestId('viewer').waitFor()
 
+    // On a phone a tap and a pinch keep the point of the photo under the finger
+    // in place, and a pinch scales with the distance between the fingers.
+    await page.setViewportSize({ width: 375, height: 740 })
+    try {
+      await open('large.jpg')
+      const settled = () =>
+        waitFor('the zoom to settle', () => document.querySelector('[data-testid=viewer-image]').getAnimations().length === 0)
+      const box = () => image.evaluate((i) => i.getBoundingClientRect().toJSON())
+      const check = (what, before, after, point, scale) => {
+        const share = (b) => [(point.x - b.x) / b.width, (point.y - b.y) / b.height]
+        const [a, b] = [share(before), share(after)]
+        if (Math.abs(a[0] - b[0]) > 0.01 || Math.abs(a[1] - b[1]) > 0.01 || Math.abs(after.width / before.width - scale) > 0.05) {
+          throw new Error(`${what}: ${JSON.stringify({ before, after, point })}`)
+        }
+      }
+
+      let before = await box()
+      const tap = { x: before.x + before.width * 0.2, y: before.y + before.height * 0.3 }
+      await page.mouse.click(tap.x, tap.y)
+      await waitFor('the zoom', () => document.querySelector('[data-testid=viewer-image]').style.transform !== '')
+      await settled()
+      check('a tap zooms at the tapped point', before, await box(), tap, 2400 / before.width)
+      await page.keyboard.press('Escape')
+      await waitFor('the zoom to end', () => document.querySelector('[data-testid=viewer-image]').style.transform === '')
+      await settled()
+
+      before = await box()
+      const pinch = { x: 120, y: 370 }
+      await image.evaluate((image, { x, y }) => {
+        const at = (type, id, dx) =>
+          image.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: id, pointerType: 'touch', clientX: x + dx, clientY: y }))
+        at('pointerdown', 1, -50)
+        at('pointerdown', 2, 50)
+        for (const d of [60, 80, 100]) {
+          at('pointermove', 1, -d)
+          at('pointermove', 2, d)
+        }
+        at('pointerup', 1, -100)
+        at('pointerup', 2, 100)
+      }, pinch)
+      check('a pinch zooms between the fingers', before, await box(), pinch, 2)
+    } finally {
+      await page.setViewportSize({ width: 1280, height: 800 })
+    }
+
     await page.goto(`${BASE}/profile`)
     await expectRequest('/me', () => page.getByLabel('Show originals instead of previews').click())
     await expectRequest('/me', () => page.getByLabel('Location', { exact: true }).click())

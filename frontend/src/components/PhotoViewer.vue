@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import Panzoom, { type PanzoomObject } from '@panzoom/panzoom'
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { originalUrl, previewUrl, type Camera, type Photo, type ViewerField } from '../api/client'
 import { useAuthStore } from '../stores/auth'
@@ -138,14 +137,12 @@ watch(
   { immediate: true },
 )
 
-// The image is laid out at the size that fits the screen, and Panzoom scales
-// it up to the photo's own resolution, one image pixel per CSS pixel.
+// The image is laid out at the size that fits the screen, and a transform
+// scales it up to the photo's own resolution, one image pixel per CSS pixel.
 const stage = ref<HTMLElement | null>(null)
 const image = ref<HTMLImageElement | null>(null)
 const stageSize = ref({ width: 0, height: 0 })
 const naturalSize = ref<{ width: number; height: number } | null>(null)
-const panzoom = shallowRef<PanzoomObject | null>(null)
-const scale = ref(1)
 
 const photoSize = computed(() =>
   props.photo.width && props.photo.height ? { width: props.photo.width, height: props.photo.height } : naturalSize.value,
@@ -160,15 +157,71 @@ const fit = computed(() => {
   return { width: size.width * ratio, height: size.height * ratio, maxScale: 1 / ratio }
 })
 
+// The scale over the fitting size, and the offset of the photo's centre from
+// the centre of the screen, in screen pixels.
+type View = { scale: number; x: number; y: number }
+type Point = { x: number; y: number }
+
+const view = ref<View>({ scale: 1, x: 0, y: 0 })
+// Set for a zoom by a click or a key, which animates; gestures follow the
+// fingers directly.
+const animated = ref(false)
+
 const zoomable = computed(() => (fit.value?.maxScale ?? 1) > 1.01)
-const zoomed = computed(() => scale.value > 1.001)
+const zoomed = computed(() => view.value.scale > 1.001)
+
+const transform = computed(() => {
+  const { scale, x, y } = view.value
+  return scale === 1 && x === 0 && y === 0 ? undefined : `translate(${x}px, ${y}px) scale(${scale})`
+})
+
+function clampScale(scale: number) {
+  return Math.min(Math.max(scale, 1), fit.value?.maxScale ?? 1)
+}
+
+// A photo larger than the screen can move until its edge meets the edge of the
+// screen; a smaller one stays in the middle.
+function setView(scale: number, x: number, y: number, animate = false) {
+  const f = fit.value
+  if (!f) {
+    return
+  }
+  scale = clampScale(scale)
+  const spareX = Math.max(0, (f.width * scale - stageSize.value.width) / 2)
+  const spareY = Math.max(0, (f.height * scale - stageSize.value.height) / 2)
+  view.value = { scale, x: Math.min(Math.max(x, -spareX), spareX), y: Math.min(Math.max(y, -spareY), spareY) }
+  animated.value = animate
+}
+
+function resetView(animate = false) {
+  setView(1, 0, 0, animate)
+}
+
+// Scales the photo from the view start, so that the point of the photo that
+// was under the screen point from comes under the screen point to. With the
+// same point, as for a click or the wheel, that point stays in place.
+function zoomAround(scale: number, start: View, from: Point, to: Point, animate = false) {
+  const rect = stage.value?.getBoundingClientRect()
+  if (!rect) {
+    return
+  }
+  const cx = rect.left + rect.width / 2
+  const cy = rect.top + rect.height / 2
+  const k = clampScale(scale) / start.scale
+  setView(scale, to.x - cx - k * (from.x - cx - start.x), to.y - cy - k * (from.y - cy - start.y), animate)
+}
+
+// Zoomed out for each photo and each screen size.
+watch([() => props.photo.id, () => fit.value?.maxScale, () => stageSize.value.width, () => stageSize.value.height], () => {
+  view.value = { scale: 1, x: 0, y: 0 }
+  animated.value = false
+})
 
 watch(
   () => props.photo.id,
   () => {
     originalShown.value = false
     naturalSize.value = null
-    scale.value = 1
   },
 )
 
@@ -190,97 +243,106 @@ function onImageLoad() {
   }
 }
 
-function onScale(event: Event) {
-  scale.value = (event as CustomEvent<{ scale: number }>).detail.scale
-}
-
-// Recreates Panzoom for each photo and each screen size, zoomed out.
-watch(
-  [image, () => fit.value?.maxScale],
-  ([element, maxScale], _, onCleanup) => {
-    scale.value = 1
-    if (!element || !maxScale || maxScale <= 1.01) {
-      return
-    }
-    const instance = Panzoom(element, {
-      canvas: true,
-      maxScale,
-      minScale: 1,
-      startScale: 1,
-      panOnlyWhenZoomed: true,
-      cursor: '',
-      step: 0.3,
-    })
-    element.addEventListener('panzoomchange', onScale)
-    panzoom.value = instance
-    onCleanup(() => {
-      element.removeEventListener('panzoomchange', onScale)
-      instance.destroy()
-      instance.resetStyle()
-      panzoom.value = null
-    })
-  },
-  { flush: 'post' },
-)
-
+// A wheel notch zooms by about a tenth; a touchpad pinch, which comes as
+// wheel events with small deltas, zooms smoothly.
 function onWheel(event: WheelEvent) {
-  if (panzoom.value) {
-    panzoom.value.zoomWithWheel(event)
-    // Zoomed all the way out, the photo goes back to the centre.
-    if (panzoom.value.getScale() <= 1.001) {
-      panzoom.value.reset({ animate: false })
-    }
+  if (!zoomable.value) {
+    return
   }
+  const delta = (event.deltaY || event.deltaX) * (event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1)
+  const point = { x: event.clientX, y: event.clientY }
+  const start = view.value
+  zoomAround(start.scale * Math.exp(-Math.max(-100, Math.min(100, delta)) / 1000), start, point, point)
 }
 
-// A click zooms to the photo's own resolution at the clicked point, or back.
-// Dragging the photo also ends in a click, which must not zoom.
-// The stage takes pointerdown while it captures, because Panzoom stops it on
-// the photo's slide.
-let downAt = { x: 0, y: 0 }
+// Pointers down on the stage, by id. Moves and releases are taken from the
+// window, so that a drag continues over the bars or outside the window.
+const pointers = new Map<number, Point>()
+let downAt: Point = { x: 0, y: 0 }
+
+function middle(a: Point, b: Point) {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+}
 
 // A horizontal swipe with one finger steps to the neighbouring photo, unless
-// the photo is zoomed in, when the finger moves the photo instead. The photos
-// lie in a row, and the row follows the finger, so the neighbour comes in from
-// the side. A second finger, for a pinch, ends the swipe.
+// the photo is zoomed in, when the finger moves the photo instead. Two fingers
+// zoom: the scale follows the distance between them, and the point between
+// them stays under them. The mouse moves a zoomed photo too.
 //
-// On release the row slides either back or on to the neighbour, and only once
-// the neighbour is in place does it become the viewer's photo.
+// For a swipe the photos lie in a row, and the row follows the finger, so the
+// neighbour comes in from the side. On release the row slides either back or
+// on to the neighbour, and only once the neighbour is in place does it become
+// the viewer's photo.
+type Gesture =
+  | { kind: 'swipe' }
+  | { kind: 'pan'; start: View; from: Point }
+  | { kind: 'pinch'; start: View; from: Point; distance: number }
+
 const SWIPE_DISTANCE = 50
 const SLIDE_GAP = 16
-const pointers = new Set<number>()
-let swiping = false
+let gesture: Gesture | null = null
 const swipeOffset = ref(0)
 const sliding = ref(false)
 let slideTarget: Photo | null = null
 let slideFallback = 0
 
+// Starts the gesture that the pointers now down make, such as a pan with the
+// finger left after a pinch.
+function startGesture(swipe: boolean) {
+  const [a, b] = pointers.values()
+  if (gesture?.kind === 'swipe') {
+    slideTo(0, null)
+  }
+  gesture = null
+  if (a && b && zoomable.value && !sliding.value) {
+    gesture = { kind: 'pinch', start: view.value, from: middle(a, b), distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)) }
+  } else if (a && !b && zoomed.value) {
+    gesture = { kind: 'pan', start: view.value, from: a }
+  } else if (a && !b && swipe && !sliding.value) {
+    gesture = { kind: 'swipe' }
+  }
+  if (gesture && gesture.kind !== 'swipe') {
+    animated.value = false
+  }
+}
+
 function onPointerDown(event: PointerEvent) {
-  downAt = { x: event.clientX, y: event.clientY }
-  pointers.add(event.pointerId)
-  swiping = event.pointerType !== 'mouse' && pointers.size === 1 && !zoomed.value && !sliding.value
+  const point = { x: event.clientX, y: event.clientY }
+  pointers.set(event.pointerId, point)
+  if (pointers.size === 1) {
+    downAt = point
+  }
+  startGesture(event.pointerType !== 'mouse')
 }
 
 function onPointerMove(event: PointerEvent) {
-  if (!swiping || !pointers.has(event.pointerId)) {
+  if (!pointers.has(event.pointerId)) {
     return
   }
-  if (pointers.size > 1 || zoomed.value) {
-    swiping = false
-    slideTo(0, null)
-    return
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+  const [a, b] = pointers.values()
+  if (gesture?.kind === 'pinch' && b) {
+    const distance = Math.hypot(a.x - b.x, a.y - b.y)
+    zoomAround((gesture.start.scale * distance) / gesture.distance, gesture.start, gesture.from, middle(a, b))
+  } else if (gesture?.kind === 'pan') {
+    const { start, from } = gesture
+    setView(start.scale, start.x + a.x - from.x, start.y + a.y - from.y)
+  } else if (gesture?.kind === 'swipe') {
+    const dx = event.clientX - downAt.x
+    // Past the first or the last photo, the photo moves only a little.
+    swipeOffset.value = (dx > 0 ? previous.value : next.value) ? dx : dx / 4
   }
-  const dx = event.clientX - downAt.x
-  // Past the first or the last photo, the photo moves only a little.
-  swipeOffset.value = (dx > 0 ? previous.value : next.value) ? dx : dx / 4
 }
 
 function onPointerUp(event: PointerEvent) {
-  pointers.delete(event.pointerId)
-  if (!swiping) {
+  if (!pointers.delete(event.pointerId)) {
     return
   }
-  swiping = false
+  if (gesture?.kind !== 'swipe') {
+    startGesture(false)
+    return
+  }
+  gesture = null
   const dx = event.clientX - downAt.x
   const dy = event.clientY - downAt.y
   const target = dx > 0 ? previous.value : next.value
@@ -335,15 +397,17 @@ watch(
 
 onBeforeUnmount(() => clearTimeout(slideFallback))
 
+// A click zooms to the photo's own resolution at the clicked point, or back.
+// Dragging the photo also ends in a click, which must not zoom.
 function onClick(event: MouseEvent) {
-  const instance = panzoom.value
-  if (!instance || !fit.value || Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 5) {
+  if (!zoomable.value || Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 5) {
     return
   }
   if (zoomed.value) {
-    instance.reset()
+    resetView(true)
   } else if (event.target === image.value) {
-    instance.zoomToPoint(fit.value.maxScale, event)
+    const point = { x: event.clientX, y: event.clientY }
+    zoomAround(fit.value!.maxScale, view.value, point, point, true)
   }
 }
 
@@ -352,7 +416,7 @@ function onKey(event: KeyboardEvent) {
     return
   }
   if (event.key === 'Escape' && zoomed.value) {
-    panzoom.value?.reset()
+    resetView(true)
   } else if (event.key === 'Escape') {
     emit('close')
   } else if (event.key === 'ArrowLeft' && previous.value) {
@@ -366,10 +430,16 @@ onMounted(() => {
   measure()
   window.addEventListener('keydown', onKey)
   window.addEventListener('resize', measure)
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerUp)
+  window.addEventListener('pointercancel', onPointerUp)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('resize', measure)
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', onPointerUp)
+  window.removeEventListener('pointercancel', onPointerUp)
 })
 </script>
 
@@ -379,10 +449,7 @@ onBeforeUnmount(() => {
       ref="stage"
       class="stage"
       :class="{ zoomable, zoomed }"
-      @pointerdown.capture="onPointerDown"
-      @pointermove="onPointerMove"
-      @pointerup="onPointerUp"
-      @pointercancel="onPointerUp"
+      @pointerdown="onPointerDown"
       @click="onClick"
       @wheel.prevent="onWheel"
     >
@@ -402,7 +469,8 @@ onBeforeUnmount(() => {
             :src="source"
             :alt="photo.name"
             :data-source="originalShown ? 'original' : 'preview'"
-            :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
+            :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px`, transform } : undefined"
+            :class="{ animated }"
             class="image"
             data-testid="viewer-image"
             draggable="false"
@@ -511,6 +579,10 @@ onBeforeUnmount(() => {
 .neighbour .image {
   width: 100%;
   height: 100%;
+}
+
+.image.animated {
+  transition: transform 0.25s ease-out;
 }
 
 .stage.zoomable {

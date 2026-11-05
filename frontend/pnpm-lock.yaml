@@ -169,9 +169,6 @@ importers:
       '@mdi/font':
         specifier: ^7.4.47
         version: 7.4.47
-      '@panzoom/panzoom':
-        specifier: ^4.6.2
-        version: 4.6.2
       openapi-fetch:
         specifier: ^0.17.0
         version: 0.17.0
@@ -274,9 +271,6 @@ packages:
 
   '@oxc-project/types@0.156.0':
     resolution: {integrity: sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw==}
-
-  '@panzoom/panzoom@4.6.2':
-    resolution: {integrity: sha512-Zn3B5/hwa6eYIPRSKX0xf2clv8nviTX8AnAU5kU/EugiTDhG41ya2wlBqYrZJYCWQROr/5XkWObZhIkepi89qw==}
 
   '@redocly/ajv@8.11.2':
     resolution: {integrity: sha512-io1JpnwtIcvojV7QKDUSIuMN/ikdOUd1ReEnUnMKGfDVridQZ31J0MmIuqwuRjWDZfmvr+Q0MqCcfHM2gTivOg==}
@@ -1061,8 +1055,6 @@ snapshots:
   '@mdi/font@7.4.47': {}
 
   '@oxc-project/types@0.156.0': {}
-
-  '@panzoom/panzoom@4.6.2': {}
 
   '@redocly/ajv@8.11.2':
     dependencies:
