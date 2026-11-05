@@ -42,7 +42,7 @@ Run each of these in its own terminal:
 make dev-db         # PostgreSQL on port 5432
 make dev-admin LOGIN=admin   # once: create an administrator, then type a password and press Enter
 make dev-backend    # applies migrations, then serves the API on port 8080
-make dev-frontend   # Vite dev server on port 5173
+make dev-frontend   # Vite dev server on port 5173, also reachable from the local network
 ```
 
 Open <http://localhost:5173>. Vite proxies `/api` to the backend.
