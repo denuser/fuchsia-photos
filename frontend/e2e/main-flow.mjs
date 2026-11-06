@@ -136,7 +136,7 @@ const steps = {
     await tiles(2)
   },
   'a second tag widens the search': async () => {
-    await page.getByLabel('Any of these tags').click()
+    await page.getByRole('combobox', { name: 'Any of these tags' }).click()
     await page.getByRole('option', { name: 'City' }).click()
     await page.keyboard.press('Escape')
     await tiles(3)
@@ -149,7 +149,7 @@ const steps = {
     await tiles(5)
   },
   'filter by camera': async () => {
-    await page.getByLabel('Any of these cameras').click()
+    await page.getByRole('combobox', { name: 'Any of these cameras' }).click()
     await page.getByRole('option', { name: /Canon EOS R5/ }).click()
     await page.keyboard.press('Escape')
     await tiles(1)

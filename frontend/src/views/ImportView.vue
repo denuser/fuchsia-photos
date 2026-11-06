@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
 
 import { api, type ImportProblem, type ImportRun } from '../api/client'
+import AppAutocomplete from '../components/AppAutocomplete.vue'
 import { useUsersStore } from '../stores/users'
 
 const POLL_MS = 2000
@@ -91,7 +92,7 @@ async function openDetails(run: ImportRun) {
     <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
 
     <v-form class="d-flex flex-wrap align-start ga-4 mb-2" @submit.prevent="start">
-      <v-autocomplete
+      <AppAutocomplete
         v-model="owner"
         :items="users.active"
         item-title="login"
@@ -101,7 +102,7 @@ async function openDetails(run: ImportRun) {
         hide-details
         class="field"
       />
-      <v-autocomplete
+      <AppAutocomplete
         v-model="folder"
         :items="folderItems"
         label="Folder"

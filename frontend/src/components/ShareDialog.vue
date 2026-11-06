@@ -4,6 +4,7 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import { api, type UserRef, type Visibility } from '../api/client'
 import { inBatches } from '../stores/photos'
 import { useUsersStore } from '../stores/users'
+import AppAutocomplete from './AppAutocomplete.vue'
 
 const open = defineModel<boolean>({ required: true })
 
@@ -129,18 +130,16 @@ async function save() {
           <template v-if="single">
             <v-switch v-model="everyone" label="Visible to all users" color="primary" density="compact" hide-details class="mb-4" />
           </template>
-          <v-select v-else v-model="visibilityChoice" :items="visibilityChoices" label="Visibility" class="mb-2" />
-          <v-autocomplete
+          <v-select v-else v-model="visibilityChoice" variant="outlined" :items="visibilityChoices" label="Visibility" class="mb-2" />
+          <AppAutocomplete
             v-model="chosen"
             :items="candidates"
             item-title="login"
             item-value="id"
             label="Share with"
             multiple
-            chips
-            closable-chips
           />
-          <v-autocomplete
+          <AppAutocomplete
             v-if="!single"
             v-model="toRemove"
             :items="users.everyone"
@@ -148,8 +147,6 @@ async function save() {
             item-value="id"
             label="Stop sharing with"
             multiple
-            chips
-            closable-chips
           />
           <div class="text-body-2 text-medium-emphasis">
             Recipients can download the original files, which keep their metadata, including location.

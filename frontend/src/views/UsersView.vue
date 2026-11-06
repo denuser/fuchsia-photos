@@ -129,7 +129,7 @@ async function savePassword() {
             <v-alert v-if="formError" type="error" density="compact" class="mb-4" :text="formError" />
             <v-text-field v-model="form.login" label="Login" autocomplete="off" />
             <v-text-field v-model="form.password" label="Password" type="password" autocomplete="new-password" />
-            <v-select v-model="form.role" :items="roles" label="Role" />
+            <v-select v-model="form.role" variant="outlined" :items="roles" label="Role" />
           </v-card-text>
           <v-card-actions>
             <v-spacer />

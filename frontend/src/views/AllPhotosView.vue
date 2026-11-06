@@ -2,6 +2,7 @@
 import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import AppAutocomplete from '../components/AppAutocomplete.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
 import { usePhotosStore } from '../stores/photos'
@@ -37,7 +38,7 @@ function chooseOwner(id: number | null) {
   <PhotoBrowser mode="admin">
     <template #toolbar>
       <div class="d-flex align-center pa-2 ga-2">
-        <v-autocomplete
+        <AppAutocomplete
           :model-value="owner"
           :items="users.everyone"
           item-title="login"

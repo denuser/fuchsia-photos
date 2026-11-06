@@ -94,7 +94,7 @@ async function save() {
         text="These settings apply to new photos. Photos that are already processed keep their previews."
       />
 
-      <v-select v-model="settings.format" :items="formats" label="Preview format" density="compact" class="mb-2" />
+      <v-select v-model="settings.format" variant="outlined" :items="formats" label="Preview format" density="compact" class="mb-2" />
 
       <template v-if="settings.format === 'webp'">
         <v-text-field

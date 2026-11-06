@@ -4,6 +4,7 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import { api, type TagRef } from '../api/client'
 import { inBatches } from '../stores/photos'
 import { useTagsStore } from '../stores/tags'
+import AppAutocomplete from './AppAutocomplete.vue'
 
 const open = defineModel<boolean>({ required: true })
 
@@ -89,17 +90,16 @@ async function save() {
             multiple
             chips
             closable-chips
+            variant="outlined"
             class="mb-2"
           />
-          <v-autocomplete
+          <AppAutocomplete
             v-model="toRemove"
             :items="removable"
             item-title="name"
             item-value="id"
             label="Remove tags"
             multiple
-            chips
-            closable-chips
             :disabled="removable.length === 0"
           />
         </v-card-text>

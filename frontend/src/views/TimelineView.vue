@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 
 import { api, type NameCount } from '../api/client'
+import AppAutocomplete from '../components/AppAutocomplete.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
 import { useAuthStore } from '../stores/auth'
@@ -191,7 +192,7 @@ function onDrop(event: DragEvent) {
             <v-btn v-if="xs" value="all" icon="mdi-account-multiple-outline" aria-label="All" />
             <v-btn v-else value="all" text="All" />
           </v-btn-toggle>
-          <v-autocomplete
+          <AppAutocomplete
             :model-value="tagIds"
             :items="tags.tags"
             item-title="name"
@@ -200,8 +201,7 @@ function onDrop(event: DragEvent) {
             density="compact"
             hide-details
             multiple
-            chips
-            closable-chips
+            clearable
             class="tag-filter"
             @update:model-value="setFilter({ tag: $event })"
           />
@@ -216,7 +216,7 @@ function onDrop(event: DragEvent) {
               />
             </template>
             <v-card class="filter-menu">
-              <v-autocomplete
+              <AppAutocomplete
                 v-for="field in cameraFields"
                 :key="field.key"
                 :model-value="field.value"
@@ -226,10 +226,9 @@ function onDrop(event: DragEvent) {
                 :item-props="photoCount"
                 :label="field.label"
                 density="compact"
+                clearable
                 hide-details
                 multiple
-                chips
-                closable-chips
                 @update:model-value="setFilter({ [field.key]: $event })"
               />
               <v-text-field
@@ -245,7 +244,7 @@ function onDrop(event: DragEvent) {
             </v-card>
           </v-menu>
           <template v-else>
-            <v-autocomplete
+            <AppAutocomplete
               v-for="field in cameraFields"
               :key="field.key"
               :model-value="field.value"
@@ -257,8 +256,6 @@ function onDrop(event: DragEvent) {
               density="compact"
               hide-details
               multiple
-              chips
-              closable-chips
               class="camera-filter"
               @update:model-value="setFilter({ [field.key]: $event })"
             />
