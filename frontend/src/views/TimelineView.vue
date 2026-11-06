@@ -6,17 +6,40 @@ import { useDisplay } from 'vuetify'
 import { api, type NameCount } from '../api/client'
 import EmptyState from '../components/EmptyState.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
+import { useAuthStore } from '../stores/auth'
 import { listFilters, usePhotosStore, type PhotoQuery } from '../stores/photos'
 import { useTagsStore } from '../stores/tags'
 import { useUploadsStore } from '../stores/uploads'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const photos = usePhotosStore()
 const tags = useTagsStore()
 const uploads = useUploadsStore()
 
 const dragging = ref(false)
+const browser = ref<InstanceType<typeof PhotoBrowser> | null>(null)
+
+// Whether the timeline shows other users' photos the user can see next to the
+// user's own. It is a setting of the user rather than a filter in the address,
+// so that it stays as chosen on every device.
+const withShared = computed(() => auth.user?.timelineIncludesShared ?? true)
+const savingScope = ref(false)
+
+async function setWithShared(value: boolean) {
+  if (value === withShared.value) {
+    return
+  }
+  savingScope.value = true
+  const { data, error } = await api.PATCH('/me', { body: { timelineIncludesShared: value } })
+  savingScope.value = false
+  if (data) {
+    auth.user = data
+  } else {
+    browser.value?.say(error?.error ?? 'The setting could not be saved')
+  }
+}
 
 // On a phone the cameras, lenses and dates hide behind a button, so the filters take one row.
 const { xs } = useDisplay()
@@ -107,6 +130,7 @@ function dayStart(date: string, addDays = 0) {
 
 function currentQuery(): PhotoQuery {
   return {
+    withShared: withShared.value,
     tags: tagIds.value,
     cameras: cameras.value,
     lenses: lenses.value,
@@ -123,7 +147,7 @@ onMounted(() => {
 })
 
 watch(
-  () => route.query,
+  [() => route.query, withShared],
   () => {
     const query = currentQuery()
     void loadCameras(query)
@@ -149,9 +173,24 @@ function onDrop(event: DragEvent) {
 
 <template>
   <div class="timeline" @dragover.prevent="dragging = true" @dragleave.self="dragging = false" @drop.prevent="onDrop">
-    <PhotoBrowser mode="library" @tagged="onTagged">
+    <PhotoBrowser ref="browser" mode="library" @tagged="onTagged">
       <template #toolbar>
         <div class="filters">
+          <v-btn-toggle
+            :model-value="withShared ? 'all' : 'mine'"
+            mandatory
+            divided
+            variant="outlined"
+            density="compact"
+            :disabled="savingScope"
+            class="scope"
+            @update:model-value="setWithShared($event === 'all')"
+          >
+            <v-btn v-if="xs" value="mine" icon="mdi-account-outline" aria-label="Mine" />
+            <v-btn v-else value="mine" text="Mine" />
+            <v-btn v-if="xs" value="all" icon="mdi-account-multiple-outline" aria-label="All" />
+            <v-btn v-else value="all" text="All" />
+          </v-btn-toggle>
           <v-autocomplete
             :model-value="tagIds"
             :items="tags.tags"
@@ -262,8 +301,12 @@ function onDrop(event: DragEvent) {
   padding: 8px;
 }
 
+.scope {
+  flex: none;
+}
+
 .tag-filter {
-  flex: 1 1 240px;
+  flex: 1 1 160px;
   max-width: 480px;
 }
 

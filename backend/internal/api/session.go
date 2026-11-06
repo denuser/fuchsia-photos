@@ -137,6 +137,7 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 
 		NavigationHiddenOnPhones *bool `json:"navigationHiddenOnPhones"`
 		GridSquares              *bool `json:"gridSquares"`
+		TimelineIncludesShared   *bool `json:"timelineIncludesShared"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -199,6 +200,17 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 		user, err = s.Queries.SetUserGridSquares(r.Context(), store.SetUserGridSquaresParams{
 			ID:          user.ID,
 			GridSquares: *req.GridSquares,
+		})
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+	}
+	if req.TimelineIncludesShared != nil {
+		var err error
+		user, err = s.Queries.SetUserTimelineIncludesShared(r.Context(), store.SetUserTimelineIncludesSharedParams{
+			ID:                     user.ID,
+			TimelineIncludesShared: *req.TimelineIncludesShared,
 		})
 		if err != nil {
 			internalError(w, r, err)

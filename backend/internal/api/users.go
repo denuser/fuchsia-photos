@@ -32,6 +32,8 @@ type userJSON struct {
 	NavigationHiddenOnPhones bool `json:"navigationHiddenOnPhones"`
 	// GridSquares makes photo grids show square tiles of one size.
 	GridSquares bool `json:"gridSquares"`
+	// TimelineIncludesShared adds other users' photos the user can see to the timeline.
+	TimelineIncludesShared bool `json:"timelineIncludesShared"`
 }
 
 type userRefJSON struct {
@@ -56,6 +58,7 @@ func toUserJSON(u store.User) userJSON {
 
 		NavigationHiddenOnPhones: u.NavigationHiddenOnPhones,
 		GridSquares:              u.GridSquares,
+		TimelineIncludesShared:   u.TimelineIncludesShared,
 	}
 }
 

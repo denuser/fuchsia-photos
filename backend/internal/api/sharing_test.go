@@ -2,7 +2,9 @@ package api
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/auth"
 )
@@ -376,4 +378,109 @@ func TestUserDirectory(t *testing.T) {
 			t.Errorf("sharing = %+v", state)
 		}
 	})
+}
+
+func TestTimelineWithShared(t *testing.T) {
+	s := setupSharing(t)
+	// Taken earlier than the others are added, so it comes last.
+	direct := s.anna.addPhoto("landscape.jpg")
+	withExif(t, s.e, direct, `{"Model":"iPhone 8"}`)
+	inAlbum := s.anna.addPhoto("landscape.png")
+	forAll := s.anna.addPhoto("landscape.webp")
+	private := s.anna.addPhoto("rotated.jpg")
+	for _, photo := range []int64{inAlbum, forAll, private} {
+		markReady(t, s.e, photo)
+	}
+	// Shared, but not processed yet.
+	pending := s.anna.addPhoto("large.jpg")
+	sharePhoto(t, s.anna, direct, map[string]any{"add": []int64{s.borisID}})
+	sharePhoto(t, s.anna, pending, map[string]any{"add": []int64{s.borisID}})
+	sharePhoto(t, s.anna, forAll, map[string]any{"visibility": "all"})
+	album := s.anna.newAlbum(t, "Trip", inAlbum)
+	shareAlbum(t, s.anna, album, map[string]any{"add": []int64{s.borisID}})
+	own := s.boris.addPhoto("landscape.jpg")
+	markReady(t, s.e, own)
+
+	t.Run("is on by default and personal", func(t *testing.T) {
+		if !decode[userJSON](t, s.boris.get("/api/v1/me")).TimelineIncludesShared {
+			t.Error("the setting is off for a new user")
+		}
+		res := s.boris.json(http.MethodPatch, "/api/v1/me", map[string]bool{"timelineIncludesShared": false})
+		wantStatus(t, res, http.StatusOK)
+		if decode[userJSON](t, res).TimelineIncludesShared {
+			t.Error("the setting did not change")
+		}
+		if !decode[userJSON](t, s.vera.get("/api/v1/me")).TimelineIncludesShared {
+			t.Error("another user's setting changed")
+		}
+	})
+
+	t.Run("the timeline keeps to the user's own photos unless asked", func(t *testing.T) {
+		wantIDs(t, s.boris.photoIDs("/api/v1/photos"), own)
+	})
+
+	t.Run("adds every processed photo the user can see", func(t *testing.T) {
+		wantIDs(t, s.boris.photoIDs("/api/v1/photos?withShared=true"), own, forAll, inAlbum, direct)
+		wantIDs(t, s.vera.photoIDs("/api/v1/photos?withShared=true"), forAll)
+		wantIDs(t, s.anna.photoIDs("/api/v1/photos?withShared=true"), pending, private, forAll, inAlbum, direct)
+		wantMonths(t, s.boris.months("/api/v1/photos/months?tz=UTC&withShared=true&from=2024-06-01T00:00:00Z"),
+			monthJSON{monthKey(time.Now().UTC()), 3})
+		wantMonths(t, s.boris.months("/api/v1/photos/months?tz=UTC&withShared=true&to=2024-06-01T00:00:00Z"),
+			monthJSON{"2024-05", 1})
+	})
+
+	t.Run("an administrator sees only what was shared with them here", func(t *testing.T) {
+		wantIDs(t, s.root.photoIDs("/api/v1/photos?withShared=true"), forAll)
+	})
+
+	t.Run("filters by camera across all of them", func(t *testing.T) {
+		got := decode[camerasJSON](t, s.boris.get("/api/v1/photos/cameras?withShared=true"))
+		want := []nameCountJSON{{"Canon EOS R5", 3}, {"iPhone 8", 1}}
+		if !reflect.DeepEqual(got.Cameras, want) {
+			t.Errorf("cameras = %+v, want %+v", got.Cameras, want)
+		}
+		wantIDs(t, s.boris.photoIDs("/api/v1/photos?withShared=true&camera=iPhone+8"), direct)
+	})
+
+	t.Run("a tag filter keeps only the user's own photos", func(t *testing.T) {
+		annaTag := newTag(t, s.anna, "Private")
+		tagPhotos(t, s.anna, annaTag, inAlbum, forAll)
+		borisTag := newTag(t, s.boris, "Mine")
+		tagPhotos(t, s.boris, borisTag, own)
+
+		wantIDs(t, s.boris.photoIDs("/api/v1/photos?withShared=true&tag="+itoa(annaTag)))
+		wantIDs(t, s.boris.photoIDs("/api/v1/photos?withShared=true&tag="+itoa(borisTag)), own)
+		got := decode[camerasJSON](t, s.boris.get("/api/v1/photos/cameras?withShared=true&tag="+itoa(annaTag)))
+		if len(got.Cameras) != 0 {
+			t.Errorf("cameras of another user's tag = %+v", got.Cameras)
+		}
+	})
+
+	t.Run("an album is listed on its own", func(t *testing.T) {
+		wantStatus(t, s.boris.get("/api/v1/photos?withShared=true&album="+itoa(album)), http.StatusBadRequest)
+		wantStatus(t, s.boris.get("/api/v1/photos?withShared=yes"), http.StatusBadRequest)
+	})
+
+	t.Run("revoked and trashed photos leave it", func(t *testing.T) {
+		shareAlbum(t, s.anna, album, map[string]any{"remove": []int64{s.borisID}})
+		wantStatus(t, s.anna.json(http.MethodPost, "/api/v1/photos/trash", ids(direct)), http.StatusNoContent)
+		wantIDs(t, s.boris.photoIDs("/api/v1/photos?withShared=true"), own, forAll)
+	})
+}
+
+func monthKey(at time.Time) string {
+	return at.Format("2006-01")
+}
+
+func newTag(t *testing.T, b *browser, name string) int64 {
+	t.Helper()
+	res := b.json(http.MethodPost, "/api/v1/tags", map[string]string{"name": name})
+	wantStatus(t, res, http.StatusCreated)
+	return decode[tagRefJSON](t, res).ID
+}
+
+func tagPhotos(t *testing.T, b *browser, tag int64, photos ...int64) {
+	t.Helper()
+	res := b.json(http.MethodPost, "/api/v1/photos/tags", map[string]any{"ids": photos, "add": []int64{tag}})
+	wantStatus(t, res, http.StatusNoContent)
 }

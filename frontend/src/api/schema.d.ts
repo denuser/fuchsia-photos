@@ -152,7 +152,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the current user's photos, newest first */
+        /**
+         * List the current user's photos, newest first
+         * @description With `withShared`, the list also holds other users' photos that the current user can see, which the user cannot change
+         */
         get: operations["listPhotos"];
         put?: never;
         /** Upload a photo */
@@ -916,6 +919,8 @@ export interface components {
             navigationHiddenOnPhones: boolean;
             /** @description Whether photo grids show square tiles of one size, set by the grid preview size, instead of rows that keep each photo's shape. Off by default */
             gridSquares: boolean;
+            /** @description Whether the timeline shows other users' photos that the user can see next to the user's own. The interface passes it to listPhotos as `withShared`. On by default */
+            timelineIncludesShared: boolean;
         };
         /**
          * @description A photo detail the viewer can show. `camera` is the make and model, `location` is shown only if an administrator allows it
@@ -1213,6 +1218,7 @@ export interface operations {
                     viewerHiddenFields?: components["schemas"]["ViewerField"][];
                     navigationHiddenOnPhones?: boolean;
                     gridSquares?: boolean;
+                    timelineIncludesShared?: boolean;
                 };
             };
         };
@@ -1379,6 +1385,8 @@ export interface operations {
                 lens?: string[];
                 /** @description Only photos of this album */
                 album?: number;
+                /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
+                withShared?: boolean;
             };
             header?: never;
             path?: never;
@@ -1581,6 +1589,8 @@ export interface operations {
                 lens?: string[];
                 /** @description Only photos of this album */
                 album?: number;
+                /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
+                withShared?: boolean;
             };
             header?: never;
             path?: never;
@@ -1636,6 +1646,8 @@ export interface operations {
                 lens?: string[];
                 /** @description Only photos of this album */
                 album?: number;
+                /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
+                withShared?: boolean;
             };
             header?: never;
             path?: never;

@@ -14,6 +14,8 @@ export interface PhotoQuery {
   everyone?: boolean
   owner?: number
   album?: number
+  // The user's photos together with other users' photos the user can see, in the timeline.
+  withShared?: boolean
   tags?: number[]
   cameras?: string[]
   lenses?: string[]
@@ -132,9 +134,10 @@ function fetchMonths(query: PhotoQuery) {
   return api.GET('/photos/months', { params: { query: { tz, album, ...listFilters(query), from, to } } })
 }
 
-// The filters of the user's own list that take several values. An empty one is left out.
-export function listFilters({ tags, cameras, lenses }: PhotoQuery) {
+// The filters of the user's own list, other than the album and the dates. An empty one is left out.
+export function listFilters({ withShared, tags, cameras, lenses }: PhotoQuery) {
   return {
+    withShared: withShared || undefined,
     tag: tags?.length ? tags : undefined,
     camera: cameras?.length ? cameras : undefined,
     lens: lenses?.length ? lenses : undefined,

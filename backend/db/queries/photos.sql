@@ -17,10 +17,18 @@ WHERE p.id = @id
   AND (p.deleted_at IS NULL OR p.owner_id = @viewer_id::bigint)
   AND photo_visible_to(p, @viewer_id::bigint, @viewer_is_admin::boolean);
 
+-- The photos of one owner: the current user, or the owner of an album the
+-- user can see. With with_shared, which the API allows only without an album,
+-- the list also takes other users' processed photos that the current user can
+-- see, as photo_visible_to does. Tags are personal, so a tag filter keeps only
+-- the owner's photos: another user's tag must not reveal how that user grouped
+-- the photos it shared. The queries below take the same filters.
 -- name: ListTimeline :many
 SELECT p.*
 FROM photos p
-WHERE p.owner_id = @owner_id
+WHERE (p.owner_id = @owner_id
+       OR (@with_shared::boolean AND p.status = 'ready'
+           AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
   AND (sqlc.narg(after_sort_at)::timestamptz IS NULL
        OR (p.sort_at, p.id) < (sqlc.narg(after_sort_at)::timestamptz, sqlc.narg(after_id)::bigint))
@@ -29,7 +37,8 @@ WHERE p.owner_id = @owner_id
   AND (sqlc.narg(album_id)::bigint IS NULL
        OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = sqlc.narg(album_id)::bigint))
   AND (sqlc.narg(tag_ids)::bigint[] IS NULL
-       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[])))
+       OR (p.owner_id = @owner_id
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[]))))
   AND (sqlc.narg(cameras)::text[] IS NULL OR p.camera = ANY (sqlc.narg(cameras)::text[]))
   AND (sqlc.narg(lenses)::text[] IS NULL OR p.lens = ANY (sqlc.narg(lenses)::text[]))
 ORDER BY p.sort_at DESC, p.id DESC
@@ -41,14 +50,17 @@ LIMIT @max_rows;
 SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE @tz::text), 'YYYY-MM')::text AS month,
        count(*) AS count
 FROM photos p
-WHERE p.owner_id = @owner_id
+WHERE (p.owner_id = @owner_id
+       OR (@with_shared::boolean AND p.status = 'ready'
+           AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
   AND (sqlc.narg(album_id)::bigint IS NULL
        OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = sqlc.narg(album_id)::bigint))
   AND (sqlc.narg(tag_ids)::bigint[] IS NULL
-       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[])))
+       OR (p.owner_id = @owner_id
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[]))))
   AND (sqlc.narg(cameras)::text[] IS NULL OR p.camera = ANY (sqlc.narg(cameras)::text[]))
   AND (sqlc.narg(lenses)::text[] IS NULL OR p.lens = ANY (sqlc.narg(lenses)::text[]))
 GROUP BY 1
@@ -61,7 +73,9 @@ ORDER BY 1 DESC;
 -- name: ListCameras :many
 SELECT p.camera::text AS name, count(*) AS count
 FROM photos p
-WHERE p.owner_id = @owner_id
+WHERE (p.owner_id = @owner_id
+       OR (@with_shared::boolean AND p.status = 'ready'
+           AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
   AND p.camera IS NOT NULL
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
@@ -69,7 +83,8 @@ WHERE p.owner_id = @owner_id
   AND (sqlc.narg(album_id)::bigint IS NULL
        OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = sqlc.narg(album_id)::bigint))
   AND (sqlc.narg(tag_ids)::bigint[] IS NULL
-       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[])))
+       OR (p.owner_id = @owner_id
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[]))))
   AND (sqlc.narg(lenses)::text[] IS NULL OR p.lens = ANY (sqlc.narg(lenses)::text[]))
 GROUP BY p.camera
 ORDER BY p.camera;
@@ -77,7 +92,9 @@ ORDER BY p.camera;
 -- name: ListLenses :many
 SELECT p.lens::text AS name, count(*) AS count
 FROM photos p
-WHERE p.owner_id = @owner_id
+WHERE (p.owner_id = @owner_id
+       OR (@with_shared::boolean AND p.status = 'ready'
+           AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
   AND p.lens IS NOT NULL
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
@@ -85,7 +102,8 @@ WHERE p.owner_id = @owner_id
   AND (sqlc.narg(album_id)::bigint IS NULL
        OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = sqlc.narg(album_id)::bigint))
   AND (sqlc.narg(tag_ids)::bigint[] IS NULL
-       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[])))
+       OR (p.owner_id = @owner_id
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[]))))
   AND (sqlc.narg(cameras)::text[] IS NULL OR p.camera = ANY (sqlc.narg(cameras)::text[]))
 GROUP BY p.lens
 ORDER BY p.lens;

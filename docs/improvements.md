@@ -35,4 +35,10 @@ Loaded months stay in memory. Unloading the months far from the screen is left f
 
 The timeline filters by camera and by lens, next to the tags and dates. On a phone they sit behind one button with the dates. The counts in each list take the other filters into account. Decisions are in the [README](../README.md#decisions).
 
-The lists offer only the user's own photos, and other pages, such as albums and "Shared with me", have no such filters yet.
+The lists offer the photos the timeline shows, including other users' photos when it shows them. Other pages, such as albums and "Shared with me", have no such filters yet.
+
+## 4. Shared photos in the timeline
+
+**Status:** done.
+
+A user who had uploaded nothing saw an empty timeline, even with photos and albums shared with them. The timeline now also shows the other users' photos that the user can see, with a "Mine / All" switch that is saved for the user and on by default. Decisions are in the [README](../README.md#decisions).

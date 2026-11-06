@@ -92,6 +92,8 @@ paths:
                   type: boolean
                 gridSquares:
                   type: boolean
+                timelineIncludesShared:
+                  type: boolean
       responses:
         "200":
           description: The changed user
@@ -221,6 +223,7 @@ paths:
     get:
       operationId: listPhotos
       summary: List the current user's photos, newest first
+      description: With `withShared`, the list also holds other users' photos that the current user can see, which the user cannot change
       parameters:
         - name: limit
           in: query
@@ -273,6 +276,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: withShared
+          in: query
+          description: Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album`
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: One page of photos
@@ -465,6 +474,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: withShared
+          in: query
+          description: Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album`
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: Photos by month
@@ -534,6 +549,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: withShared
+          in: query
+          description: Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album`
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: Cameras and lenses by name, with the number of photos each took
@@ -1370,7 +1391,7 @@ components:
       enum: [admin, user]
     User:
       type: object
-      required: [id, login, role, disabled, createdAt, sharedIncludesAlbums, viewerShowsOriginals, viewerHiddenFields, navigationHiddenOnPhones, gridSquares]
+      required: [id, login, role, disabled, createdAt, sharedIncludesAlbums, viewerShowsOriginals, viewerHiddenFields, navigationHiddenOnPhones, gridSquares, timelineIncludesShared]
       properties:
         id:
           type: integer
@@ -1400,6 +1421,9 @@ components:
           type: boolean
         gridSquares:
           description: Whether photo grids show square tiles of one size, set by the grid preview size, instead of rows that keep each photo's shape. Off by default
+          type: boolean
+        timelineIncludesShared:
+          description: Whether the timeline shows other users' photos that the user can see next to the user's own. The interface passes it to listPhotos as `withShared`. On by default
           type: boolean
     ViewerField:
       description: A photo detail the viewer can show. `camera` is the make and model, `location` is shown only if an administrator allows it

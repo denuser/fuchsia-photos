@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 
 import type { Photo } from '../api/client'
+import { useAuthStore } from '../stores/auth'
 import { usePhotosStore } from '../stores/photos'
 import { useUsersStore } from '../stores/users'
 import AddToAlbumDialog from './AddToAlbumDialog.vue'
@@ -14,10 +15,12 @@ import TagDialog from './TagDialog.vue'
 // The grid, the viewer and the bulk actions shared by all lists of photos. A
 // library list edits the user's photos, and the trash restores or purges them.
 // An administrator's list shares or trashes the photos of any user. Photos
-// shared with the user are read-only.
+// shared with the user are read-only, also where a library list shows them
+// next to the user's own.
 const props = defineProps<{ mode: 'library' | 'trash' | 'admin' | 'shared' }>()
 const emit = defineEmits<{ tagged: [] }>()
 
+const auth = useAuthStore()
 const photos = usePhotosStore()
 const users = useUsersStore()
 
@@ -39,6 +42,18 @@ const selectedIds = computed(() => [...selected.value])
 const tagTargets = computed(() => (viewerTargets.value.length > 0 ? viewerTargets.value : selectedIds.value))
 const dialogOpen = computed(() => tagDialog.value || albumDialog.value || purgeDialog.value || shareDialog.value)
 const canManage = computed(() => props.mode === 'library' || props.mode === 'admin')
+
+// Whether the user can select a photo and act on it. Only an administrator's
+// list manages other users' photos.
+function selectable(photo: Photo) {
+  if (props.mode === 'library') {
+    return photo.ownerId === auth.user?.id
+  }
+  return props.mode !== 'shared'
+}
+
+const viewerCanTag = computed(() => props.mode === 'library' && opened.value !== null && selectable(opened.value))
+const viewerCanManage = computed(() => canManage.value && opened.value !== null && selectable(opened.value))
 
 // The viewer steps through the loaded photos around the open one, and the
 // months next to it load as it gets there.
@@ -68,7 +83,9 @@ function toggle(photo: Photo, range: boolean) {
   if (range && from >= 0) {
     const to = list.findIndex((p) => p.id === photo.id)
     for (const p of list.slice(Math.min(from, to), Math.max(from, to) + 1)) {
-      next.add(p.id)
+      if (selectable(p)) {
+        next.add(p.id)
+      }
     }
   } else if (next.has(photo.id)) {
     next.delete(photo.id)
@@ -208,7 +225,7 @@ defineExpose({ clearSelection, say })
         :sections="photos.sections"
         :by-month="photos.byMonth"
         :selected="selected"
-        :selectable="props.mode !== 'shared'"
+        :selectable="selectable"
         @open="opened = $event"
         @toggle="toggle"
         @want="photos.want"
@@ -220,8 +237,8 @@ defineExpose({ clearSelection, say })
       v-if="opened"
       :photos="viewerPhotos"
       :photo="opened"
-      :can-tag="props.mode === 'library'"
-      :can-manage="canManage"
+      :can-tag="viewerCanTag"
+      :can-manage="viewerCanManage"
       :paused="dialogOpen"
       @close="opened = null"
       @navigate="opened = $event"

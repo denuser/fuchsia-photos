@@ -129,14 +129,15 @@ func (s *server) countPhotoMonths(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.Queries.CountTimelineMonths(r.Context(), store.CountTimelineMonthsParams{
-		Tz:       tz,
-		OwnerID:  filter.OwnerID,
-		FromTime: filter.FromTime,
-		ToTime:   filter.ToTime,
-		AlbumID:  filter.AlbumID,
-		TagIds:   filter.TagIds,
-		Cameras:  filter.Cameras,
-		Lenses:   filter.Lenses,
+		Tz:         tz,
+		OwnerID:    filter.OwnerID,
+		WithShared: filter.WithShared,
+		FromTime:   filter.FromTime,
+		ToTime:     filter.ToTime,
+		AlbumID:    filter.AlbumID,
+		TagIds:     filter.TagIds,
+		Cameras:    filter.Cameras,
+		Lenses:     filter.Lenses,
 	})
 	if err != nil {
 		internalError(w, r, err)
@@ -146,7 +147,7 @@ func (s *server) countPhotoMonths(w http.ResponseWriter, r *http.Request) {
 }
 
 // timelineFilter reads the filters of the current user's list of photos, which
-// listPhotos and countPhotoMonths share. It leaves out the page.
+// listPhotos, countPhotoMonths and listCameras share. It leaves out the page.
 func (s *server) timelineFilter(w http.ResponseWriter, r *http.Request) (store.ListTimelineParams, bool) {
 	params := store.ListTimelineParams{OwnerID: currentUser(r).ID}
 	query := r.URL.Query()
@@ -168,7 +169,20 @@ func (s *server) timelineFilter(w http.ResponseWriter, r *http.Request) (store.L
 	// Names as listCameras gives them. A name no photo has matches nothing.
 	params.Cameras = query["camera"]
 	params.Lenses = query["lens"]
+	switch query.Get("withShared") {
+	case "", "false":
+	case "true":
+		params.WithShared = true
+	default:
+		writeError(w, http.StatusBadRequest, "invalid withShared")
+		return params, false
+	}
 	if text := query.Get("album"); text != "" {
+		// An album is one owner's, and its own sharing decides who sees it.
+		if params.WithShared {
+			writeError(w, http.StatusBadRequest, "an album cannot be listed with shared photos")
+			return params, false
+		}
 		id, err := strconv.ParseInt(text, 10, 64)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid album")
@@ -205,24 +219,26 @@ func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cameras, err := s.Queries.ListCameras(r.Context(), store.ListCamerasParams{
-		OwnerID:  filter.OwnerID,
-		FromTime: filter.FromTime,
-		ToTime:   filter.ToTime,
-		AlbumID:  filter.AlbumID,
-		TagIds:   filter.TagIds,
-		Lenses:   filter.Lenses,
+		OwnerID:    filter.OwnerID,
+		WithShared: filter.WithShared,
+		FromTime:   filter.FromTime,
+		ToTime:     filter.ToTime,
+		AlbumID:    filter.AlbumID,
+		TagIds:     filter.TagIds,
+		Lenses:     filter.Lenses,
 	})
 	if err != nil {
 		internalError(w, r, err)
 		return
 	}
 	lenses, err := s.Queries.ListLenses(r.Context(), store.ListLensesParams{
-		OwnerID:  filter.OwnerID,
-		FromTime: filter.FromTime,
-		ToTime:   filter.ToTime,
-		AlbumID:  filter.AlbumID,
-		TagIds:   filter.TagIds,
-		Cameras:  filter.Cameras,
+		OwnerID:    filter.OwnerID,
+		WithShared: filter.WithShared,
+		FromTime:   filter.FromTime,
+		ToTime:     filter.ToTime,
+		AlbumID:    filter.AlbumID,
+		TagIds:     filter.TagIds,
+		Cameras:    filter.Cameras,
 	})
 	if err != nil {
 		internalError(w, r, err)

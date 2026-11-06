@@ -46,29 +46,33 @@ const countTimelineMonths = `-- name: CountTimelineMonths :many
 SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE $1::text), 'YYYY-MM')::text AS month,
        count(*) AS count
 FROM photos p
-WHERE p.owner_id = $2
+WHERE (p.owner_id = $2
+       OR ($3::boolean AND p.status = 'ready'
+           AND (photo_shared_directly(p, $2::bigint) OR photo_in_visible_album(p, $2::bigint))))
   AND p.deleted_at IS NULL
-  AND ($3::timestamptz IS NULL OR p.sort_at >= $3::timestamptz)
-  AND ($4::timestamptz IS NULL OR p.sort_at < $4::timestamptz)
-  AND ($5::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $5::bigint))
-  AND ($6::bigint[] IS NULL
-       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($6::bigint[])))
-  AND ($7::text[] IS NULL OR p.camera = ANY ($7::text[]))
-  AND ($8::text[] IS NULL OR p.lens = ANY ($8::text[]))
+  AND ($4::timestamptz IS NULL OR p.sort_at >= $4::timestamptz)
+  AND ($5::timestamptz IS NULL OR p.sort_at < $5::timestamptz)
+  AND ($6::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $6::bigint))
+  AND ($7::bigint[] IS NULL
+       OR (p.owner_id = $2
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($7::bigint[]))))
+  AND ($8::text[] IS NULL OR p.camera = ANY ($8::text[]))
+  AND ($9::text[] IS NULL OR p.lens = ANY ($9::text[]))
 GROUP BY 1
 ORDER BY 1 DESC
 `
 
 type CountTimelineMonthsParams struct {
-	Tz       string
-	OwnerID  int64
-	FromTime *time.Time
-	ToTime   *time.Time
-	AlbumID  *int64
-	TagIds   []int64
-	Cameras  []string
-	Lenses   []string
+	Tz         string
+	OwnerID    int64
+	WithShared bool
+	FromTime   *time.Time
+	ToTime     *time.Time
+	AlbumID    *int64
+	TagIds     []int64
+	Cameras    []string
+	Lenses     []string
 }
 
 type CountTimelineMonthsRow struct {
@@ -82,6 +86,7 @@ func (q *Queries) CountTimelineMonths(ctx context.Context, arg CountTimelineMont
 	rows, err := q.db.Query(ctx, countTimelineMonths,
 		arg.Tz,
 		arg.OwnerID,
+		arg.WithShared,
 		arg.FromTime,
 		arg.ToTime,
 		arg.AlbumID,
@@ -339,27 +344,31 @@ func (q *Queries) InsertPhoto(ctx context.Context, arg InsertPhotoParams) (Photo
 const listCameras = `-- name: ListCameras :many
 SELECT p.camera::text AS name, count(*) AS count
 FROM photos p
-WHERE p.owner_id = $1
+WHERE (p.owner_id = $1
+       OR ($2::boolean AND p.status = 'ready'
+           AND (photo_shared_directly(p, $1::bigint) OR photo_in_visible_album(p, $1::bigint))))
   AND p.deleted_at IS NULL
   AND p.camera IS NOT NULL
-  AND ($2::timestamptz IS NULL OR p.sort_at >= $2::timestamptz)
-  AND ($3::timestamptz IS NULL OR p.sort_at < $3::timestamptz)
-  AND ($4::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $4::bigint))
-  AND ($5::bigint[] IS NULL
-       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($5::bigint[])))
-  AND ($6::text[] IS NULL OR p.lens = ANY ($6::text[]))
+  AND ($3::timestamptz IS NULL OR p.sort_at >= $3::timestamptz)
+  AND ($4::timestamptz IS NULL OR p.sort_at < $4::timestamptz)
+  AND ($5::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $5::bigint))
+  AND ($6::bigint[] IS NULL
+       OR (p.owner_id = $1
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($6::bigint[]))))
+  AND ($7::text[] IS NULL OR p.lens = ANY ($7::text[]))
 GROUP BY p.camera
 ORDER BY p.camera
 `
 
 type ListCamerasParams struct {
-	OwnerID  int64
-	FromTime *time.Time
-	ToTime   *time.Time
-	AlbumID  *int64
-	TagIds   []int64
-	Lenses   []string
+	OwnerID    int64
+	WithShared bool
+	FromTime   *time.Time
+	ToTime     *time.Time
+	AlbumID    *int64
+	TagIds     []int64
+	Lenses     []string
 }
 
 type ListCamerasRow struct {
@@ -374,6 +383,7 @@ type ListCamerasRow struct {
 func (q *Queries) ListCameras(ctx context.Context, arg ListCamerasParams) ([]ListCamerasRow, error) {
 	rows, err := q.db.Query(ctx, listCameras,
 		arg.OwnerID,
+		arg.WithShared,
 		arg.FromTime,
 		arg.ToTime,
 		arg.AlbumID,
@@ -459,27 +469,31 @@ func (q *Queries) ListChangedPhotos(ctx context.Context, arg ListChangedPhotosPa
 const listLenses = `-- name: ListLenses :many
 SELECT p.lens::text AS name, count(*) AS count
 FROM photos p
-WHERE p.owner_id = $1
+WHERE (p.owner_id = $1
+       OR ($2::boolean AND p.status = 'ready'
+           AND (photo_shared_directly(p, $1::bigint) OR photo_in_visible_album(p, $1::bigint))))
   AND p.deleted_at IS NULL
   AND p.lens IS NOT NULL
-  AND ($2::timestamptz IS NULL OR p.sort_at >= $2::timestamptz)
-  AND ($3::timestamptz IS NULL OR p.sort_at < $3::timestamptz)
-  AND ($4::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $4::bigint))
-  AND ($5::bigint[] IS NULL
-       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($5::bigint[])))
-  AND ($6::text[] IS NULL OR p.camera = ANY ($6::text[]))
+  AND ($3::timestamptz IS NULL OR p.sort_at >= $3::timestamptz)
+  AND ($4::timestamptz IS NULL OR p.sort_at < $4::timestamptz)
+  AND ($5::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $5::bigint))
+  AND ($6::bigint[] IS NULL
+       OR (p.owner_id = $1
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($6::bigint[]))))
+  AND ($7::text[] IS NULL OR p.camera = ANY ($7::text[]))
 GROUP BY p.lens
 ORDER BY p.lens
 `
 
 type ListLensesParams struct {
-	OwnerID  int64
-	FromTime *time.Time
-	ToTime   *time.Time
-	AlbumID  *int64
-	TagIds   []int64
-	Cameras  []string
+	OwnerID    int64
+	WithShared bool
+	FromTime   *time.Time
+	ToTime     *time.Time
+	AlbumID    *int64
+	TagIds     []int64
+	Cameras    []string
 }
 
 type ListLensesRow struct {
@@ -490,6 +504,7 @@ type ListLensesRow struct {
 func (q *Queries) ListLenses(ctx context.Context, arg ListLensesParams) ([]ListLensesRow, error) {
 	rows, err := q.db.Query(ctx, listLenses,
 		arg.OwnerID,
+		arg.WithShared,
 		arg.FromTime,
 		arg.ToTime,
 		arg.AlbumID,
@@ -541,24 +556,28 @@ func (q *Queries) ListReadyPhotoIDs(ctx context.Context) ([]int64, error) {
 const listTimeline = `-- name: ListTimeline :many
 SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version
 FROM photos p
-WHERE p.owner_id = $1
+WHERE (p.owner_id = $1
+       OR ($2::boolean AND p.status = 'ready'
+           AND (photo_shared_directly(p, $1::bigint) OR photo_in_visible_album(p, $1::bigint))))
   AND p.deleted_at IS NULL
-  AND ($2::timestamptz IS NULL
-       OR (p.sort_at, p.id) < ($2::timestamptz, $3::bigint))
-  AND ($4::timestamptz IS NULL OR p.sort_at >= $4::timestamptz)
-  AND ($5::timestamptz IS NULL OR p.sort_at < $5::timestamptz)
-  AND ($6::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $6::bigint))
-  AND ($7::bigint[] IS NULL
-       OR EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($7::bigint[])))
-  AND ($8::text[] IS NULL OR p.camera = ANY ($8::text[]))
-  AND ($9::text[] IS NULL OR p.lens = ANY ($9::text[]))
+  AND ($3::timestamptz IS NULL
+       OR (p.sort_at, p.id) < ($3::timestamptz, $4::bigint))
+  AND ($5::timestamptz IS NULL OR p.sort_at >= $5::timestamptz)
+  AND ($6::timestamptz IS NULL OR p.sort_at < $6::timestamptz)
+  AND ($7::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $7::bigint))
+  AND ($8::bigint[] IS NULL
+       OR (p.owner_id = $1
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($8::bigint[]))))
+  AND ($9::text[] IS NULL OR p.camera = ANY ($9::text[]))
+  AND ($10::text[] IS NULL OR p.lens = ANY ($10::text[]))
 ORDER BY p.sort_at DESC, p.id DESC
-LIMIT $10
+LIMIT $11
 `
 
 type ListTimelineParams struct {
 	OwnerID     int64
+	WithShared  bool
 	AfterSortAt *time.Time
 	AfterID     *int64
 	FromTime    *time.Time
@@ -570,9 +589,16 @@ type ListTimelineParams struct {
 	MaxRows     int32
 }
 
+// The photos of one owner: the current user, or the owner of an album the
+// user can see. With with_shared, which the API allows only without an album,
+// the list also takes other users' processed photos that the current user can
+// see, as photo_visible_to does. Tags are personal, so a tag filter keeps only
+// the owner's photos: another user's tag must not reveal how that user grouped
+// the photos it shared. The queries below take the same filters.
 func (q *Queries) ListTimeline(ctx context.Context, arg ListTimelineParams) ([]Photo, error) {
 	rows, err := q.db.Query(ctx, listTimeline,
 		arg.OwnerID,
+		arg.WithShared,
 		arg.AfterSortAt,
 		arg.AfterID,
 		arg.FromTime,

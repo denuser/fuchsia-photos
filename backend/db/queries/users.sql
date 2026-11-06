@@ -37,3 +37,6 @@ UPDATE users SET navigation_hidden_on_phones = @navigation_hidden_on_phones WHER
 
 -- name: SetUserGridSquares :one
 UPDATE users SET grid_squares = @grid_squares WHERE id = @id RETURNING *;
+
+-- name: SetUserTimelineIncludesShared :one
+UPDATE users SET timeline_includes_shared = @timeline_includes_shared WHERE id = @id RETURNING *;

@@ -205,6 +205,16 @@ const steps = {
         throw new Error(`timed out waiting for the second user to see ${n} photos`)
       })
 
+    // The timeline shows what was shared next to the user's own photos, which the guest has none of.
+    await guestTiles(3)
+    if ((await guest.getByTestId('tile-check').count()) > 0) {
+      throw new Error('another user\'s photos can be selected in the timeline')
+    }
+    await guest.getByRole('button', { name: 'Mine', exact: true }).click()
+    await guest.getByText('No photos yet').waitFor()
+    await guest.getByRole('button', { name: 'All', exact: true }).click()
+    await guestTiles(3)
+
     await guest.goto(`${BASE}/shared`)
     await guest.getByText('Trip').click()
     await guestTiles(2)

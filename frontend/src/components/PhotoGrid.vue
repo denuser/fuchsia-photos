@@ -12,7 +12,9 @@ import TimelineScrubber from './TimelineScrubber.vue'
 // The photos of a list in sections: months with titles, or one whole list.
 // Only what is near the screen is rendered, and sections near the screen are
 // asked for, so that a large library loads only the months being looked at.
-const props = defineProps<{ sections: Section[]; byMonth: boolean; selected: ReadonlySet<number>; selectable: boolean }>()
+// Selectable tells which photos the user may select: a list can mix the user's
+// photos with other users' read-only ones.
+const props = defineProps<{ sections: Section[]; byMonth: boolean; selected: ReadonlySet<number>; selectable: (photo: Photo) => boolean }>()
 const emit = defineEmits<{ open: [photo: Photo]; toggle: [photo: Photo, range: boolean]; want: [keys: string[]]; retry: [key: string] }>()
 
 const PADDING = 4
@@ -46,7 +48,7 @@ const canvasStyle = computed(() => ({
 const selecting = computed(() => props.selected.size > 0)
 
 function onTileClick(photo: Photo, event: MouseEvent) {
-  if (selecting.value) {
+  if (selecting.value && props.selectable(photo)) {
     emit('toggle', photo, event.shiftKey)
   } else {
     emit('open', photo)
@@ -245,7 +247,7 @@ onBeforeUnmount(() => {
             type="button"
             class="open"
             data-testid="tile-open"
-            :disabled="photo.status !== 'ready' && !selecting"
+            :disabled="photo.status !== 'ready' && !(selecting && selectable(photo))"
             :aria-label="photo.name"
             @click="onTileClick(photo, $event)"
           >
@@ -258,7 +260,7 @@ onBeforeUnmount(() => {
             </v-tooltip>
           </button>
           <button
-            v-if="selectable"
+            v-if="selectable(photo)"
             type="button"
             class="check"
             data-testid="tile-check"

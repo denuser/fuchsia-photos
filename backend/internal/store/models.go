@@ -135,4 +135,5 @@ type User struct {
 	ViewerHiddenFields       []string
 	NavigationHiddenOnPhones bool
 	GridSquares              bool
+	TimelineIncludesShared   bool
 }
