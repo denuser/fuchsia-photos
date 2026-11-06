@@ -163,7 +163,7 @@ html {
 }
 
 .brand {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
   color: inherit;
