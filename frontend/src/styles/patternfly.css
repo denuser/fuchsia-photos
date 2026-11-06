@@ -1,0 +1,232 @@
+/*
+ * Vuetify components restyled after PatternFly 6: Red Hat fonts, pill buttons,
+ * 6px form controls, 16px cards and menus, 24px dialogs, and the main content
+ * in a rounded panel set into the page chrome. Colors come from the themes in
+ * plugins/vuetify.ts. The rules sit in Vuetify's override layer, so utility
+ * classes such as rounded-0 or mr-2 still win over them.
+ */
+
+:root {
+  --v-font-body: 'Red Hat Text Variable', 'Red Hat Text', Helvetica, Arial, sans-serif;
+  --v-font-heading: 'Red Hat Display Variable', 'Red Hat Display', Helvetica, Arial, sans-serif;
+  --page-inset: 16px;
+  --radius-small: 6px;
+  --radius-medium: 16px;
+  --radius-large: 24px;
+  --shadow-md: 0 4px 10px 0 rgba(41, 41, 41, 0.15);
+  --shadow-lg: 0 10px 20px 0 rgba(41, 41, 41, 0.15);
+}
+
+@layer vuetify-overrides {
+  body {
+    font-family: var(--v-font-body);
+  }
+
+  .v-theme--dark,
+  .v-theme--dark-hc {
+    --shadow-md: 0 4px 10px 0 rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 10px 20px 0 rgba(0, 0, 0, 0.5);
+  }
+
+  /* Page layout: app bar and navigation on the page background, the content
+     in a panel with rounded corners. */
+
+  .v-main {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  .page-panel {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    margin: 0 var(--page-inset) var(--page-inset) 0;
+    overflow: hidden;
+    border-radius: var(--radius-medium);
+    background: rgb(var(--v-theme-surface));
+    color: rgb(var(--v-theme-on-surface));
+  }
+
+  @media (max-width: 599.98px) {
+    .page-panel {
+      margin: 0;
+      border-radius: var(--radius-medium) var(--radius-medium) 0 0;
+    }
+  }
+
+  .v-theme--light-hc .page-panel,
+  .v-theme--dark-hc .page-panel {
+    border: 1px solid rgb(var(--v-border-color));
+  }
+
+  .v-navigation-drawer .v-list-item {
+    border-radius: var(--radius-small);
+  }
+
+  .v-navigation-drawer .v-list-item--active {
+    background: rgb(var(--v-theme-surface));
+    color: rgb(var(--v-theme-on-surface));
+  }
+
+  .v-navigation-drawer .v-list-item--active > .v-list-item__overlay {
+    opacity: 0;
+  }
+
+  .v-navigation-drawer .v-list-item--active .v-icon {
+    color: rgb(var(--v-theme-primary));
+  }
+
+  .v-theme--light-hc .v-navigation-drawer .v-list-item--active,
+  .v-theme--dark-hc .v-navigation-drawer .v-list-item--active {
+    outline: 1px solid rgb(var(--v-border-color));
+  }
+
+  /* Buttons */
+
+  .v-btn {
+    font-weight: 500;
+    letter-spacing: normal;
+  }
+
+  .v-btn-toggle {
+    border-radius: var(--radius-small);
+  }
+
+  .v-btn-toggle .v-btn--active {
+    color: rgb(var(--v-theme-primary));
+  }
+
+  .v-btn-toggle .v-btn--active > .v-btn__overlay {
+    opacity: 0.12;
+  }
+
+  /* Form controls */
+
+  .v-field {
+    --v-field-border-opacity: 1;
+    border-radius: var(--radius-small);
+  }
+
+  .v-field--variant-outlined:not(.v-field--focused, .v-field--error) .v-field__outline {
+    color: rgb(var(--v-theme-border-control));
+  }
+
+  .v-field--variant-outlined:not(.v-field--focused, .v-field--error):hover .v-field__outline {
+    color: rgb(var(--v-theme-primary));
+  }
+
+  /* Cards, menus, dialogs and tooltips */
+
+  .v-card {
+    border-radius: var(--radius-medium);
+  }
+
+  .v-menu > .v-overlay__content {
+    border-radius: var(--radius-medium);
+    box-shadow: var(--shadow-md);
+  }
+
+  .v-menu > .v-overlay__content > .v-card,
+  .v-menu > .v-overlay__content > .v-list {
+    border-radius: inherit;
+    background: rgb(var(--v-theme-surface-bright));
+    box-shadow: none;
+  }
+
+  .v-menu > .v-overlay__content > .v-list {
+    padding: 8px;
+  }
+
+  .v-menu .v-list-item {
+    border-radius: var(--radius-small);
+  }
+
+  .v-dialog > .v-overlay__content > .v-card {
+    border-radius: var(--radius-large);
+    background: rgb(var(--v-theme-surface-bright));
+    box-shadow: var(--shadow-lg);
+  }
+
+  .v-dialog > .v-overlay__content > .v-card > .v-card-item {
+    padding: 24px 24px 8px;
+  }
+
+  .v-dialog > .v-overlay__content > .v-card > .v-card-text {
+    padding: 8px 24px 16px;
+  }
+
+  .v-dialog > .v-overlay__content > .v-card > .v-card-actions {
+    padding: 8px 24px 24px;
+  }
+
+  .v-dialog .v-card-title {
+    font-family: var(--v-font-heading);
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+
+  .v-theme--light-hc .v-overlay__content > .v-card,
+  .v-theme--dark-hc .v-overlay__content > .v-card,
+  .v-theme--light-hc .v-menu > .v-overlay__content,
+  .v-theme--dark-hc .v-menu > .v-overlay__content {
+    outline: 1px solid rgb(var(--v-border-color));
+  }
+
+  .v-tooltip > .v-overlay__content {
+    border-radius: var(--radius-small);
+    font-size: 0.875rem;
+  }
+
+  .v-alert {
+    border-radius: var(--radius-medium);
+  }
+
+  /* Glass: the page shows a soft gradient, and the surfaces above it let it
+     through with a blur. */
+
+  html.glass .v-application {
+    background:
+      radial-gradient(70% 60% at 0% 0%, rgba(var(--v-theme-primary), 0.6), transparent 70%),
+      radial-gradient(60% 70% at 100% 100%, rgba(94, 64, 190, 0.55), transparent 70%),
+      radial-gradient(40% 40% at 70% 20%, rgba(var(--v-theme-primary), 0.3), transparent 70%),
+      rgb(var(--v-theme-background));
+  }
+
+  html.glass .page-panel {
+    border: 1px solid rgba(var(--v-theme-surface), 0.6);
+    background: rgba(var(--v-theme-surface), 0.5);
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(16px);
+  }
+
+  html.glass .v-navigation-drawer .v-list-item--active {
+    background: rgba(var(--v-theme-surface), 0.6);
+  }
+
+  html.glass .v-menu > .v-overlay__content > .v-card,
+  html.glass .v-menu > .v-overlay__content > .v-list,
+  html.glass .v-dialog > .v-overlay__content > .v-card {
+    border: 1px solid rgba(var(--v-theme-surface), 0.6);
+    background: rgba(var(--v-theme-surface-bright), 0.7);
+    backdrop-filter: blur(16px);
+  }
+}
+
+/* In glass the app bar and navigation let the page gradient through. Their
+   color comes from a bg-background utility class, which only rules outside
+   the layers can override. */
+html.glass .v-app-bar,
+html.glass .v-navigation-drawer {
+  background: transparent !important;
+}
+
+/* Headings use Red Hat Display at the PatternFly heading weight. Vuetify sets
+   typography through utility classes, which only rules outside the layers can
+   override. */
+.text-h5,
+.text-h6,
+.text-subtitle-1 {
+  font-family: var(--v-font-heading) !important;
+  font-weight: 600 !important;
+}

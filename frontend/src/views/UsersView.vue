@@ -167,7 +167,7 @@ async function savePassword() {
 
 <style scoped>
 .users {
-  height: calc(100dvh - var(--v-layout-top, 0px));
+  height: 100%;
   overflow-y: auto;
   max-width: 900px;
 }

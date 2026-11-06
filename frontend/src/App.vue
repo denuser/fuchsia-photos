@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useDisplay } from 'vuetify'
+import { useDisplay, useTheme } from 'vuetify'
 
 import logo from './assets/logo.png'
+import AppearanceMenu from './components/AppearanceMenu.vue'
 import UploadPanel from './components/UploadPanel.vue'
+import { useAppearanceStore } from './stores/appearance'
 import { useAuthStore } from './stores/auth'
 import { usePhotosStore } from './stores/photos'
 import { useUploadsStore } from './stores/uploads'
@@ -12,10 +14,14 @@ import { useUploadsStore } from './stores/uploads'
 const auth = useAuthStore()
 const photos = usePhotosStore()
 const uploads = useUploadsStore()
+const appearance = useAppearanceStore()
+const theme = useTheme()
 const route = useRoute()
 const router = useRouter()
 // On a phone the upload button is an icon, to leave room in the app bar.
 const { xs } = useDisplay()
+
+watchEffect(() => theme.change(appearance.theme))
 
 const navExpanded = ref(localStorage.getItem('navExpanded') === 'true')
 
@@ -72,7 +78,7 @@ window.addEventListener('beforeunload', (event) => {
 
 <template>
   <v-app>
-    <v-app-bar v-if="auth.user" density="comfortable" flat border="b">
+    <v-app-bar v-if="auth.user" density="comfortable">
       <template #prepend>
         <v-app-bar-nav-icon
           :aria-label="navShownInFull ? 'Collapse menu' : 'Expand menu'"
@@ -109,6 +115,8 @@ window.addEventListener('beforeunload', (event) => {
         hidden
         @change="chosen"
       />
+
+      <AppearanceMenu />
 
       <v-menu>
         <template #activator="{ props }">
@@ -150,7 +158,10 @@ window.addEventListener('beforeunload', (event) => {
     </v-navigation-drawer>
 
     <v-main>
-      <router-view :key="$route.path" />
+      <div v-if="auth.user" class="page-panel">
+        <router-view :key="$route.path" />
+      </div>
+      <router-view v-else :key="$route.path" />
     </v-main>
 
     <UploadPanel v-if="auth.user" />

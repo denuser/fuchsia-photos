@@ -1,0 +1,88 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useDisplay } from 'vuetify'
+
+import { useAppearanceStore, type Contrast, type Scheme } from '../stores/appearance'
+
+const appearance = useAppearanceStore()
+// On a phone the button is an icon alone, to leave room in the app bar.
+const { xs } = useDisplay()
+
+const schemes: { value: Scheme; title: string }[] = [
+  { value: 'system', title: 'System' },
+  { value: 'light', title: 'Light' },
+  { value: 'dark', title: 'Dark' },
+]
+
+const contrasts: { value: Contrast; title: string }[] = [
+  { value: 'system', title: 'System' },
+  { value: 'default', title: 'Default' },
+  { value: 'high', title: 'High contrast' },
+  { value: 'glass', title: 'Glass' },
+]
+
+const icon = computed(() => {
+  if (appearance.scheme === 'system') {
+    return 'mdi-theme-light-dark'
+  }
+  return appearance.scheme === 'dark' ? 'mdi-weather-night' : 'mdi-white-balance-sunny'
+})
+</script>
+
+<template>
+  <v-menu :close-on-content-click="false" location="bottom end">
+    <template #activator="{ props }">
+      <v-btn v-if="xs" v-bind="props" :icon="icon" aria-label="Appearance" />
+      <v-btn v-else v-bind="props" variant="outlined" class="mr-2 appearance-button" aria-label="Appearance">
+        <v-icon :icon="icon" />
+        <v-icon icon="mdi-menu-down" end />
+      </v-btn>
+    </template>
+    <v-card class="appearance-menu">
+      <section>
+        <h2 id="scheme-title">Color scheme</h2>
+        <v-btn-toggle v-model="appearance.scheme" mandatory divided variant="outlined" aria-labelledby="scheme-title">
+          <v-btn v-for="item in schemes" :key="item.value" :value="item.value">{{ item.title }}</v-btn>
+        </v-btn-toggle>
+      </section>
+      <v-divider />
+      <section>
+        <h2 id="contrast-title">Contrast mode</h2>
+        <v-btn-toggle v-model="appearance.contrast" mandatory divided variant="outlined" aria-labelledby="contrast-title">
+          <v-btn v-for="item in contrasts" :key="item.value" :value="item.value">{{ item.title }}</v-btn>
+        </v-btn-toggle>
+      </section>
+    </v-card>
+  </v-menu>
+</template>
+
+<style scoped>
+.appearance-button {
+  min-width: 0;
+  padding-inline: 12px;
+}
+
+.appearance-menu section {
+  padding: 16px 24px;
+}
+
+.appearance-menu h2 {
+  margin-bottom: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.appearance-menu .v-btn-toggle {
+  max-width: 100%;
+}
+
+@media (max-width: 599.98px) {
+  .appearance-menu section {
+    padding: 12px 16px;
+  }
+
+  .appearance-menu .v-btn {
+    padding-inline: 10px;
+  }
+}
+</style>

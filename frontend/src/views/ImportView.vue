@@ -187,7 +187,7 @@ async function openDetails(run: ImportRun) {
 
 <style scoped>
 .imports {
-  height: calc(100dvh - var(--v-layout-top, 0px));
+  height: 100%;
   overflow-y: auto;
   max-width: 1200px;
 }

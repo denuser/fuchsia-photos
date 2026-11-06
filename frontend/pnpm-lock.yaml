@@ -166,6 +166,12 @@ importers:
 
   .:
     dependencies:
+      '@fontsource-variable/red-hat-display':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/red-hat-text':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@mdi/font':
         specifier: ^7.4.47
         version: 7.4.47
@@ -249,6 +255,12 @@ packages:
   '@babel/types@8.0.8':
     resolution: {integrity: sha512-iXSSZAKQWmaeAwGtFw10v9fg5hUiUs0L+w+Z2K11kym3pDNK+SF0VcAQPsEFvWcTSZ7LMgClMXDBvTbH0IlICg==}
     engines: {node: ^22.18.0 || >=24.11.0}
+
+  '@fontsource-variable/red-hat-display@5.3.0':
+    resolution: {integrity: sha512-8u4FI+i3fkB8erlN9lMGa7Hm7aBCRP34y/aPwriBUiDYoxmS/N1QvBrd/hghUBnHJKrVKRg3h4Oubpyl2H8smw==}
+
+  '@fontsource-variable/red-hat-text@5.3.0':
+    resolution: {integrity: sha512-DvwcJ6vj6ZR4xGnrcBpzWEnl35TXXroCYHGoTIdWpkgeYKq/Hda7JhvNuJFplKoGpu4DsCO2ZnyJjiGxvn4Etg==}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -1032,6 +1044,10 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 8.0.8
       '@babel/helper-validator-identifier': 8.0.6
+
+  '@fontsource-variable/red-hat-display@5.3.0': {}
+
+  '@fontsource-variable/red-hat-text@5.3.0': {}
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:

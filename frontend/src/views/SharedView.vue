@@ -102,7 +102,7 @@ function albumSubtitle(album: Album) {
 
 <style scoped>
 .page {
-  height: calc(100dvh - var(--v-layout-top, 0px));
+  height: 100%;
   padding: 16px;
   overflow-y: auto;
 }

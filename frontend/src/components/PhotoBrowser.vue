@@ -266,7 +266,7 @@ defineExpose({ clearSelection, say })
   position: relative;
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - var(--v-layout-top, 0px));
+  height: 100%;
 }
 
 .content {
