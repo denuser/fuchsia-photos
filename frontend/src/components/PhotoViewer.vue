@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import { originalUrl, previewUrl, type Camera, type Photo, type ViewerField } from '../api/client'
 import { useAuthStore } from '../stores/auth'
@@ -89,7 +89,7 @@ const showOriginals = computed(() => auth.user?.viewerShowsOriginals ?? false)
 
 // Formats the browser failed to decode, such as HEIC outside Safari. Their
 // originals are not downloaded again, and the viewer keeps the preview.
-const undecodable = new Set<string>()
+const undecodable = reactive(new Set<string>())
 
 function canShowOriginal(photo: Photo) {
   return !undecodable.has(photo.mime)
@@ -136,14 +136,24 @@ watch(
 )
 
 // The image is laid out at the size that fits the screen, and a transform
-// scales it up to the photo's own resolution, one image pixel per CSS pixel.
+// scales it up to the resolution of what zooming shows, one image pixel per
+// CSS pixel.
 const stage = ref<HTMLElement | null>(null)
 const image = ref<HTMLImageElement | null>(null)
 const stageSize = ref({ width: 0, height: 0 })
+// The preview's own size, measured when it loads; the original replaces it
+// only later and leaves this as it is.
 const naturalSize = ref<{ width: number; height: number } | null>(null)
 
 const photoSize = computed(() =>
   props.photo.width && props.photo.height ? { width: props.photo.width, height: props.photo.height } : naturalSize.value,
+)
+
+// Zooming shows the original only when the profile asks for it and the
+// browser can decode it. Otherwise it enlarges the preview, which goes no
+// further than the preview's own resolution: past it the photo only blurs.
+const zoomSize = computed(() =>
+  showOriginals.value && canShowOriginal(props.photo) ? photoSize.value : naturalSize.value,
 )
 
 const fit = computed(() => {
@@ -152,7 +162,9 @@ const fit = computed(() => {
     return null
   }
   const ratio = Math.min(1, stageSize.value.width / size.width, stageSize.value.height / size.height)
-  return { width: size.width * ratio, height: size.height * ratio, maxScale: 1 / ratio }
+  const width = size.width * ratio
+  const maxScale = Math.max(1, (zoomSize.value?.width ?? 0) / width)
+  return { width, height: size.height * ratio, maxScale }
 })
 
 // The scale over the fitting size, and the offset of the photo's centre from
@@ -210,9 +222,16 @@ function zoomAround(scale: number, start: View, from: Point, to: Point, animate 
 }
 
 // Zoomed out for each photo and each screen size.
-watch([() => props.photo.id, () => fit.value?.maxScale, () => stageSize.value.width, () => stageSize.value.height], () => {
+watch([() => props.photo.id, () => stageSize.value.width, () => stageSize.value.height], () => {
   view.value = { scale: 1, x: 0, y: 0 }
   animated.value = false
+})
+
+// The limit falls when an original turns out to be undecodable, or when the
+// profile setting changes; a zoomed photo then stays zoomed, within the limit.
+watch(() => fit.value?.maxScale, () => {
+  const { scale, x, y } = view.value
+  setView(scale, x, y)
 })
 
 watch(

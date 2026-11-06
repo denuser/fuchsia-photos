@@ -352,9 +352,9 @@ const steps = {
       await image.waitFor()
     }
 
-    // Without the profile setting, zooming enlarges the preview and never asks
-    // for the original. large.jpg is 2400 × 1800, more than the screen and the
-    // viewer preview.
+    // Without the profile setting, zooming enlarges the preview, no further
+    // than the preview's own resolution, and never asks for the original.
+    // large.jpg is 2400 × 1800, more than the screen and the viewer preview.
     const originals = []
     const countOriginals = (request) => request.url().endsWith('/original') && originals.push(request.url())
     page.on('request', countOriginals)
@@ -389,11 +389,15 @@ const steps = {
       }
 
       let before = await box()
+      const previewWidth = await image.evaluate((i) => i.naturalWidth)
+      if (previewWidth >= 2400) {
+        throw new Error(`the viewer preview of large.jpg is ${previewWidth} px wide, as wide as the original`)
+      }
       const tap = { x: before.x + before.width * 0.2, y: before.y + before.height * 0.3 }
       await page.mouse.click(tap.x, tap.y)
       await waitFor('the zoom', () => document.querySelector('[data-testid=viewer-image]').style.transform !== '')
       await settled()
-      check('a tap zooms at the tapped point', before, await box(), tap, 2400 / before.width)
+      check('a tap zooms at the tapped point to the preview resolution', before, await box(), tap, previewWidth / before.width)
       await page.keyboard.press('Escape')
       await waitFor('the zoom to end', () => document.querySelector('[data-testid=viewer-image]').style.transform === '')
       await settled()
@@ -426,6 +430,8 @@ const steps = {
     await source('preview')
     await image.click()
     await source('original')
+    await waitFor('the zoom to the original resolution', () =>
+      Math.abs(document.querySelector('[data-testid=viewer-image]').getBoundingClientRect().width - 2400) < 2)
     await open('rotated.jpg')
     await source('preview')
     if ((await page.getByTestId('viewer').getByRole('link', { name: '59.93000, 30.33000' }).count()) > 0) {
