@@ -3,6 +3,7 @@ import { onMounted, ref, shallowRef } from 'vue'
 
 import { api, type Role, type User } from '../api/client'
 import { useAuthStore } from '../stores/auth'
+import AppDialog from '../components/AppDialog.vue'
 import AppFormGroup from '../components/AppFormGroup.vue'
 
 const auth = useAuthStore()
@@ -123,53 +124,36 @@ async function savePassword() {
       </tbody>
     </v-table>
 
-    <v-dialog v-model="createOpen" max-width="420">
-      <v-card title="Add user">
-        <v-form @submit.prevent="create">
-          <v-card-text>
-            <v-alert v-if="formError" type="error" density="compact" class="mb-4" :text="formError" />
-            <AppFormGroup v-slot="field" label="Login" required>
-              <v-text-field v-bind="field" v-model="form.login" autocomplete="off" />
-            </AppFormGroup>
-            <AppFormGroup v-slot="field" label="Password" required>
-              <v-text-field v-bind="field" v-model="form.password" type="password" autocomplete="new-password" />
-            </AppFormGroup>
-            <AppFormGroup v-slot="field" label="Role" required>
-              <v-select v-bind="field" v-model="form.role" variant="outlined" :items="roles" />
-            </AppFormGroup>
-          </v-card-text>
-          <v-card-actions>
-            <v-spacer />
-            <v-btn text="Cancel" @click="createOpen = false" />
-            <v-btn type="submit" color="primary" text="Add user" />
-          </v-card-actions>
-        </v-form>
-      </v-card>
-    </v-dialog>
+    <AppDialog v-model="createOpen" title="Add user" action="Add user" :error="formError" @submit="create">
+      <AppFormGroup v-slot="field" label="Login" required>
+        <v-text-field v-bind="field" v-model="form.login" autocomplete="off" />
+      </AppFormGroup>
+      <AppFormGroup v-slot="field" label="Password" required>
+        <v-text-field v-bind="field" v-model="form.password" type="password" autocomplete="new-password" />
+      </AppFormGroup>
+      <AppFormGroup v-slot="field" label="Role" required>
+        <v-select v-bind="field" v-model="form.role" variant="outlined" :items="roles" />
+      </AppFormGroup>
+    </AppDialog>
 
-    <v-dialog :model-value="passwordFor !== null" max-width="420" @update:model-value="passwordFor = null">
-      <v-card :title="`Reset password of ${passwordFor?.login}`">
-        <v-form @submit.prevent="savePassword">
-          <v-card-text>
-            <v-alert v-if="passwordError" type="error" density="compact" class="mb-4" :text="passwordError" />
-            <AppFormGroup v-slot="field" label="New password" required>
-              <v-text-field
-                v-bind="field"
-                v-model="newPassword"
-                type="password"
-                autocomplete="new-password"
-                hint="This user will be logged out everywhere."
-              />
-            </AppFormGroup>
-          </v-card-text>
-          <v-card-actions>
-            <v-spacer />
-            <v-btn text="Cancel" @click="passwordFor = null" />
-            <v-btn type="submit" color="primary" text="Reset password" />
-          </v-card-actions>
-        </v-form>
-      </v-card>
-    </v-dialog>
+    <AppDialog
+      :model-value="passwordFor !== null"
+      :title="`Reset password of ${passwordFor?.login}`"
+      action="Reset password"
+      :error="passwordError"
+      @update:model-value="passwordFor = null"
+      @submit="savePassword"
+    >
+      <AppFormGroup v-slot="field" label="New password" required>
+        <v-text-field
+          v-bind="field"
+          v-model="newPassword"
+          type="password"
+          autocomplete="new-password"
+          hint="This user will be logged out everywhere."
+        />
+      </AppFormGroup>
+    </AppDialog>
   </v-container>
 </template>
 

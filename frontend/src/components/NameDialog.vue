@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import AppDialog from './AppDialog.vue'
 import AppFormGroup from './AppFormGroup.vue'
 
 const open = defineModel<boolean>({ required: true })
@@ -29,21 +30,9 @@ async function submit() {
 </script>
 
 <template>
-  <v-dialog v-model="open" max-width="420">
-    <v-card :title="title">
-      <v-form @submit.prevent="submit">
-        <v-card-text>
-          <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
-          <AppFormGroup v-slot="field" :label="label" required>
-            <v-text-field v-bind="field" v-model="name" autofocus />
-          </AppFormGroup>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn text="Cancel" @click="open = false" />
-          <v-btn type="submit" color="primary" :text="action" :loading="saving" />
-        </v-card-actions>
-      </v-form>
-    </v-card>
-  </v-dialog>
+  <AppDialog v-model="open" :title="title" :action="action" :error="error" :loading="saving" @submit="submit">
+    <AppFormGroup v-slot="field" :label="label" required>
+      <v-text-field v-bind="field" v-model="name" autofocus />
+    </AppFormGroup>
+  </AppDialog>
 </template>

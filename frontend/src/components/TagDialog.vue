@@ -5,6 +5,7 @@ import { api, type TagRef } from '../api/client'
 import { inBatches } from '../stores/photos'
 import { useTagsStore } from '../stores/tags'
 import AppAutocomplete from './AppAutocomplete.vue'
+import AppDialog from './AppDialog.vue'
 import AppFormGroup from './AppFormGroup.vue'
 
 const open = defineModel<boolean>({ required: true })
@@ -73,45 +74,33 @@ async function save() {
 </script>
 
 <template>
-  <v-dialog v-model="open" max-width="480">
-    <v-card :title="title">
-      <!-- Not a form: Enter belongs to the fields, where it confirms a tag. -->
-      <div>
-        <v-card-text>
-          <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
-          <div v-if="single && current.length > 0" class="d-flex flex-wrap ga-1 mb-4">
-            <v-chip v-for="tag in current" :key="tag.id" size="small">{{ tag.name }}</v-chip>
-          </div>
-          <AppFormGroup v-slot="field" label="Add tags">
-            <v-combobox
-              v-bind="field"
-              v-model="toAdd"
-              :items="tags.tags.map((t) => t.name)"
-              hint="Choose a tag or type a new one, then press Enter."
-              multiple
-              chips
-              closable-chips
-              variant="outlined"
-            />
-          </AppFormGroup>
-          <AppFormGroup v-slot="field" label="Remove tags">
-            <AppAutocomplete
-              v-bind="field"
-              v-model="toRemove"
-              :items="removable"
-              item-title="name"
-              item-value="id"
-              multiple
-              :disabled="removable.length === 0"
-            />
-          </AppFormGroup>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn text="Cancel" @click="open = false" />
-          <v-btn color="primary" text="Save" :loading="saving" @click="save" />
-        </v-card-actions>
-      </div>
-    </v-card>
-  </v-dialog>
+  <!-- Not a form: Enter belongs to the fields, where it confirms a tag. -->
+  <AppDialog v-model="open" :title="title" action="Save" :error="error" :loading="saving" :form="false" max-width="480" @submit="save">
+    <div v-if="single && current.length > 0" class="d-flex flex-wrap ga-1 mb-4">
+      <v-chip v-for="tag in current" :key="tag.id" size="small">{{ tag.name }}</v-chip>
+    </div>
+    <AppFormGroup v-slot="field" label="Add tags">
+      <v-combobox
+        v-bind="field"
+        v-model="toAdd"
+        :items="tags.tags.map((t) => t.name)"
+        hint="Choose a tag or type a new one, then press Enter."
+        multiple
+        chips
+        closable-chips
+        variant="outlined"
+      />
+    </AppFormGroup>
+    <AppFormGroup v-slot="field" label="Remove tags">
+      <AppAutocomplete
+        v-bind="field"
+        v-model="toRemove"
+        :items="removable"
+        item-title="name"
+        item-value="id"
+        multiple
+        :disabled="removable.length === 0"
+      />
+    </AppFormGroup>
+  </AppDialog>
 </template>

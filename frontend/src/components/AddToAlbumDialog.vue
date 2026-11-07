@@ -3,6 +3,7 @@ import { ref, shallowRef, watch } from 'vue'
 
 import { api, type Album } from '../api/client'
 import { inBatches } from '../stores/photos'
+import AppDialog from './AppDialog.vue'
 import AppFormGroup from './AppFormGroup.vue'
 
 const open = defineModel<boolean>({ required: true })
@@ -54,32 +55,23 @@ async function createAndAdd() {
 </script>
 
 <template>
-  <v-dialog v-model="open" max-width="420">
-    <v-card title="Add to album">
-      <v-card-text>
-        <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
-        <v-form class="d-flex align-end ga-2 mb-2" @submit.prevent="createAndAdd">
-          <AppFormGroup v-slot="field" label="New album" class="flex-grow-1 mb-0">
-            <v-text-field v-bind="field" v-model="newName" />
-          </AppFormGroup>
-          <v-btn type="submit" color="primary" text="Create" :disabled="!newName.trim()" :loading="saving" />
-        </v-form>
-        <v-list v-if="albums.length > 0" density="compact" max-height="300" class="overflow-y-auto">
-          <v-list-item
-            v-for="album in albums"
-            :key="album.id"
-            :title="album.name"
-            :subtitle="`${album.photoCount} photos`"
-            :disabled="saving"
-            prepend-icon="mdi-image-album"
-            @click="addTo(album)"
-          />
-        </v-list>
-      </v-card-text>
-      <v-card-actions>
-        <v-spacer />
-        <v-btn text="Cancel" @click="open = false" />
-      </v-card-actions>
-    </v-card>
-  </v-dialog>
+  <AppDialog v-model="open" title="Add to album" :error="error">
+    <v-form class="d-flex align-end ga-2 mb-2" @submit.prevent="createAndAdd">
+      <AppFormGroup v-slot="field" label="New album" class="flex-grow-1 mb-0">
+        <v-text-field v-bind="field" v-model="newName" />
+      </AppFormGroup>
+      <v-btn type="submit" color="primary" text="Create" :disabled="!newName.trim()" :loading="saving" />
+    </v-form>
+    <v-list v-if="albums.length > 0" density="compact" max-height="300" class="overflow-y-auto">
+      <v-list-item
+        v-for="album in albums"
+        :key="album.id"
+        :title="album.name"
+        :subtitle="`${album.photoCount} photos`"
+        :disabled="saving"
+        prepend-icon="mdi-image-album"
+        @click="addTo(album)"
+      />
+    </v-list>
+  </AppDialog>
 </template>

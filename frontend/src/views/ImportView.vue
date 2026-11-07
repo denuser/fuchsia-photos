@@ -4,6 +4,7 @@ import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
 import { api, type ImportProblem, type ImportRun } from '../api/client'
 import AppAutocomplete from '../components/AppAutocomplete.vue'
 import { useUsersStore } from '../stores/users'
+import AppDialog from '../components/AppDialog.vue'
 import AppFormGroup from '../components/AppFormGroup.vue'
 
 const POLL_MS = 2000
@@ -152,25 +153,23 @@ async function openDetails(run: ImportRun) {
       </tbody>
     </v-table>
 
-    <v-dialog :model-value="detailsOf !== null" max-width="720" @update:model-value="detailsOf = null">
-      <v-card title="Scan problems">
-        <v-card-text>
-          <v-alert v-if="detailsOf?.error" type="error" density="compact" class="mb-4" :text="detailsOf.error" />
-          <v-table density="compact">
-            <tbody>
-              <tr v-for="problem in problems" :key="problem.path">
-                <td class="path">{{ problem.path }}</td>
-                <td>{{ problem.state === 'changing' ? 'Still being copied. The next scan will try it again.' : problem.error }}</td>
-              </tr>
-            </tbody>
-          </v-table>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn text="Close" @click="detailsOf = null" />
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <AppDialog
+      :model-value="detailsOf !== null"
+      title="Scan problems"
+      cancel="Close"
+      :error="detailsOf?.error ?? ''"
+      max-width="720"
+      @update:model-value="detailsOf = null"
+    >
+      <v-table density="compact">
+        <tbody>
+          <tr v-for="problem in problems" :key="problem.path">
+            <td class="path">{{ problem.path }}</td>
+            <td>{{ problem.state === 'changing' ? 'Still being copied. The next scan will try it again.' : problem.error }}</td>
+          </tr>
+        </tbody>
+      </v-table>
+    </AppDialog>
   </v-container>
 </template>
 
