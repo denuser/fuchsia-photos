@@ -118,7 +118,7 @@ export const vuetify = createVuetify({
     VBtn: { rounded: 'pill' },
     // Buttons in a toggle group join into one control, so they drop the pill.
     VBtnToggle: { rounded: 'lg', VBtn: { rounded: false } },
-    VAlert: { variant: 'tonal' },
+    VAlert: { variant: 'outlined' },
     VTextField: field,
     VTextarea: field,
     VSelect: field,

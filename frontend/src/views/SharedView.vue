@@ -81,7 +81,7 @@ function albumSubtitle(album: Album) {
           <v-tab value="albums" text="Albums" />
           <v-tab value="photos" text="Photos" />
         </v-tabs>
-        <v-alert v-if="error" type="error" density="compact" :text="error" />
+        <v-alert v-if="error" type="error" density="compact" :title="error" />
         <v-switch
           :model-value="auth.user?.sharedIncludesAlbums"
           :disabled="saving"

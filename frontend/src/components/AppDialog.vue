@@ -39,7 +39,7 @@ function onClick() {
     <v-card :title="title">
       <component :is="asForm ? VForm : 'div'" @submit.prevent="emit('submit')">
         <v-card-text>
-          <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
+          <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
           <slot />
         </v-card-text>
         <v-card-actions>

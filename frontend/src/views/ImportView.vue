@@ -91,7 +91,7 @@ async function openDetails(run: ImportRun) {
   <v-container class="imports">
     <h1 class="mb-4">Import from folder</h1>
 
-    <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
+    <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
     <v-form class="d-flex flex-wrap align-end ga-4 mb-2" @submit.prevent="start">
       <AppFormGroup v-slot="field" label="Owner" required class="field mb-0">

@@ -40,7 +40,7 @@ function setShown(value: ViewerField[] | null) {
     <h1 class="mb-1">{{ auth.user.login }}</h1>
     <div class="text-medium-emphasis mb-6">{{ auth.isAdmin ? 'Administrator' : 'User' }}</div>
 
-    <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
+    <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
     <h2 class="mb-2">Photo grid</h2>
     <v-switch

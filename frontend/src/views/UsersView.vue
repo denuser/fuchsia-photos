@@ -80,7 +80,7 @@ async function savePassword() {
       <v-btn color="primary" prepend-icon="mdi-account-plus" text="Add user" @click="openCreate" />
     </div>
 
-    <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
+    <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
     <v-table>
       <thead>

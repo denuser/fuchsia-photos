@@ -74,7 +74,7 @@ function startDelete(album: Album) {
       <h1 class="flex-grow-1">Albums</h1>
       <v-btn color="primary" prepend-icon="mdi-plus" text="New album" @click="createOpen = true" />
     </div>
-    <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
+    <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
     <EmptyState v-if="loaded && albums.length === 0" icon="mdi-image-album" title="No albums yet" text="Create one here, or select photos and add them to an album." />
 

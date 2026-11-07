@@ -33,7 +33,7 @@ async function submit() {
       </template>
       <v-form @submit.prevent="submit">
         <v-card-text>
-          <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
+          <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
           <AppFormGroup v-slot="field" label="Login" required>
             <v-text-field v-bind="field" v-model="login" autocomplete="username" autofocus />
           </AppFormGroup>

@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 
 import type { Photo } from '../api/client'
 import { useAuthStore } from '../stores/auth'
+import { type NoticeType, useNoticesStore } from '../stores/notices'
 import { usePhotosStore } from '../stores/photos'
 import { useUsersStore } from '../stores/users'
 import AddToAlbumDialog from './AddToAlbumDialog.vue'
@@ -22,14 +23,13 @@ const emit = defineEmits<{ tagged: [] }>()
 
 const auth = useAuthStore()
 const photos = usePhotosStore()
+const notices = useNoticesStore()
 const users = useUsersStore()
 
 const opened = shallowRef<Photo | null>(null)
 const selected = shallowRef<ReadonlySet<number>>(new Set())
 const anchor = ref<number | null>(null)
 const busy = ref(false)
-const notice = ref('')
-const noticeOpen = ref(false)
 
 const tagDialog = ref(false)
 const albumDialog = ref(false)
@@ -96,9 +96,8 @@ function toggle(photo: Photo, range: boolean) {
   selected.value = next
 }
 
-function say(message: string) {
-  notice.value = message
-  noticeOpen.value = true
+function say(message: string, type: NoticeType = 'success') {
+  notices.notify(message, type)
 }
 
 // Runs an action on the selection and reports what happened.
@@ -109,7 +108,7 @@ async function run(action: () => Promise<void>, done: string) {
     clearSelection()
     say(done)
   } catch (failure) {
-    say((failure as Error).message)
+    say((failure as Error).message, 'error')
   } finally {
     busy.value = false
   }
@@ -185,7 +184,7 @@ async function trashOpened(photo: Photo) {
     opened.value = neighbour
     say('1 photo moved to the trash')
   } catch (failure) {
-    say((failure as Error).message)
+    say((failure as Error).message, 'error')
   }
 }
 
@@ -257,7 +256,6 @@ defineExpose({ clearSelection, say })
       action="Delete"
       @confirm="purgeSelected"
     />
-    <v-snackbar v-model="noticeOpen" :text="notice" location="bottom left" />
   </div>
 </template>
 

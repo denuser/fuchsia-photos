@@ -5,6 +5,7 @@ import { useDisplay, useTheme } from 'vuetify'
 
 import logo from './assets/logo.png'
 import AppearanceMenu from './components/AppearanceMenu.vue'
+import AppToasts from './components/AppToasts.vue'
 import UploadPanel from './components/UploadPanel.vue'
 import { useAppearanceStore } from './stores/appearance'
 import { useAuthStore } from './stores/auth'
@@ -165,6 +166,7 @@ window.addEventListener('beforeunload', (event) => {
     </v-main>
 
     <UploadPanel v-if="auth.user" />
+    <AppToasts />
   </v-app>
 </template>
 

@@ -229,8 +229,43 @@
     font-size: 0.875rem;
   }
 
+  /* Alerts as PatternFly draws them: a border and an icon in the status
+     color, the title in it too, and the text in the regular color on the
+     surface. */
+
   .v-alert {
     border-radius: var(--radius-medium);
+  }
+
+  .v-alert--variant-outlined {
+    background: rgb(var(--v-theme-surface));
+  }
+
+  .v-alert--variant-outlined .v-alert__content {
+    color: rgb(var(--v-theme-on-surface));
+  }
+
+  .v-alert-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.5;
+    hyphens: manual;
+  }
+
+  .v-alert.text-error .v-alert-title {
+    color: rgb(var(--v-theme-error));
+  }
+
+  .v-alert.text-success .v-alert-title {
+    color: rgb(var(--v-theme-success));
+  }
+
+  .v-alert.text-info .v-alert-title {
+    color: rgb(var(--v-theme-info));
+  }
+
+  .v-alert.text-warning .v-alert-title {
+    color: rgb(var(--v-theme-on-surface));
   }
 
   /* Glass: the page shows a soft gradient, and the surfaces above it let it

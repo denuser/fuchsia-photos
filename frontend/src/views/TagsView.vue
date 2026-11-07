@@ -50,7 +50,7 @@ function startDelete(tag: Tag) {
 <template>
   <div class="page">
     <h1 class="mb-4">Tags</h1>
-    <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
+    <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
     <EmptyState v-if="loaded && tags.tags.length === 0" icon="mdi-tag-multiple-outline" title="No tags yet" text="Select photos in the timeline to tag them." />
 

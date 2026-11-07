@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import { api, type MetadataSettings, type PreviewSettings } from '../api/client'
 import AppFormGroup from '../components/AppFormGroup.vue'
+import { useNoticesStore } from '../stores/notices'
 
 const formats = [
   { title: 'WebP', value: 'webp' },
   { title: 'JPEG', value: 'jpeg' },
 ]
 
+const notices = useNoticesStore()
+
 const settings = ref<PreviewSettings | null>(null)
 const metadata = ref<MetadataSettings | null>(null)
 const error = ref('')
-const saved = ref(false)
 const saving = ref(false)
 
 function range(min: number, max: number) {
@@ -44,8 +46,6 @@ const valid = computed(() => {
   return checks.every(([value, rule]) => rule(value) === true)
 })
 
-watch([settings, metadata], () => (saved.value = false), { deep: true })
-
 onMounted(async () => {
   const [previews, meta] = await Promise.all([api.GET('/settings/previews'), api.GET('/settings/metadata')])
   const failure = previews.error ?? meta.error
@@ -72,9 +72,7 @@ async function save() {
     metadata.value = meta.data
   }
   if (previews.data && meta.data) {
-    // The new values also trigger the watcher above, which must run first.
-    await nextTick()
-    saved.value = true
+    notices.notify('Settings saved')
   }
 }
 </script>
@@ -83,16 +81,16 @@ async function save() {
   <v-container class="admin">
     <h1 class="mb-4">Administration</h1>
 
-    <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
+    <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
     <v-form v-if="settings && metadata" @submit.prevent="save">
       <h2 class="mb-2">Previews</h2>
       <v-alert
         type="info"
-        variant="tonal"
         density="compact"
         class="mb-6"
-        text="These settings apply to new photos. Photos that are already processed keep their previews."
+        title="These settings apply to new photos"
+        text="Photos that are already processed keep their previews."
       />
 
       <AppFormGroup v-slot="field" label="Preview format" required>
@@ -168,10 +166,7 @@ async function save() {
         class="mb-4"
       />
 
-      <div class="d-flex align-center ga-4">
-        <v-btn type="submit" color="primary" text="Save" :disabled="!valid" :loading="saving" />
-        <span v-if="saved" class="text-medium-emphasis">Saved</span>
-      </div>
+      <v-btn type="submit" color="primary" text="Save" :disabled="!valid" :loading="saving" />
     </v-form>
   </v-container>
 </template>
