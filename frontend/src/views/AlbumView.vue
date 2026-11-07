@@ -53,7 +53,7 @@ async function rename(name: string) {
 async function remove() {
   const { error } = await api.DELETE('/albums/{id}', { params: { path: { id: id.value } } })
   if (error) {
-    browser.value?.say(error.error)
+    browser.value?.say(error.error, 'error')
     return
   }
   await router.push('/albums')
@@ -78,7 +78,7 @@ async function resetCover() {
     await setCover(null)
     browser.value?.say('The newest photo is the cover again')
   } catch (failure) {
-    browser.value?.say((failure as Error).message)
+    browser.value?.say((failure as Error).message, 'error')
   }
 }
 </script>

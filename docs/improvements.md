@@ -60,15 +60,15 @@ Done:
 - Dialogs on the `AppDialog` wrapper, with the filled primary button on the left, a link-style Cancel after it and a red button for destructive actions.
 - The PatternFly type scale: 14px body text, fields and lists, and headings sized by level (h1 1.5rem, h2 1.25rem, h3 1.125rem).
 - PatternFly alerts: a border, an icon and a title in the status color. Notices about finished actions are toast alerts stacked in the top right corner, under the app bar so that they leave the Upload button visible; errors stay until closed.
+- Applied filters on the timeline as chip groups under the toolbar, one per category with its own clear button, and "Clear all filters". The tag, camera and lens fields show only a count of chosen values.
 
 Left, in order of priority:
 
-1. **Applied filters.** PatternFly shows the chosen filters as chip groups under the toolbar, with "Clear all filters". The timeline keeps them inside the fields. The [PatternFly filter guidelines](https://www.patternfly.org/patterns/filters/design-guidelines/) are the model.
-2. **Page headers.** A title, a short description and, where it helps, breadcrumbs, such as "Albums / Trip" in an album, in a padded header section.
-3. **Tables and tabs.** The users, tags and import tables with PatternFly row borders, header style and compact density. Tabs with the PatternFly underline on the "Shared with me" page.
-4. **Empty states.** The PatternFly layout: a large icon, a title, the text and a primary action button.
-5. **Focus rings.** A 2px accent outline on keyboard focus, which PatternFly draws on every control. Vuetify shows an overlay instead.
-6. **Icons.** PatternFly uses its own icons and Font Awesome; the application uses Material Design Icons. Changing them is a new dependency and touches every page, so it comes last.
-7. **Cyrillic text.** The Red Hat fonts have no Cyrillic, so dates in Russian fall back to Helvetica or Arial. PatternFly falls back to Noto Sans for other scripts. Bundling Noto Sans Cyrillic would match it.
+1. **Page headers.** A title, a short description and, where it helps, breadcrumbs, such as "Albums / Trip" in an album, in a padded header section.
+2. **Tables and tabs.** The users, tags and import tables with PatternFly row borders, header style and compact density. Tabs with the PatternFly underline on the "Shared with me" page.
+3. **Empty states.** The PatternFly layout: a large icon, a title, the text and a primary action button.
+4. **Focus rings.** A 2px accent outline on keyboard focus, which PatternFly draws on every control. Vuetify shows an overlay instead.
+5. **Icons.** PatternFly uses its own icons and Font Awesome; the application uses Material Design Icons. Changing them is a new dependency and touches every page, so it comes last.
+6. **Cyrillic text.** The Red Hat fonts have no Cyrillic, so dates in Russian fall back to Helvetica or Arial. PatternFly falls back to Noto Sans for other scripts. Bundling Noto Sans Cyrillic would match it.
 
 A second visual style like PatternFly's Project Felt is out of scope for now.

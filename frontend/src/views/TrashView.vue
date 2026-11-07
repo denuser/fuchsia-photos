@@ -20,7 +20,7 @@ async function empty() {
   const { response } = await api.POST('/photos/trash/empty')
   emptying.value = false
   browser.value?.clearSelection()
-  browser.value?.say(response.ok ? 'The trash is empty' : 'Some photos could not be deleted')
+  browser.value?.say(response.ok ? 'The trash is empty' : 'Some photos could not be deleted', response.ok ? 'success' : 'error')
   await photos.reload()
 }
 </script>

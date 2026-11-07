@@ -151,6 +151,9 @@ const steps = {
     await page.getByRole('option', { name: 'City' }).click()
     await page.keyboard.press('Escape')
     await tiles(3)
+    // The chosen tags show as chips under the toolbar, and removing one narrows the search again.
+    await button('Remove City').click()
+    await tiles(2)
   },
   'filter by date': async () => {
     await page.getByLabel('From', { exact: true }).fill('2000-01-01')

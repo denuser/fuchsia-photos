@@ -6,6 +6,7 @@ import { useDisplay } from 'vuetify'
 import { api, type NameCount } from '../api/client'
 import AppAutocomplete from '../components/AppAutocomplete.vue'
 import EmptyState from '../components/EmptyState.vue'
+import FilterChips, { type FilterGroup } from '../components/FilterChips.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
 import { useAuthStore } from '../stores/auth'
 import { listFilters, usePhotosStore, type PhotoQuery } from '../stores/photos'
@@ -38,7 +39,7 @@ async function setWithShared(value: boolean) {
   if (data) {
     auth.user = data
   } else {
-    browser.value?.say(error?.error ?? 'The setting could not be saved')
+    browser.value?.say(error?.error ?? 'The setting could not be saved', 'error')
   }
 }
 
@@ -99,9 +100,49 @@ function withChosen(items: NameCount[], chosen: string[]) {
 }
 
 const cameraFields = computed(() => [
-  { key: 'camera', label: 'Any of these cameras', items: withChosen(cameraList.value, cameras.value), value: cameras.value },
-  { key: 'lens', label: 'Any of these lenses', items: withChosen(lensList.value, lenses.value), value: lenses.value },
+  { key: 'camera', label: 'Any of these cameras', counted: 'Cameras', items: withChosen(cameraList.value, cameras.value), value: cameras.value },
+  { key: 'lens', label: 'Any of these lenses', counted: 'Lenses', items: withChosen(lensList.value, lenses.value), value: lenses.value },
 ])
+
+// The filters in use, as chip groups under the toolbar.
+function dayTitle(date: string) {
+  const day = new Date(`${date}T00:00:00`)
+  return Number.isNaN(day.getTime()) ? date : day.toLocaleDateString()
+}
+
+const filterGroups = computed<FilterGroup[]>(() => [
+  {
+    key: 'tag',
+    label: 'Tags',
+    chips: tagIds.value.map((id) => ({ value: String(id), title: tags.tags.find((t) => t.id === id)?.name ?? `#${id}` })),
+  },
+  { key: 'camera', label: 'Cameras', chips: cameras.value.map((name) => ({ value: name, title: name })) },
+  { key: 'lens', label: 'Lenses', chips: lenses.value.map((name) => ({ value: name, title: name })) },
+  {
+    key: 'date',
+    label: 'Date',
+    chips: [
+      ...(fromDate.value ? [{ value: 'from', title: `From ${dayTitle(fromDate.value)}` }] : []),
+      ...(toDate.value ? [{ value: 'to', title: `To ${dayTitle(toDate.value)}` }] : []),
+    ],
+  },
+])
+
+function removeChip(key: string, value: string) {
+  if (key === 'tag') {
+    setFilter({ tag: tagIds.value.filter((id) => String(id) !== value) })
+  } else if (key === 'camera') {
+    setFilter({ camera: cameras.value.filter((name) => name !== value) })
+  } else if (key === 'lens') {
+    setFilter({ lens: lenses.value.filter((name) => name !== value) })
+  } else {
+    setFilter({ [value]: null })
+  }
+}
+
+function clearGroup(key: string) {
+  setFilter(key === 'date' ? { from: null, to: null } : { [key]: [] })
+}
 
 function photoCount(item: NameCount) {
   return { subtitle: item.count === 1 ? '1 photo' : `${item.count} photos` }
@@ -199,6 +240,7 @@ function onDrop(event: DragEvent) {
             item-value="id"
             placeholder="Any of these tags"
             aria-label="Any of these tags"
+            counted="Tags"
             density="compact"
             hide-details
             multiple
@@ -227,6 +269,7 @@ function onDrop(event: DragEvent) {
                 :item-props="photoCount"
                 :placeholder="field.label"
                 :aria-label="field.label"
+                :counted="field.counted"
                 density="compact"
                 clearable
                 hide-details
@@ -257,6 +300,7 @@ function onDrop(event: DragEvent) {
               :item-props="photoCount"
               :placeholder="field.label"
               :aria-label="field.label"
+              :counted="field.counted"
               density="compact"
               hide-details
               multiple
@@ -276,9 +320,8 @@ function onDrop(event: DragEvent) {
               @update:model-value="setFilter({ [field.key]: $event })"
             />
           </template>
-          <v-btn v-if="filtered && xs" icon="mdi-filter-remove-outline" variant="text" aria-label="Clear all filters" @click="router.replace({ query: {} })" />
-          <v-btn v-else-if="filtered" text="Clear all filters" variant="text" @click="router.replace({ query: {} })" />
         </div>
+        <FilterChips :groups="filterGroups" @remove="removeChip" @clear="clearGroup" @clear-all="router.replace({ query: {} })" />
       </template>
       <template #empty>
         <EmptyState v-if="filtered" icon="mdi-image-search-outline" title="No photos match these filters" />
