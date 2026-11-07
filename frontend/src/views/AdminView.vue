@@ -81,12 +81,12 @@ async function save() {
 
 <template>
   <v-container class="admin">
-    <h1 class="text-h5 mb-4">Administration</h1>
+    <h1 class="mb-4">Administration</h1>
 
     <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
 
     <v-form v-if="settings && metadata" @submit.prevent="save">
-      <h2 class="text-h6 mb-2">Previews</h2>
+      <h2 class="mb-2">Previews</h2>
       <v-alert
         type="info"
         variant="tonal"
@@ -156,7 +156,7 @@ async function save() {
         />
       </AppFormGroup>
 
-      <h2 class="text-h6 mb-2">Photo details</h2>
+      <h2 class="mb-2">Photo details</h2>
       <v-switch
         v-model="metadata.showLocation"
         data-testid="show-location"
@@ -170,7 +170,7 @@ async function save() {
 
       <div class="d-flex align-center ga-4">
         <v-btn type="submit" color="primary" text="Save" :disabled="!valid" :loading="saving" />
-        <span v-if="saved" class="text-body-2 text-medium-emphasis">Saved</span>
+        <span v-if="saved" class="text-medium-emphasis">Saved</span>
       </div>
     </v-form>
   </v-container>

@@ -37,12 +37,12 @@ function setShown(value: ViewerField[] | null) {
 
 <template>
   <v-container v-if="auth.user" class="profile">
-    <h1 class="text-h5 mb-1">{{ auth.user.login }}</h1>
+    <h1 class="mb-1">{{ auth.user.login }}</h1>
     <div class="text-medium-emphasis mb-6">{{ auth.isAdmin ? 'Administrator' : 'User' }}</div>
 
     <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
 
-    <h2 class="text-h6 mb-2">Photo grid</h2>
+    <h2 class="mb-2">Photo grid</h2>
     <v-switch
       :model-value="auth.user.gridSquares"
       :disabled="saving"
@@ -55,7 +55,7 @@ function setShown(value: ViewerField[] | null) {
       @update:model-value="save({ gridSquares: Boolean($event) })"
     />
 
-    <h2 class="text-h6 mb-2">Viewer</h2>
+    <h2 class="mb-2">Viewer</h2>
     <v-switch
       :model-value="auth.user.viewerShowsOriginals"
       :disabled="saving"
@@ -68,8 +68,8 @@ function setShown(value: ViewerField[] | null) {
       @update:model-value="save({ viewerShowsOriginals: Boolean($event) })"
     />
 
-    <h3 class="text-subtitle-1 mb-1">Photo details</h3>
-    <div class="text-body-2 text-medium-emphasis mb-2">
+    <h3 class="mb-1">Photo details</h3>
+    <div class="text-medium-emphasis mb-2">
       Shown under the photo name when the photo has them. A location is shown only if an administrator allows it.
     </div>
     <div class="fields mb-6">
@@ -86,7 +86,7 @@ function setShown(value: ViewerField[] | null) {
       />
     </div>
 
-    <h2 class="text-h6 mb-2">Phone</h2>
+    <h2 class="mb-2">Phone</h2>
     <v-switch
       :model-value="auth.user.navigationHiddenOnPhones"
       :disabled="saving"
@@ -99,7 +99,7 @@ function setShown(value: ViewerField[] | null) {
       @update:model-value="save({ navigationHiddenOnPhones: Boolean($event) })"
     />
 
-    <h2 class="text-h6 mb-2">Password</h2>
+    <h2 class="mb-2">Password</h2>
     <v-btn prepend-icon="mdi-lock-reset" variant="tonal" text="Change password" @click="passwordDialog = true" />
     <ChangePasswordDialog v-model="passwordDialog" />
   </v-container>

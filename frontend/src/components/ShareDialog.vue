@@ -147,7 +147,7 @@ async function save() {
     <AppFormGroup v-if="!single" v-slot="field" label="Stop sharing with">
       <AppAutocomplete v-bind="field" v-model="toRemove" :items="users.everyone" item-title="login" item-value="id" multiple />
     </AppFormGroup>
-    <div class="text-body-2 text-medium-emphasis">
+    <div class="text-medium-emphasis">
       Recipients can download the original files, which keep their metadata, including location.
     </div>
   </AppDialog>

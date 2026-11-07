@@ -57,7 +57,7 @@ const defaults = {
   color: rgb(var(--v-theme-error));
 }
 
-/* Helper text and errors sit right under the control, at the body size. */
+/* Helper text and errors sit right under the control. */
 .form-group :deep(.v-input__details:not(.v-input__details--hidden)) {
   padding-inline: 0;
   padding-top: 4px;
@@ -69,8 +69,6 @@ const defaults = {
 }
 
 .form-group :deep(.v-messages) {
-  font-size: 0.875rem;
-  line-height: 1.5;
   opacity: 1;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }

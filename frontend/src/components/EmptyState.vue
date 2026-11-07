@@ -5,7 +5,7 @@ defineProps<{ icon: string; title: string; text?: string }>()
 <template>
   <div class="empty">
     <v-icon :icon="icon" size="64" class="mb-4" />
-    <div class="text-h6">{{ title }}</div>
+    <h2>{{ title }}</h2>
     <div v-if="text" class="text-medium-emphasis">{{ text }}</div>
   </div>
 </template>

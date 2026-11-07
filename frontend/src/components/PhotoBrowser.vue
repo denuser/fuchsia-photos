@@ -216,7 +216,7 @@ defineExpose({ clearSelection, say })
     <div class="content">
       <div v-if="photos.failedToOpen" class="failed">
         <v-icon icon="mdi-cloud-alert-outline" size="64" class="mb-4" />
-        <div class="text-h6 mb-2">The photos could not be loaded</div>
+        <h2 class="mb-2">The photos could not be loaded</h2>
         <v-btn text="Retry" variant="tonal" color="primary" @click="photos.reload()" />
       </div>
       <slot v-else-if="photos.empty" name="empty" />

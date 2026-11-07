@@ -89,7 +89,7 @@ async function openDetails(run: ImportRun) {
 
 <template>
   <v-container class="imports">
-    <h1 class="text-h5 mb-4">Import from folder</h1>
+    <h1 class="mb-4">Import from folder</h1>
 
     <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
 
@@ -102,7 +102,7 @@ async function openDetails(run: ImportRun) {
       </AppFormGroup>
       <v-btn type="submit" color="primary" text="Start scan" :disabled="owner === null || running" />
     </v-form>
-    <p class="text-body-2 text-medium-emphasis mb-6">
+    <p class="text-medium-emphasis mb-6">
       Photos are copied into the owner's library, and the folder stays as it is. Scanning it again adds only new photos.
     </p>
 

@@ -29,7 +29,7 @@ async function empty() {
   <PhotoBrowser ref="browser" mode="trash">
     <template #toolbar>
       <div class="d-flex align-center pa-2 ga-2">
-        <div class="text-body-2 text-medium-emphasis flex-grow-1">Photos stay here until you restore or delete them.</div>
+        <div class="text-medium-emphasis flex-grow-1">Photos stay here until you restore or delete them.</div>
         <v-btn
           prepend-icon="mdi-delete-sweep"
           text="Empty trash"

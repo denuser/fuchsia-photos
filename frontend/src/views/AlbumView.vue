@@ -88,8 +88,8 @@ async function resetCover() {
     <template #toolbar>
       <div class="d-flex align-center pa-2 ga-1">
         <v-btn :to="owned ? '/albums' : '/shared'" icon="mdi-arrow-left" size="small" variant="text" :aria-label="owned ? 'Albums' : 'Shared with me'" />
-        <div class="text-subtitle-1 text-truncate">{{ album?.name }}</div>
-        <div class="text-body-2 text-medium-emphasis ml-2 flex-grow-1">{{ album?.photoCount }} photos</div>
+        <h1 class="album-name text-truncate">{{ album?.name }}</h1>
+        <div class="text-medium-emphasis ml-2 flex-grow-1">{{ album?.photoCount }} photos</div>
         <v-menu v-if="owned">
           <template #activator="{ props }">
             <v-btn v-bind="props" icon="mdi-dots-vertical" size="small" variant="text" aria-label="Album actions" />
@@ -127,3 +127,10 @@ async function resetCover() {
     @confirm="remove"
   />
 </template>
+
+<style scoped>
+/* The album name heads the page from inside the toolbar, at the size of a section title. */
+.album-name {
+  font-size: 1.125rem;
+}
+</style>

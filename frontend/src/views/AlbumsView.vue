@@ -71,7 +71,7 @@ function startDelete(album: Album) {
 <template>
   <div class="page">
     <div class="d-flex align-center mb-4">
-      <div class="text-h6 flex-grow-1">Albums</div>
+      <h1 class="flex-grow-1">Albums</h1>
       <v-btn color="primary" prepend-icon="mdi-plus" text="New album" @click="createOpen = true" />
     </div>
     <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />

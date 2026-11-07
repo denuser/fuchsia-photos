@@ -1,7 +1,7 @@
 /*
- * Vuetify components restyled after PatternFly 6: Red Hat fonts, pill buttons,
- * 6px form controls, 16px cards and menus, 24px dialogs, and the main content
- * in a rounded panel set into the page chrome. Colors come from the themes in
+ * Vuetify components restyled after PatternFly 6: Red Hat fonts, the PatternFly
+ * type scale, pill buttons, 6px form controls, 16px cards and menus, 24px
+ * dialogs, and the main content in a rounded panel set into the page chrome. Colors come from the themes in
  * plugins/vuetify.ts. The rules sit in Vuetify's override layer, so utility
  * classes such as rounded-0 or mr-2 still win over them.
  */
@@ -20,6 +20,57 @@
 @layer vuetify-overrides {
   body {
     font-family: var(--v-font-body);
+  }
+
+  /* Text follows the PatternFly scale: 14px body text, and headings in Red
+     Hat Display sized by their level. The root stays at 16px, so rem sizes
+     elsewhere keep their meaning. */
+
+  .v-application,
+  .v-input,
+  .v-label,
+  .v-field,
+  .v-list-item-title,
+  .v-list-item-subtitle {
+    font-size: 0.875rem;
+  }
+
+  /* Helper text under a control, at the body size as PatternFly sets it. */
+  .v-messages {
+    font-size: 0.875rem;
+    letter-spacing: normal;
+  }
+
+  .v-messages__message {
+    line-height: 1.5;
+    hyphens: manual;
+  }
+
+  /* Card titles outside dialogs, such as album names, at the small heading size. */
+  .v-card-title {
+    font-family: var(--v-font-heading);
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--v-font-heading);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+  }
+
+  h3 {
+    font-size: 1.125rem;
   }
 
   .v-theme--dark,
@@ -219,14 +270,4 @@
 html.glass .v-app-bar,
 html.glass .v-navigation-drawer {
   background: transparent !important;
-}
-
-/* Headings use Red Hat Display at the PatternFly heading weight. Vuetify sets
-   typography through utility classes, which only rules outside the layers can
-   override. */
-.text-h5,
-.text-h6,
-.text-subtitle-1 {
-  font-family: var(--v-font-heading) !important;
-  font-weight: 600 !important;
 }
