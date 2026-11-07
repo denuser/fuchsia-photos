@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import AppFormGroup from './AppFormGroup.vue'
 
 const open = defineModel<boolean>({ required: true })
 
@@ -33,7 +34,9 @@ async function submit() {
       <v-form @submit.prevent="submit">
         <v-card-text>
           <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
-          <v-text-field v-model="name" :label="label" autofocus />
+          <AppFormGroup v-slot="field" :label="label" required>
+            <v-text-field v-bind="field" v-model="name" autofocus />
+          </AppFormGroup>
         </v-card-text>
         <v-card-actions>
           <v-spacer />

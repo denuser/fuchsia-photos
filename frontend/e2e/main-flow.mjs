@@ -145,7 +145,7 @@ const steps = {
     await page.getByLabel('From', { exact: true }).fill('2000-01-01')
     await page.getByLabel('To', { exact: true }).fill('2000-01-02')
     await page.getByText('No photos match these filters').waitFor()
-    await button('Clear').click()
+    await button('Clear all filters').click()
     await tiles(5)
   },
   'filter by camera': async () => {
@@ -159,7 +159,7 @@ const steps = {
     await page.getByRole('combobox', { name: 'Any of these cameras' }).click()
     await page.getByRole('option', { name: /Canon EOS R5.*0 photos/ }).waitFor()
     await page.keyboard.press('Escape')
-    await button('Clear').click()
+    await button('Clear all filters').click()
     await tiles(5)
   },
   'open the album and choose a cover': async () => {

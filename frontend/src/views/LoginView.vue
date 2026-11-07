@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import logo from '../assets/logo.png'
 import { useAuthStore } from '../stores/auth'
+import AppFormGroup from '../components/AppFormGroup.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -33,8 +34,12 @@ async function submit() {
       <v-form @submit.prevent="submit">
         <v-card-text>
           <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
-          <v-text-field v-model="login" label="Login" autocomplete="username" autofocus />
-          <v-text-field v-model="password" label="Password" type="password" autocomplete="current-password" />
+          <AppFormGroup v-slot="field" label="Login" required>
+            <v-text-field v-bind="field" v-model="login" autocomplete="username" autofocus />
+          </AppFormGroup>
+          <AppFormGroup v-slot="field" label="Password" required>
+            <v-text-field v-bind="field" v-model="password" type="password" autocomplete="current-password" />
+          </AppFormGroup>
           <v-btn type="submit" color="primary" block text="Log in" :loading="submitting" :disabled="!login || !password" />
         </v-card-text>
       </v-form>

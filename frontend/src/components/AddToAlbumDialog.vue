@@ -3,6 +3,7 @@ import { ref, shallowRef, watch } from 'vue'
 
 import { api, type Album } from '../api/client'
 import { inBatches } from '../stores/photos'
+import AppFormGroup from './AppFormGroup.vue'
 
 const open = defineModel<boolean>({ required: true })
 
@@ -57,8 +58,10 @@ async function createAndAdd() {
     <v-card title="Add to album">
       <v-card-text>
         <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
-        <v-form class="d-flex ga-2 mb-2" @submit.prevent="createAndAdd">
-          <v-text-field v-model="newName" label="New album" hide-details density="compact" />
+        <v-form class="d-flex align-end ga-2 mb-2" @submit.prevent="createAndAdd">
+          <AppFormGroup v-slot="field" label="New album" class="flex-grow-1 mb-0">
+            <v-text-field v-bind="field" v-model="newName" />
+          </AppFormGroup>
           <v-btn type="submit" color="primary" text="Create" :disabled="!newName.trim()" :loading="saving" />
         </v-form>
         <v-list v-if="albums.length > 0" density="compact" max-height="300" class="overflow-y-auto">

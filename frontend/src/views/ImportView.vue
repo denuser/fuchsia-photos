@@ -4,6 +4,7 @@ import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
 import { api, type ImportProblem, type ImportRun } from '../api/client'
 import AppAutocomplete from '../components/AppAutocomplete.vue'
 import { useUsersStore } from '../stores/users'
+import AppFormGroup from '../components/AppFormGroup.vue'
 
 const POLL_MS = 2000
 
@@ -91,25 +92,13 @@ async function openDetails(run: ImportRun) {
 
     <v-alert v-if="error" type="error" density="compact" class="mb-4" :text="error" />
 
-    <v-form class="d-flex flex-wrap align-start ga-4 mb-2" @submit.prevent="start">
-      <AppAutocomplete
-        v-model="owner"
-        :items="users.active"
-        item-title="login"
-        item-value="id"
-        label="Owner"
-        density="compact"
-        hide-details
-        class="field"
-      />
-      <AppAutocomplete
-        v-model="folder"
-        :items="folderItems"
-        label="Folder"
-        density="compact"
-        hide-details
-        class="field"
-      />
+    <v-form class="d-flex flex-wrap align-end ga-4 mb-2" @submit.prevent="start">
+      <AppFormGroup v-slot="field" label="Owner" required class="field mb-0">
+        <AppAutocomplete v-bind="field" v-model="owner" :items="users.active" item-title="login" item-value="id" />
+      </AppFormGroup>
+      <AppFormGroup v-slot="field" label="Folder" required class="field mb-0">
+        <AppAutocomplete v-bind="field" v-model="folder" :items="folderItems" />
+      </AppFormGroup>
       <v-btn type="submit" color="primary" text="Start scan" :disabled="owner === null || running" />
     </v-form>
     <p class="text-body-2 text-medium-emphasis mb-6">

@@ -197,7 +197,8 @@ function onDrop(event: DragEvent) {
             :items="tags.tags"
             item-title="name"
             item-value="id"
-            label="Any of these tags"
+            placeholder="Any of these tags"
+            aria-label="Any of these tags"
             density="compact"
             hide-details
             multiple
@@ -224,7 +225,8 @@ function onDrop(event: DragEvent) {
                 item-title="name"
                 item-value="name"
                 :item-props="photoCount"
-                :label="field.label"
+                :placeholder="field.label"
+                :aria-label="field.label"
                 density="compact"
                 clearable
                 hide-details
@@ -236,7 +238,8 @@ function onDrop(event: DragEvent) {
                 :key="field.key"
                 :model-value="field.value"
                 type="date"
-                :label="field.label"
+                :prefix="field.label"
+                :aria-label="field.label"
                 density="compact"
                 hide-details
                 @update:model-value="setFilter({ [field.key]: $event })"
@@ -252,7 +255,8 @@ function onDrop(event: DragEvent) {
               item-title="name"
               item-value="name"
               :item-props="photoCount"
-              :label="field.label"
+              :placeholder="field.label"
+              :aria-label="field.label"
               density="compact"
               hide-details
               multiple
@@ -264,15 +268,16 @@ function onDrop(event: DragEvent) {
               :key="field.key"
               :model-value="field.value"
               type="date"
-              :label="field.label"
+              :prefix="field.label"
+              :aria-label="field.label"
               density="compact"
               hide-details
               class="date-filter"
               @update:model-value="setFilter({ [field.key]: $event })"
             />
           </template>
-          <v-btn v-if="filtered && xs" icon="mdi-filter-remove-outline" variant="text" aria-label="Clear" @click="router.replace({ query: {} })" />
-          <v-btn v-else-if="filtered" text="Clear" variant="text" @click="router.replace({ query: {} })" />
+          <v-btn v-if="filtered && xs" icon="mdi-filter-remove-outline" variant="text" aria-label="Clear all filters" @click="router.replace({ query: {} })" />
+          <v-btn v-else-if="filtered" text="Clear all filters" variant="text" @click="router.replace({ query: {} })" />
         </div>
       </template>
       <template #empty>
@@ -303,7 +308,7 @@ function onDrop(event: DragEvent) {
 }
 
 .tag-filter {
-  flex: 1 1 160px;
+  flex: 1 1 200px;
   max-width: 480px;
 }
 
@@ -313,7 +318,7 @@ function onDrop(event: DragEvent) {
 }
 
 .date-filter {
-  flex: 0 1 170px;
+  flex: 0 1 196px;
 }
 
 .filter-menu {

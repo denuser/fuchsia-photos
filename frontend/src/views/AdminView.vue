@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import { api, type MetadataSettings, type PreviewSettings } from '../api/client'
+import AppFormGroup from '../components/AppFormGroup.vue'
 
 const formats = [
   { title: 'WebP', value: 'webp' },
@@ -94,65 +95,66 @@ async function save() {
         text="These settings apply to new photos. Photos that are already processed keep their previews."
       />
 
-      <v-select v-model="settings.format" variant="outlined" :items="formats" label="Preview format" density="compact" class="mb-2" />
+      <AppFormGroup v-slot="field" label="Preview format" required>
+        <v-select v-bind="field" v-model="settings.format" variant="outlined" :items="formats" density="compact" />
+      </AppFormGroup>
 
       <template v-if="settings.format === 'webp'">
+        <AppFormGroup v-slot="field" label="WebP quality" required>
+          <v-text-field
+            v-bind="field"
+            v-model.number="settings.webpQuality"
+            :rules="rules.quality"
+            type="number"
+            hint="From 1 to 100. Higher looks better and takes more space."
+            density="compact"
+          />
+        </AppFormGroup>
+        <AppFormGroup v-slot="field" label="WebP compression effort" required>
+          <v-text-field
+            v-bind="field"
+            v-model.number="settings.webpEffort"
+            :rules="rules.effort"
+            type="number"
+            hint="From 0 to 6. Higher makes smaller files, but takes longer."
+            density="compact"
+          />
+        </AppFormGroup>
+      </template>
+      <AppFormGroup v-else v-slot="field" label="JPEG quality" required>
         <v-text-field
-          v-model.number="settings.webpQuality"
+          v-bind="field"
+          v-model.number="settings.jpegQuality"
           :rules="rules.quality"
           type="number"
-          label="WebP quality"
           hint="From 1 to 100. Higher looks better and takes more space."
-          persistent-hint
           density="compact"
-          class="mb-2"
         />
-        <v-text-field
-          v-model.number="settings.webpEffort"
-          :rules="rules.effort"
-          type="number"
-          label="WebP compression effort"
-          hint="From 0 to 6. Higher makes smaller files, but takes longer."
-          persistent-hint
-          density="compact"
-          class="mb-2"
-        />
-      </template>
-      <v-text-field
-        v-else
-        v-model.number="settings.jpegQuality"
-        :rules="rules.quality"
-        type="number"
-        label="JPEG quality"
-        hint="From 1 to 100. Higher looks better and takes more space."
-        persistent-hint
-        density="compact"
-        class="mb-2"
-      />
+      </AppFormGroup>
 
-      <v-text-field
-        v-model.number="settings.gridEdge"
-        :rules="rules.gridEdge"
-        data-testid="grid-edge"
-        type="number"
-        label="Grid preview size"
-        suffix="px"
-        hint="Shortest side, from 200 to 800 pixels."
-        persistent-hint
-        density="compact"
-        class="mb-2"
-      />
-      <v-text-field
-        v-model.number="settings.viewerEdge"
-        :rules="rules.viewerEdge"
-        type="number"
-        label="Viewer preview size"
-        suffix="px"
-        hint="Longest side, from 1024 to 4096 pixels."
-        persistent-hint
-        density="compact"
-        class="mb-6"
-      />
+      <AppFormGroup v-slot="field" label="Grid preview size" required>
+        <v-text-field
+          v-bind="field"
+          v-model.number="settings.gridEdge"
+          :rules="rules.gridEdge"
+          data-testid="grid-edge"
+          type="number"
+          suffix="px"
+          hint="Shortest side, from 200 to 800 pixels."
+          density="compact"
+        />
+      </AppFormGroup>
+      <AppFormGroup v-slot="field" label="Viewer preview size" required>
+        <v-text-field
+          v-bind="field"
+          v-model.number="settings.viewerEdge"
+          :rules="rules.viewerEdge"
+          type="number"
+          suffix="px"
+          hint="Longest side, from 1024 to 4096 pixels."
+          density="compact"
+        />
+      </AppFormGroup>
 
       <h2 class="text-h6 mb-2">Photo details</h2>
       <v-switch

@@ -43,7 +43,8 @@ function chooseOwner(id: number | null) {
           :items="users.everyone"
           item-title="login"
           item-value="id"
-          label="Owner"
+          placeholder="Any owner"
+          aria-label="Owner"
           density="compact"
           hide-details
           clearable

@@ -3,6 +3,7 @@ import { onMounted, ref, shallowRef } from 'vue'
 
 import { api, type Role, type User } from '../api/client'
 import { useAuthStore } from '../stores/auth'
+import AppFormGroup from '../components/AppFormGroup.vue'
 
 const auth = useAuthStore()
 
@@ -127,9 +128,15 @@ async function savePassword() {
         <v-form @submit.prevent="create">
           <v-card-text>
             <v-alert v-if="formError" type="error" density="compact" class="mb-4" :text="formError" />
-            <v-text-field v-model="form.login" label="Login" autocomplete="off" />
-            <v-text-field v-model="form.password" label="Password" type="password" autocomplete="new-password" />
-            <v-select v-model="form.role" variant="outlined" :items="roles" label="Role" />
+            <AppFormGroup v-slot="field" label="Login" required>
+              <v-text-field v-bind="field" v-model="form.login" autocomplete="off" />
+            </AppFormGroup>
+            <AppFormGroup v-slot="field" label="Password" required>
+              <v-text-field v-bind="field" v-model="form.password" type="password" autocomplete="new-password" />
+            </AppFormGroup>
+            <AppFormGroup v-slot="field" label="Role" required>
+              <v-select v-bind="field" v-model="form.role" variant="outlined" :items="roles" />
+            </AppFormGroup>
           </v-card-text>
           <v-card-actions>
             <v-spacer />
@@ -145,14 +152,15 @@ async function savePassword() {
         <v-form @submit.prevent="savePassword">
           <v-card-text>
             <v-alert v-if="passwordError" type="error" density="compact" class="mb-4" :text="passwordError" />
-            <v-text-field
-              v-model="newPassword"
-              label="New password"
-              type="password"
-              autocomplete="new-password"
-              hint="This user will be logged out everywhere."
-              persistent-hint
-            />
+            <AppFormGroup v-slot="field" label="New password" required>
+              <v-text-field
+                v-bind="field"
+                v-model="newPassword"
+                type="password"
+                autocomplete="new-password"
+                hint="This user will be logged out everywhere."
+              />
+            </AppFormGroup>
           </v-card-text>
           <v-card-actions>
             <v-spacer />

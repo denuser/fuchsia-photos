@@ -5,6 +5,7 @@ import { api, type UserRef, type Visibility } from '../api/client'
 import { inBatches } from '../stores/photos'
 import { useUsersStore } from '../stores/users'
 import AppAutocomplete from './AppAutocomplete.vue'
+import AppFormGroup from './AppFormGroup.vue'
 
 const open = defineModel<boolean>({ required: true })
 
@@ -130,24 +131,15 @@ async function save() {
           <template v-if="single">
             <v-switch v-model="everyone" label="Visible to all users" color="primary" density="compact" hide-details class="mb-4" />
           </template>
-          <v-select v-else v-model="visibilityChoice" variant="outlined" :items="visibilityChoices" label="Visibility" class="mb-2" />
-          <AppAutocomplete
-            v-model="chosen"
-            :items="candidates"
-            item-title="login"
-            item-value="id"
-            label="Share with"
-            multiple
-          />
-          <AppAutocomplete
-            v-if="!single"
-            v-model="toRemove"
-            :items="users.everyone"
-            item-title="login"
-            item-value="id"
-            label="Stop sharing with"
-            multiple
-          />
+          <AppFormGroup v-else v-slot="field" label="Visibility">
+            <v-select v-bind="field" v-model="visibilityChoice" variant="outlined" :items="visibilityChoices" />
+          </AppFormGroup>
+          <AppFormGroup v-slot="field" label="Share with">
+            <AppAutocomplete v-bind="field" v-model="chosen" :items="candidates" item-title="login" item-value="id" multiple />
+          </AppFormGroup>
+          <AppFormGroup v-if="!single" v-slot="field" label="Stop sharing with">
+            <AppAutocomplete v-bind="field" v-model="toRemove" :items="users.everyone" item-title="login" item-value="id" multiple />
+          </AppFormGroup>
           <div class="text-body-2 text-medium-emphasis">
             Recipients can download the original files, which keep their metadata, including location.
           </div>
