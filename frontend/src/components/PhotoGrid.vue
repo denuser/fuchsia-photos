@@ -221,7 +221,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="grid">
-    <div ref="scroller" class="scroller" :class="{ scrubbed: scrubber }" @scroll.passive="onScroll">
+    <div ref="scroller" class="scroller" data-testid="grid-scroller" :class="{ scrubbed: scrubber }" @scroll.passive="onScroll">
       <div class="canvas" :style="canvasStyle">
         <h2 v-for="header in headers" :key="header.key" class="month" data-testid="month" :style="header.style">
           {{ header.title }}

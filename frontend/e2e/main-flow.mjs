@@ -112,6 +112,17 @@ const steps = {
     // The timeline groups photos by month, after reading the dates from EXIF.
     await page.getByTestId('month').first().waitFor()
   },
+  'the timeline scrolls in a short window': async () => {
+    await page.setViewportSize({ width: 1280, height: 360 })
+    try {
+      await tile(0).hover()
+      await page.mouse.wheel(0, 400)
+      await waitFor('the grid to scroll', () => document.querySelector('[data-testid=grid-scroller]').scrollTop > 0)
+      await page.mouse.wheel(0, -400)
+    } finally {
+      await page.setViewportSize({ width: 1280, height: 800 })
+    }
+  },
   'select a range': async () => {
     await select(0)
     await page.getByTestId('tile-check').nth(2).click({ modifiers: ['Shift'] })

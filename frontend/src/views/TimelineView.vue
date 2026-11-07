@@ -293,6 +293,7 @@ function onDrop(event: DragEvent) {
 <style scoped>
 .timeline {
   position: relative;
+  height: 100%;
 }
 
 .filters {
