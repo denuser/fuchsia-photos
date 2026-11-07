@@ -25,16 +25,23 @@ const HIDE_AFTER = 1500
 const track = computed(() => Math.max(1, props.viewport - PAD * 2 - HANDLE))
 const range = computed(() => Math.max(1, props.height - props.viewport))
 
-function toTrack(y: number) {
-  return PAD + Math.min(1, Math.max(0, y / range.value)) * track.value
+// The handle stands for a reading line on the screen, which moves from the
+// top edge at the start of the list to the bottom edge at its end. A share of
+// the track is the same share of the whole list's height, so the year marks
+// spread over the track and the last screen's months get their own places.
+const share = computed(() => Math.min(1, Math.max(0, props.scrollTop / range.value)))
+const readingLine = computed(() => Math.min(props.height - 1, share.value * props.height))
+
+function toTrack(ratio: number) {
+  return PAD + Math.min(1, Math.max(0, ratio)) * track.value
 }
 
-const handleTop = computed(() => toTrack(props.scrollTop))
+const handleTop = computed(() => toTrack(share.value))
 
 const labels = computed(() => {
   const shown: { top: number; label: string }[] = []
   for (const mark of props.marks) {
-    const top = toTrack(mark.y) + HANDLE / 2
+    const top = toTrack(mark.y / props.height) + HANDLE / 2
     if (shown.length === 0 || top - shown.at(-1)!.top >= LABEL_SPACING) {
       shown.push({ top, label: mark.label })
     }
@@ -57,7 +64,7 @@ watch(
 
 onBeforeUnmount(() => clearTimeout(hideTimer))
 
-const bubble = computed(() => (dragging.value ? props.labelAt(props.scrollTop) : ''))
+const bubble = computed(() => (dragging.value ? props.labelAt(readingLine.value) : ''))
 
 const strip = ref<HTMLElement>()
 
