@@ -85,11 +85,14 @@ defineProps<{
     color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   }
 
+  /* The row is as tall as a control, so that actions shown only some of the
+     time do not change the height of the header. */
   .page-header__main {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 16px;
+    min-height: 40px;
   }
 
   .page-header__text {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useDisplay } from 'vuetify'
 
 import { api, type Album } from '../api/client'
 import AlbumCard from '../components/AlbumCard.vue'
@@ -16,6 +17,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const photos = usePhotosStore()
 const users = useUsersStore()
+const { xs } = useDisplay()
 
 // The address holds the tab, so that it survives a reload.
 const tab = computed(() => (route.query.tab === 'photos' ? 'photos' : 'albums'))
@@ -57,6 +59,17 @@ async function setIncludesAlbums(value: boolean | null) {
   await photos.reload()
 }
 
+// The switch shows in the header or, on a phone, above the photos.
+const includesAlbums = computed(() => ({
+  modelValue: auth.user?.sharedIncludesAlbums,
+  disabled: saving.value,
+  label: 'Include photos from shared albums',
+  color: 'primary',
+  density: 'compact' as const,
+  hideDetails: true,
+  'onUpdate:modelValue': setIncludesAlbums,
+}))
+
 function albumSubtitle(album: Album) {
   const owner = users.login(album.ownerId)
   return owner ? `${album.photoCount} photos · ${owner}` : `${album.photoCount} photos`
@@ -64,50 +77,57 @@ function albumSubtitle(album: Album) {
 </script>
 
 <template>
-  <div v-if="tab === 'albums'" class="page">
-    <AppPageHeader title="Shared with me" />
-    <div class="page-section">
-      <v-tabs :model-value="tab" density="compact" class="mb-4" @update:model-value="chooseTab">
+  <!-- Both tabs share the header and the tab row, so switching keeps them in
+       place and only the content below changes. The switch for the photos
+       tab sits in the header; on a phone it would not fit beside the title,
+       so it heads the photos instead. -->
+  <div class="shared">
+    <AppPageHeader title="Shared with me">
+      <template v-if="tab === 'photos' && !xs" #actions>
+        <v-switch v-bind="includesAlbums" />
+      </template>
+    </AppPageHeader>
+    <div class="px-4 px-sm-6 pb-2">
+      <v-tabs :model-value="tab" @update:model-value="chooseTab">
         <v-tab value="albums" text="Albums" />
         <v-tab value="photos" text="Photos" />
       </v-tabs>
+      <v-alert v-if="error" type="error" density="compact" class="mt-2" :title="error" />
+    </div>
+
+    <div v-if="tab === 'albums'" class="page page-section pt-2">
       <EmptyState v-if="albumsLoaded && albums.length === 0" icon="mdi-image-album" title="No albums are shared with you" />
       <div class="albums">
         <AlbumCard v-for="album in albums" :key="album.id" :album="album" :subtitle="albumSubtitle(album)" />
       </div>
     </div>
-  </div>
 
-  <PhotoBrowser v-else mode="shared">
-    <template #header>
-      <AppPageHeader title="Shared with me" />
-    </template>
-    <template #toolbar>
-      <div class="d-flex flex-wrap align-center ga-4 px-4 px-sm-6 pb-2">
-        <v-tabs :model-value="tab" density="compact" class="flex-grow-1" @update:model-value="chooseTab">
-          <v-tab value="albums" text="Albums" />
-          <v-tab value="photos" text="Photos" />
-        </v-tabs>
-        <v-alert v-if="error" type="error" density="compact" :title="error" />
-        <v-switch
-          :model-value="auth.user?.sharedIncludesAlbums"
-          :disabled="saving"
-          label="Include photos from shared albums"
-          color="primary"
-          density="compact"
-          hide-details
-          class="flex-grow-0"
-          @update:model-value="setIncludesAlbums"
-        />
-      </div>
-    </template>
-    <template #empty>
-      <EmptyState icon="mdi-account-multiple-outline" title="No photos are shared with you" />
-    </template>
-  </PhotoBrowser>
+    <PhotoBrowser v-else mode="shared" class="photos">
+      <template v-if="xs" #toolbar>
+        <div class="px-4 pb-2">
+          <v-switch v-bind="includesAlbums" />
+        </div>
+      </template>
+      <template #empty>
+        <EmptyState icon="mdi-account-multiple-outline" title="No photos are shared with you" />
+      </template>
+    </PhotoBrowser>
+  </div>
 </template>
 
 <style scoped>
+.shared {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.shared > .page,
+.shared > .photos {
+  flex: 1;
+  min-height: 0;
+}
+
 .albums {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

@@ -108,7 +108,7 @@ async function openDetails(run: ImportRun) {
         <v-btn type="submit" color="primary" text="Start scan" :disabled="owner === null || running" />
       </v-form>
 
-      <v-table v-if="runs.length > 0" density="compact">
+      <v-table v-if="runs.length > 0">
         <thead>
           <tr>
             <th>Started</th>
@@ -163,7 +163,7 @@ async function openDetails(run: ImportRun) {
         max-width="720"
         @update:model-value="detailsOf = null"
       >
-        <v-table density="compact">
+        <v-table>
           <tbody>
             <tr v-for="problem in problems" :key="problem.path">
               <td class="path">{{ problem.path }}</td>

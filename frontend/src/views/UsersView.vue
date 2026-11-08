@@ -168,4 +168,11 @@ async function savePassword() {
 .role {
   width: 200px;
 }
+
+/* A plain field keeps room for a label above its text, which this one does
+   not have, so its value would sit lower than the rest of the row. */
+.role :deep(.v-field__input) {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
 </style>

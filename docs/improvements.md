@@ -64,12 +64,12 @@ Done:
 - PatternFly alerts: a border, an icon and a title in the status color. Notices about finished actions are toast alerts stacked in the top right corner, under the app bar so that they leave the Upload button visible; errors stay until closed.
 - Applied filters on the timeline as chip groups under the toolbar, one per category with its own clear button, and "Clear all filters". The tag, camera and lens fields show only a count of chosen values.
 - Page headers on the `AppPageHeader` wrapper: breadcrumbs, the title, a short description where it helps and the page actions on the right, with the PatternFly section padding of 16px and 24px. Every page has one except the timeline, which keeps its height for photos. An album shows "Albums / Trip" or "Shared with me / Trip" instead of a back arrow. Pages without a photo grid scroll as a whole, with their content aligned to the header.
+- PatternFly tables and tabs. Tables are compact, with a line under every row including the last, column titles at 12px in bold, and the outer columns lined up with the page title. Tabs have a line under the whole row, the current tab underlined in fuchsia with rounded ends, the others in the subtle text color, and 8px of padding at the sides.
 
 Left, in order of priority:
 
-1. **Tables and tabs.** The users, tags and import tables with PatternFly row borders, header style and compact density. Tabs with the PatternFly underline on the "Shared with me" page.
-2. **Empty states.** The PatternFly layout: a large icon, a title, the text and a primary action button.
-3. **Focus rings.** A 2px accent outline on keyboard focus, which PatternFly draws on every control. Vuetify shows an overlay instead.
-4. **Icons.** PatternFly uses its own icons and Font Awesome; the application uses Material Design Icons. Changing them is a new dependency and touches every page, so it comes last.
+1. **Empty states.** The PatternFly layout: a large icon, a title, the text and a primary action button.
+2. **Focus rings.** A 2px accent outline on keyboard focus, which PatternFly draws on every control. Vuetify shows an overlay instead.
+3. **Icons.** PatternFly uses its own icons and Font Awesome; the application uses Material Design Icons. Changing them is a new dependency and touches every page, so it comes last.
 
 A second visual style like PatternFly's Project Felt is out of scope for now.

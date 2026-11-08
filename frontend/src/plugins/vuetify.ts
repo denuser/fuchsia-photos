@@ -126,5 +126,8 @@ export const vuetify = createVuetify({
     VAutocomplete: field,
     VSwitch: { color: 'primary', inset: true },
     VCheckbox: { color: 'primary' },
+    // PatternFly's compact tables: 8px above and below the cell text.
+    VTable: { density: 'compact' },
+    VTabs: { density: 'compact' },
   },
 })
