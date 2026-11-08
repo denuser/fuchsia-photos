@@ -8,6 +8,7 @@ import { usePhotosStore } from '../stores/photos'
 import { useUsersStore } from '../stores/users'
 import AddToAlbumDialog from './AddToAlbumDialog.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
+import EmptyState from './EmptyState.vue'
 import PhotoGrid from './PhotoGrid.vue'
 import PhotoViewer from './PhotoViewer.vue'
 import ShareDialog from './ShareDialog.vue'
@@ -214,11 +215,17 @@ defineExpose({ clearSelection, say })
     <slot v-else name="toolbar" />
 
     <div class="content">
-      <div v-if="photos.failedToOpen" class="failed">
-        <v-icon icon="mdi-cloud-alert-outline" size="64" class="mb-4" />
-        <h2 class="mb-2">The photos could not be loaded</h2>
-        <v-btn text="Retry" variant="tonal" color="primary" @click="photos.reload()" />
-      </div>
+      <EmptyState
+        v-if="photos.failedToOpen"
+        icon="mdi-cloud-alert-outline"
+        title="The photos could not be loaded"
+        text="Check the connection and try again."
+        danger
+      >
+        <template #actions>
+          <v-btn text="Retry" color="primary" @click="photos.reload()" />
+        </template>
+      </EmptyState>
       <slot v-else-if="photos.empty" name="empty" />
       <PhotoGrid
         v-else
@@ -271,13 +278,5 @@ defineExpose({ clearSelection, say })
 .content {
   flex: 1;
   min-height: 0;
-}
-
-.failed {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
 }
 </style>

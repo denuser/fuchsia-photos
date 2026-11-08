@@ -117,7 +117,11 @@ async function resetCover() {
       />
     </template>
     <template #empty>
-      <EmptyState v-if="owned" icon="mdi-image-album" title="This album is empty" text="Select photos in the timeline and add them here." />
+      <EmptyState v-if="owned" icon="mdi-image-album" title="This album is empty" text="Select photos in the timeline and add them here.">
+        <template #actions>
+          <v-btn text="Open the timeline" color="primary" to="/" />
+        </template>
+      </EmptyState>
       <EmptyState v-else icon="mdi-image-album" title="This album is empty" />
     </template>
   </PhotoBrowser>

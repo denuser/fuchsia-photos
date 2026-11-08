@@ -79,7 +79,16 @@ function startDelete(album: Album) {
     <div class="page-section">
       <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
-      <EmptyState v-if="loaded && albums.length === 0" icon="mdi-image-album" title="No albums yet" text="Create one here, or select photos and add them to an album." />
+      <EmptyState
+        v-if="loaded && albums.length === 0"
+        icon="mdi-image-album"
+        title="No albums yet"
+        text="Create an album here, or select photos in the timeline and add them to a new one."
+      >
+        <template #actions>
+          <v-btn text="Create an album" color="primary" prepend-icon="mdi-plus" @click="createOpen = true" />
+        </template>
+      </EmptyState>
 
       <div class="albums">
         <AlbumCard v-for="album in albums" :key="album.id" :album="album" :subtitle="`${album.photoCount} photos`">

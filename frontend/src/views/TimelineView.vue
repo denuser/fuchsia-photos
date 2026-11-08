@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, inject, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 
@@ -11,10 +11,11 @@ import PhotoBrowser from '../components/PhotoBrowser.vue'
 import { useAuthStore } from '../stores/auth'
 import { listFilters, usePhotosStore, type PhotoQuery } from '../stores/photos'
 import { useTagsStore } from '../stores/tags'
-import { useUploadsStore } from '../stores/uploads'
+import { pickUploadsKey, useUploadsStore } from '../stores/uploads'
 
 const route = useRoute()
 const router = useRouter()
+const pickUploads = inject(pickUploadsKey, () => {})
 const auth = useAuthStore()
 const photos = usePhotosStore()
 const tags = useTagsStore()
@@ -324,8 +325,16 @@ function onDrop(event: DragEvent) {
         <FilterChips :groups="filterGroups" @remove="removeChip" @clear="clearGroup" @clear-all="router.replace({ query: {} })" />
       </template>
       <template #empty>
-        <EmptyState v-if="filtered" icon="mdi-image-search-outline" title="No photos match these filters" />
-        <EmptyState v-else icon="mdi-image-multiple-outline" title="No photos yet" text="Use the Upload button, or drag photos here." />
+        <EmptyState v-if="filtered" icon="mdi-image-search-outline" title="No photos match these filters" text="Change the filters, or clear them to see every photo.">
+          <template #actions>
+            <v-btn text="Clear all filters" variant="text" color="primary" @click="router.replace({ query: {} })" />
+          </template>
+        </EmptyState>
+        <EmptyState v-else icon="mdi-image-multiple-outline" title="No photos yet" text="Upload photos from this device, or drag them here.">
+          <template #actions>
+            <v-btn text="Upload photos" color="primary" prepend-icon="mdi-upload" @click="pickUploads" />
+          </template>
+        </EmptyState>
       </template>
     </PhotoBrowser>
 

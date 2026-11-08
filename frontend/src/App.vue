@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, watchEffect } from 'vue'
+import { computed, provide, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDisplay, useTheme } from 'vuetify'
 
@@ -10,7 +10,7 @@ import UploadPanel from './components/UploadPanel.vue'
 import { useAppearanceStore } from './stores/appearance'
 import { useAuthStore } from './stores/auth'
 import { usePhotosStore } from './stores/photos'
-import { useUploadsStore } from './stores/uploads'
+import { pickUploadsKey, useUploadsStore } from './stores/uploads'
 
 const auth = useAuthStore()
 const photos = usePhotosStore()
@@ -57,6 +57,7 @@ const navItems = computed(() => [
   ...(auth.isAdmin ? [{ to: '/all', icon: 'mdi-shield-account-outline', title: 'All photos' }] : []),
 ])
 const fileInput = ref<HTMLInputElement>()
+provide(pickUploadsKey, () => fileInput.value?.click())
 
 function chosen(event: Event) {
   const input = event.target as HTMLInputElement

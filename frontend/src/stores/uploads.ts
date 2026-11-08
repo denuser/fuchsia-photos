@@ -1,8 +1,12 @@
 import { defineStore } from 'pinia'
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef, type InjectionKey } from 'vue'
 
 import { API_BASE, notifyUnauthorized, type UploadResult } from '../api/client'
 import { usePhotosStore } from './photos'
+
+// Opens the file picker of the Upload button in the app bar. App provides it,
+// so that a page can offer the same choice, as the empty timeline does.
+export const pickUploadsKey: InjectionKey<() => void> = Symbol('pickUploads')
 
 const CONCURRENCY = 3
 const MAX_ATTEMPTS = 3

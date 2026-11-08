@@ -54,7 +54,11 @@ function startDelete(tag: Tag) {
     <div class="page-section">
       <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
-      <EmptyState v-if="loaded && tags.tags.length === 0" icon="mdi-tag-multiple-outline" title="No tags yet" text="Select photos in the timeline to tag them." />
+      <EmptyState v-if="loaded && tags.tags.length === 0" icon="mdi-tag-multiple-outline" title="No tags yet" text="Select photos in the timeline to tag them.">
+        <template #actions>
+          <v-btn text="Open the timeline" color="primary" to="/" />
+        </template>
+      </EmptyState>
 
       <v-table v-else-if="loaded">
         <thead>
