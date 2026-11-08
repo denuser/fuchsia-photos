@@ -16,7 +16,8 @@ const PHOTOS = ['landscape.jpg', 'landscape.png', 'landscape.webp', 'landscape.h
 mkdirSync(RESULTS, { recursive: true })
 
 const browser = await chromium.launch({ channel: 'chrome', headless: !process.env.E2E_HEADED })
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+// The date fields take dates the way the browser's language writes them, so the language is fixed.
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
 
 const problems = []
 let loggedIn = false
@@ -51,6 +52,14 @@ async function expectRequest(path, action) {
     page.waitForResponse((r) => r.request().method() !== 'GET' && new URL(r.url()).pathname.endsWith(path) && r.ok(), { timeout: 30_000 }),
     action(),
   ])
+}
+
+// Types a day, given as YYYY-MM-DD, into a date field the way en-US writes it.
+async function typeDate(label, day) {
+  const [year, month, date] = day.split('-')
+  const field = page.getByLabel(label, { exact: true })
+  await field.fill(`${month}/${date}/${year}`)
+  await field.press('Enter')
 }
 
 async function select(n) {
@@ -156,8 +165,8 @@ const steps = {
     await tiles(2)
   },
   'filter by date': async () => {
-    await page.getByLabel('From', { exact: true }).fill('2000-01-01')
-    await page.getByLabel('To', { exact: true }).fill('2000-01-02')
+    await typeDate('From', '2000-01-01')
+    await typeDate('To', '2000-01-02')
     await page.getByText('No photos match these filters').waitFor()
     // The empty state offers the same way out as the chips above it.
     await page.getByTestId('empty-state').getByRole('button', { name: 'Clear all filters' }).click()
@@ -169,8 +178,8 @@ const steps = {
     await page.keyboard.press('Escape')
     await tiles(1)
     // The other filters leave the chosen camera no photos, and it stays in its list to be removed.
-    await page.getByLabel('From', { exact: true }).fill('2000-01-01')
-    await page.getByLabel('To', { exact: true }).fill('2000-01-02')
+    await typeDate('From', '2000-01-01')
+    await typeDate('To', '2000-01-02')
     await page.getByRole('combobox', { name: 'Any of these cameras' }).click()
     await page.getByRole('option', { name: /Canon EOS R5.*0 photos/ }).waitFor()
     await page.keyboard.press('Escape')
@@ -206,7 +215,7 @@ const steps = {
     await page.getByText('1 selected').waitFor({ state: 'hidden' })
   },
   'the second user sees them, read-only': async () => {
-    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
     const guest = await context.newPage()
     guest.on('pageerror', (error) => problems.push(`second user's page error: ${error.message}`))
     await guest.goto(BASE)

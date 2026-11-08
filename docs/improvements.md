@@ -66,6 +66,7 @@ Done:
 - Page headers on the `AppPageHeader` wrapper: breadcrumbs, the title, a short description where it helps and the page actions on the right, with the PatternFly section padding of 16px and 24px. Every page has one except the timeline, which keeps its height for photos. An album shows "Albums / Trip" or "Shared with me / Trip" instead of a back arrow. Pages without a photo grid scroll as a whole, with their content aligned to the header.
 - PatternFly tables and tabs. Tables are compact, with a line under every row including the last, column titles at 12px in bold, and the outer columns lined up with the page title. Tabs have a line under the whole row, the current tab underlined in fuchsia with rounded ends, the others in the subtle text color, and 8px of padding at the sides.
 - PatternFly empty states on the `EmptyState` component: a 56px icon in a subtle color, red for a failure, the title, a line of text and the action that leads out. The empty timeline offers "Upload photos", no matching photos "Clear all filters", no albums "Create an album", an empty album and no tags "Open the timeline", and a failed load "Retry".
+- Date filters on Vuetify's `VDateInput` instead of the browser's own date field: an outlined field with "From" or "To" and the format hint inside, a calendar button, and a calendar popover in the application's theme. Dates are typed and shown the way the browser's language writes them, in the fields, the calendar and the filter chips, while the address keeps YYYY-MM-DD.
 
 Left, in order of priority:
 

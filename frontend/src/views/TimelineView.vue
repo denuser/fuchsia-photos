@@ -106,9 +106,24 @@ const cameraFields = computed(() => [
 ])
 
 // The filters in use, as chip groups under the toolbar.
+// The address keeps a day as YYYY-MM-DD; the date fields work with Date.
+function asDate(day: string) {
+  const date = new Date(`${day}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function asDay(value: unknown) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    return null
+  }
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+}
+
 function dayTitle(date: string) {
   const day = new Date(`${date}T00:00:00`)
-  return Number.isNaN(day.getTime()) ? date : day.toLocaleDateString()
+  // Written as the date fields write it, with two-digit days and months.
+  return Number.isNaN(day.getTime()) ? date : day.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
 const filterGroups = computed<FilterGroup[]>(() => [
@@ -277,16 +292,18 @@ function onDrop(event: DragEvent) {
                 multiple
                 @update:model-value="setFilter({ [field.key]: $event })"
               />
-              <v-text-field
+              <v-date-input
                 v-for="field in dateFields"
                 :key="field.key"
-                :model-value="field.value"
-                type="date"
+                :model-value="asDate(field.value)"
                 :prefix="field.label"
                 :aria-label="field.label"
+                persistent-placeholder
+                prepend-icon=""
+                append-inner-icon="mdi-calendar-month-outline"
                 density="compact"
                 hide-details
-                @update:model-value="setFilter({ [field.key]: $event })"
+                @update:model-value="setFilter({ [field.key]: asDay($event) })"
               />
             </v-card>
           </v-menu>
@@ -308,17 +325,19 @@ function onDrop(event: DragEvent) {
               class="camera-filter"
               @update:model-value="setFilter({ [field.key]: $event })"
             />
-            <v-text-field
+            <v-date-input
               v-for="field in dateFields"
               :key="field.key"
-              :model-value="field.value"
-              type="date"
+              :model-value="asDate(field.value)"
               :prefix="field.label"
               :aria-label="field.label"
+              persistent-placeholder
+              prepend-icon=""
+              append-inner-icon="mdi-calendar-month-outline"
               density="compact"
               hide-details
               class="date-filter"
-              @update:model-value="setFilter({ [field.key]: $event })"
+              @update:model-value="setFilter({ [field.key]: asDay($event) })"
             />
           </template>
         </div>

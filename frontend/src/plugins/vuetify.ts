@@ -112,6 +112,9 @@ export const vuetify = createVuetify({
     defaultTheme: initialThemeName(),
     themes: { light, dark, 'light-hc': lightHighContrast, 'dark-hc': darkHighContrast },
   },
+  // Dates are typed, shown and laid out in calendars the way the browser's
+  // language writes them, while Vuetify's own words stay English.
+  date: { locale: { en: navigator.language } },
   defaults: {
     VAppBar: { color: 'background', flat: true },
     VNavigationDrawer: { color: 'background', border: 0 },
@@ -124,6 +127,7 @@ export const vuetify = createVuetify({
     VSelect: field,
     VCombobox: field,
     VAutocomplete: field,
+    VDateInput: field,
     VSwitch: { color: 'primary', inset: true },
     VCheckbox: { color: 'primary' },
     // PatternFly's compact tables: 8px above and below the cell text.
