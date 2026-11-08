@@ -65,7 +65,7 @@ onBeforeUnmount(() => observer?.disconnect())
           color="primary"
           variant="flat"
           size="small"
-          class="font-weight-medium"
+          class="font-weight-semibold"
         />
       </template>
       <v-card class="selection-list">

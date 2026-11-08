@@ -49,7 +49,7 @@ const defaults = {
   display: inline-block;
   padding-bottom: 8px;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.5;
 }
 

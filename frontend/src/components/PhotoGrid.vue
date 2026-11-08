@@ -318,7 +318,6 @@ onBeforeUnmount(() => {
   align-items: flex-end;
   padding: 0 8px 8px;
   font-size: 1rem;
-  font-weight: 500;
   white-space: nowrap;
 }
 

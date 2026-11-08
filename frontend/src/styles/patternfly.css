@@ -1,14 +1,42 @@
 /*
- * Vuetify components restyled after PatternFly 6: Red Hat fonts, the PatternFly
- * type scale, pill buttons, 6px form controls, 16px cards and menus, 24px
+ * Vuetify components restyled after PatternFly 6: Red Hat fonts with Inter for
+ * Cyrillic, the PatternFly type scale and font weights, pill buttons, 6px form controls, 16px cards and menus, 24px
  * dialogs, and the main content in a rounded panel set into the page chrome. Colors come from the themes in
  * plugins/vuetify.ts. The rules sit in Vuetify's override layer, so utility
  * classes such as rounded-0 or mr-2 still win over them.
  */
 
+/* The Red Hat fonts have no Cyrillic, so dates in Russian take it from Inter.
+   Only the Cyrillic file is declared, and the browser downloads it only for
+   a page that shows Cyrillic. Inter is larger than Red Hat Text: 92% brings
+   its lowercase close without making its capitals too small. */
+@font-face {
+  font-family: 'Inter Cyrillic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter/files/inter-cyrillic-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+  size-adjust: 92%;
+}
+
+/* Red Hat Display is lighter than Inter at the same weight: its 600 matches
+   Inter at 500. Headings take Inter through a face that stops at 500, and
+   the browser must not thicken it to 600 on its own (font-synthesis-weight
+   below). */
+@font-face {
+  font-family: 'Inter Cyrillic Display';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 500;
+  src: url('@fontsource-variable/inter/files/inter-cyrillic-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+  size-adjust: 92%;
+}
+
 :root {
-  --v-font-body: 'Red Hat Text Variable', 'Red Hat Text', Helvetica, Arial, sans-serif;
-  --v-font-heading: 'Red Hat Display Variable', 'Red Hat Display', Helvetica, Arial, sans-serif;
+  --v-font-body: 'Red Hat Text Variable', 'Red Hat Text', 'Inter Cyrillic', Helvetica, Arial, sans-serif;
+  --v-font-heading: 'Red Hat Display Variable', 'Red Hat Display', 'Inter Cyrillic Display', Helvetica, Arial, sans-serif;
   --page-inset: 16px;
   --radius-small: 6px;
   --radius-medium: 16px;
@@ -18,8 +46,18 @@
 }
 
 @layer vuetify-overrides {
+  /* All the fonts are variable and cover every weight, so a bold made up by
+     the browser is never needed. */
   body {
     font-family: var(--v-font-body);
+    font-synthesis-weight: none;
+  }
+
+  /* PatternFly sets no letter spacing anywhere; Vuetify spaces out buttons,
+     fields, labels, lists and cards after Material Design. */
+  .v-application,
+  .v-application * {
+    letter-spacing: normal;
   }
 
   /* Text follows the PatternFly scale: 14px body text, and headings in Red
@@ -38,7 +76,6 @@
   /* Helper text under a control, at the body size as PatternFly sets it. */
   .v-messages {
     font-size: 0.875rem;
-    letter-spacing: normal;
   }
 
   .v-messages__message {
@@ -136,9 +173,9 @@
 
   /* Buttons */
 
+  /* Button text at the regular body weight, as PatternFly sets it. */
   .v-btn {
-    font-weight: 500;
-    letter-spacing: normal;
+    font-weight: 400;
   }
 
   .v-btn-toggle {
@@ -227,7 +264,7 @@
 
   .v-tooltip > .v-overlay__content {
     border-radius: var(--radius-small);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
 
   /* Alerts as PatternFly draws them: a border and an icon in the status

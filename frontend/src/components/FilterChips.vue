@@ -65,6 +65,5 @@ const shown = computed(() => props.groups.filter((group) => group.chips.length >
 .label {
   margin-right: 4px;
   font-size: 0.875rem;
-  font-weight: 500;
 }
 </style>
