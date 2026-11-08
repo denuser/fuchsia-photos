@@ -6,6 +6,7 @@ import AppAutocomplete from '../components/AppAutocomplete.vue'
 import { useUsersStore } from '../stores/users'
 import AppDialog from '../components/AppDialog.vue'
 import AppFormGroup from '../components/AppFormGroup.vue'
+import AppPageHeader from '../components/AppPageHeader.vue'
 
 const POLL_MS = 2000
 
@@ -88,96 +89,96 @@ async function openDetails(run: ImportRun) {
 </script>
 
 <template>
-  <v-container class="imports">
-    <h1 class="mb-4">Import from folder</h1>
+  <div class="page">
+    <AppPageHeader
+      title="Import from folder"
+      description="Photos are copied into the owner's library, and the folder stays as it is. Scanning it again adds only new photos."
+    />
+    <div class="page-section imports">
 
-    <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
+      <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
-    <v-form class="d-flex flex-wrap align-end ga-4 mb-2" @submit.prevent="start">
-      <AppFormGroup v-slot="field" label="Owner" required class="field mb-0">
-        <AppAutocomplete v-bind="field" v-model="owner" :items="users.active" item-title="login" item-value="id" />
-      </AppFormGroup>
-      <AppFormGroup v-slot="field" label="Folder" required class="field mb-0">
-        <AppAutocomplete v-bind="field" v-model="folder" :items="folderItems" />
-      </AppFormGroup>
-      <v-btn type="submit" color="primary" text="Start scan" :disabled="owner === null || running" />
-    </v-form>
-    <p class="text-medium-emphasis mb-6">
-      Photos are copied into the owner's library, and the folder stays as it is. Scanning it again adds only new photos.
-    </p>
+      <v-form class="d-flex flex-wrap align-end ga-4 mb-6" @submit.prevent="start">
+        <AppFormGroup v-slot="field" label="Owner" required class="field mb-0">
+          <AppAutocomplete v-bind="field" v-model="owner" :items="users.active" item-title="login" item-value="id" />
+        </AppFormGroup>
+        <AppFormGroup v-slot="field" label="Folder" required class="field mb-0">
+          <AppAutocomplete v-bind="field" v-model="folder" :items="folderItems" />
+        </AppFormGroup>
+        <v-btn type="submit" color="primary" text="Start scan" :disabled="owner === null || running" />
+      </v-form>
 
-    <v-table v-if="runs.length > 0" density="compact">
-      <thead>
-        <tr>
-          <th>Started</th>
-          <th>Owner</th>
-          <th>Folder</th>
-          <th>Status</th>
-          <th class="text-right">Files</th>
-          <th class="text-right">Added</th>
-          <th class="text-right">Already there</th>
-          <th class="text-right">In trash</th>
-          <th class="text-right">Deleted</th>
-          <th class="text-right">Not photos</th>
-          <th class="text-right">Problems</th>
-          <th aria-label="Actions" />
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="run in runs" :key="run.id" data-testid="import-run">
-          <td>{{ new Date(run.createdAt).toLocaleString() }}</td>
-          <td>{{ users.login(run.ownerId) }}</td>
-          <td>{{ run.folder || 'The whole folder' }}</td>
-          <td :title="run.error ?? undefined">{{ statusTitles[run.status] }}</td>
-          <td class="text-right">
-            <template v-if="run.status === 'importing'">{{ processed(run) }} of {{ run.found }}</template>
-            <template v-else>{{ run.found }}</template>
-          </td>
-          <td class="text-right" data-testid="added">{{ run.added }}</td>
-          <td class="text-right" data-testid="duplicates">{{ run.duplicates }}</td>
-          <td class="text-right">{{ run.inTrash }}</td>
-          <td class="text-right">{{ run.purged }}</td>
-          <td class="text-right">{{ run.unsupported }}</td>
-          <td class="text-right">{{ run.changing + run.failed }}</td>
-          <td class="text-right">
-            <v-btn v-if="isActive(run)" variant="text" size="small" text="Stop" @click="stop(run)" />
-            <v-btn
-              v-else-if="run.changing + run.failed > 0 || run.error"
-              variant="text"
-              size="small"
-              text="Details"
-              @click="openDetails(run)"
-            />
-          </td>
-        </tr>
-      </tbody>
-    </v-table>
-
-    <AppDialog
-      :model-value="detailsOf !== null"
-      title="Scan problems"
-      cancel="Close"
-      :error="detailsOf?.error ?? ''"
-      max-width="720"
-      @update:model-value="detailsOf = null"
-    >
-      <v-table density="compact">
+      <v-table v-if="runs.length > 0" density="compact">
+        <thead>
+          <tr>
+            <th>Started</th>
+            <th>Owner</th>
+            <th>Folder</th>
+            <th>Status</th>
+            <th class="text-right">Files</th>
+            <th class="text-right">Added</th>
+            <th class="text-right">Already there</th>
+            <th class="text-right">In trash</th>
+            <th class="text-right">Deleted</th>
+            <th class="text-right">Not photos</th>
+            <th class="text-right">Problems</th>
+            <th aria-label="Actions" />
+          </tr>
+        </thead>
         <tbody>
-          <tr v-for="problem in problems" :key="problem.path">
-            <td class="path">{{ problem.path }}</td>
-            <td>{{ problem.state === 'changing' ? 'Still being copied. The next scan will try it again.' : problem.error }}</td>
+          <tr v-for="run in runs" :key="run.id" data-testid="import-run">
+            <td>{{ new Date(run.createdAt).toLocaleString() }}</td>
+            <td>{{ users.login(run.ownerId) }}</td>
+            <td>{{ run.folder || 'The whole folder' }}</td>
+            <td :title="run.error ?? undefined">{{ statusTitles[run.status] }}</td>
+            <td class="text-right">
+              <template v-if="run.status === 'importing'">{{ processed(run) }} of {{ run.found }}</template>
+              <template v-else>{{ run.found }}</template>
+            </td>
+            <td class="text-right" data-testid="added">{{ run.added }}</td>
+            <td class="text-right" data-testid="duplicates">{{ run.duplicates }}</td>
+            <td class="text-right">{{ run.inTrash }}</td>
+            <td class="text-right">{{ run.purged }}</td>
+            <td class="text-right">{{ run.unsupported }}</td>
+            <td class="text-right">{{ run.changing + run.failed }}</td>
+            <td class="text-right">
+              <v-btn v-if="isActive(run)" variant="text" size="small" text="Stop" @click="stop(run)" />
+              <v-btn
+                v-else-if="run.changing + run.failed > 0 || run.error"
+                variant="text"
+                size="small"
+                text="Details"
+                @click="openDetails(run)"
+              />
+            </td>
           </tr>
         </tbody>
       </v-table>
-    </AppDialog>
-  </v-container>
+
+      <AppDialog
+        :model-value="detailsOf !== null"
+        title="Scan problems"
+        cancel="Close"
+        :error="detailsOf?.error ?? ''"
+        max-width="720"
+        @update:model-value="detailsOf = null"
+      >
+        <v-table density="compact">
+          <tbody>
+            <tr v-for="problem in problems" :key="problem.path">
+              <td class="path">{{ problem.path }}</td>
+              <td>{{ problem.state === 'changing' ? 'Still being copied. The next scan will try it again.' : problem.error }}</td>
+            </tr>
+          </tbody>
+        </v-table>
+      </AppDialog>
+    </div>
+  </div>
 </template>
 
 <style scoped>
 .imports {
-  height: 100%;
-  overflow-y: auto;
-  max-width: 1200px;
+  max-width: 1248px;
 }
 
 .field {

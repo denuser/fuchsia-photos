@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { api, type Album } from '../api/client'
 import AlbumCard from '../components/AlbumCard.vue'
+import AppPageHeader from '../components/AppPageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
 import { useAuthStore } from '../stores/auth'
@@ -64,19 +65,25 @@ function albumSubtitle(album: Album) {
 
 <template>
   <div v-if="tab === 'albums'" class="page">
-    <v-tabs :model-value="tab" density="compact" class="mb-4" @update:model-value="chooseTab">
-      <v-tab value="albums" text="Albums" />
-      <v-tab value="photos" text="Photos" />
-    </v-tabs>
-    <EmptyState v-if="albumsLoaded && albums.length === 0" icon="mdi-image-album" title="No albums are shared with you" />
-    <div class="albums">
-      <AlbumCard v-for="album in albums" :key="album.id" :album="album" :subtitle="albumSubtitle(album)" />
+    <AppPageHeader title="Shared with me" />
+    <div class="page-section">
+      <v-tabs :model-value="tab" density="compact" class="mb-4" @update:model-value="chooseTab">
+        <v-tab value="albums" text="Albums" />
+        <v-tab value="photos" text="Photos" />
+      </v-tabs>
+      <EmptyState v-if="albumsLoaded && albums.length === 0" icon="mdi-image-album" title="No albums are shared with you" />
+      <div class="albums">
+        <AlbumCard v-for="album in albums" :key="album.id" :album="album" :subtitle="albumSubtitle(album)" />
+      </div>
     </div>
   </div>
 
   <PhotoBrowser v-else mode="shared">
+    <template #header>
+      <AppPageHeader title="Shared with me" />
+    </template>
     <template #toolbar>
-      <div class="d-flex flex-wrap align-center ga-4 pr-4">
+      <div class="d-flex flex-wrap align-center ga-4 px-4 px-sm-6 pb-2">
         <v-tabs :model-value="tab" density="compact" class="flex-grow-1" @update:model-value="chooseTab">
           <v-tab value="albums" text="Albums" />
           <v-tab value="photos" text="Photos" />
@@ -101,12 +108,6 @@ function albumSubtitle(album: Album) {
 </template>
 
 <style scoped>
-.page {
-  height: 100%;
-  padding: 16px;
-  overflow-y: auto;
-}
-
 .albums {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

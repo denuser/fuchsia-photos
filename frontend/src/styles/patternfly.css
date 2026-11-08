@@ -149,6 +149,23 @@
     border: 1px solid rgb(var(--v-border-color));
   }
 
+  /* A page without a photo grid scrolls as a whole: AppPageHeader, then its
+     content in a section with the PatternFly side padding. */
+  .page {
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  .page-section {
+    padding: 0 24px 24px;
+  }
+
+  @media (max-width: 599.98px) {
+    .page-section {
+      padding: 0 16px 16px;
+    }
+  }
+
   .v-navigation-drawer .v-list-item {
     border-radius: var(--radius-small);
   }

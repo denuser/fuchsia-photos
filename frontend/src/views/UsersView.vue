@@ -5,6 +5,7 @@ import { api, type Role, type User } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import AppDialog from '../components/AppDialog.vue'
 import AppFormGroup from '../components/AppFormGroup.vue'
+import AppPageHeader from '../components/AppPageHeader.vue'
 
 const auth = useAuthStore()
 
@@ -73,95 +74,95 @@ async function savePassword() {
 </script>
 
 <template>
-  <v-container class="users">
-    <div class="d-flex align-center mb-4">
-      <h1>Users</h1>
-      <v-spacer />
-      <v-btn color="primary" prepend-icon="mdi-account-plus" text="Add user" @click="openCreate" />
+  <div class="page">
+    <AppPageHeader title="Users">
+      <template #actions>
+        <v-btn color="primary" prepend-icon="mdi-account-plus" text="Add user" @click="openCreate" />
+      </template>
+    </AppPageHeader>
+    <div class="page-section users">
+
+      <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
+
+      <v-table>
+        <thead>
+          <tr>
+            <th>Login</th>
+            <th>Role</th>
+            <th>Active</th>
+            <th aria-label="Actions" />
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="user in users" :key="user.id">
+            <td>{{ user.login }}</td>
+            <td class="role">
+              <v-select
+                :model-value="user.role"
+                :items="roles"
+                :disabled="user.id === auth.user?.id"
+                density="compact"
+                variant="plain"
+                hide-details
+                :aria-label="`Role of ${user.login}`"
+                @update:model-value="update(user, { role: $event })"
+              />
+            </td>
+            <td>
+              <v-switch
+                :model-value="!user.disabled"
+                :disabled="user.id === auth.user?.id"
+                color="primary"
+                density="compact"
+                hide-details
+                :aria-label="`${user.login} is active`"
+                @update:model-value="update(user, { disabled: !$event })"
+              />
+            </td>
+            <td class="text-right">
+              <v-btn variant="text" size="small" text="Reset password" @click="openPassword(user)" />
+            </td>
+          </tr>
+        </tbody>
+      </v-table>
+
+      <AppDialog v-model="createOpen" title="Add user" action="Add user" :error="formError" @submit="create">
+        <AppFormGroup v-slot="field" label="Login" required>
+          <v-text-field v-bind="field" v-model="form.login" autocomplete="off" />
+        </AppFormGroup>
+        <AppFormGroup v-slot="field" label="Password" required>
+          <v-text-field v-bind="field" v-model="form.password" type="password" autocomplete="new-password" />
+        </AppFormGroup>
+        <AppFormGroup v-slot="field" label="Role" required>
+          <v-select v-bind="field" v-model="form.role" variant="outlined" :items="roles" />
+        </AppFormGroup>
+      </AppDialog>
+
+      <AppDialog
+        :model-value="passwordFor !== null"
+        :title="`Reset password of ${passwordFor?.login}`"
+        action="Reset password"
+        :error="passwordError"
+        @update:model-value="passwordFor = null"
+        @submit="savePassword"
+      >
+        <AppFormGroup v-slot="field" label="New password" required>
+          <v-text-field
+            v-bind="field"
+            v-model="newPassword"
+            type="password"
+            autocomplete="new-password"
+            hint="This user will be logged out everywhere."
+          />
+        </AppFormGroup>
+      </AppDialog>
     </div>
-
-    <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
-
-    <v-table>
-      <thead>
-        <tr>
-          <th>Login</th>
-          <th>Role</th>
-          <th>Active</th>
-          <th aria-label="Actions" />
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="user in users" :key="user.id">
-          <td>{{ user.login }}</td>
-          <td class="role">
-            <v-select
-              :model-value="user.role"
-              :items="roles"
-              :disabled="user.id === auth.user?.id"
-              density="compact"
-              variant="plain"
-              hide-details
-              :aria-label="`Role of ${user.login}`"
-              @update:model-value="update(user, { role: $event })"
-            />
-          </td>
-          <td>
-            <v-switch
-              :model-value="!user.disabled"
-              :disabled="user.id === auth.user?.id"
-              color="primary"
-              density="compact"
-              hide-details
-              :aria-label="`${user.login} is active`"
-              @update:model-value="update(user, { disabled: !$event })"
-            />
-          </td>
-          <td class="text-right">
-            <v-btn variant="text" size="small" text="Reset password" @click="openPassword(user)" />
-          </td>
-        </tr>
-      </tbody>
-    </v-table>
-
-    <AppDialog v-model="createOpen" title="Add user" action="Add user" :error="formError" @submit="create">
-      <AppFormGroup v-slot="field" label="Login" required>
-        <v-text-field v-bind="field" v-model="form.login" autocomplete="off" />
-      </AppFormGroup>
-      <AppFormGroup v-slot="field" label="Password" required>
-        <v-text-field v-bind="field" v-model="form.password" type="password" autocomplete="new-password" />
-      </AppFormGroup>
-      <AppFormGroup v-slot="field" label="Role" required>
-        <v-select v-bind="field" v-model="form.role" variant="outlined" :items="roles" />
-      </AppFormGroup>
-    </AppDialog>
-
-    <AppDialog
-      :model-value="passwordFor !== null"
-      :title="`Reset password of ${passwordFor?.login}`"
-      action="Reset password"
-      :error="passwordError"
-      @update:model-value="passwordFor = null"
-      @submit="savePassword"
-    >
-      <AppFormGroup v-slot="field" label="New password" required>
-        <v-text-field
-          v-bind="field"
-          v-model="newPassword"
-          type="password"
-          autocomplete="new-password"
-          hint="This user will be logged out everywhere."
-        />
-      </AppFormGroup>
-    </AppDialog>
-  </v-container>
+  </div>
 </template>
 
 <style scoped>
 .users {
-  height: 100%;
-  overflow-y: auto;
-  max-width: 900px;
+  max-width: 948px;
 }
 
 .role {

@@ -2,6 +2,7 @@
 import { onMounted, ref, shallowRef } from 'vue'
 
 import { api, type Tag } from '../api/client'
+import AppPageHeader from '../components/AppPageHeader.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import NameDialog from '../components/NameDialog.vue'
@@ -49,48 +50,42 @@ function startDelete(tag: Tag) {
 
 <template>
   <div class="page">
-    <h1 class="mb-4">Tags</h1>
-    <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
+    <AppPageHeader title="Tags" description="Open a tag to see its photos in the timeline." />
+    <div class="page-section">
+      <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
-    <EmptyState v-if="loaded && tags.tags.length === 0" icon="mdi-tag-multiple-outline" title="No tags yet" text="Select photos in the timeline to tag them." />
+      <EmptyState v-if="loaded && tags.tags.length === 0" icon="mdi-tag-multiple-outline" title="No tags yet" text="Select photos in the timeline to tag them." />
 
-    <v-table v-else-if="loaded">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Photos</th>
-          <th />
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="tag in tags.tags" :key="tag.id">
-          <td>
-            <router-link :to="{ path: '/', query: { tag: String(tag.id) } }">{{ tag.name }}</router-link>
-          </td>
-          <td>{{ tag.photoCount }}</td>
-          <td class="text-right">
-            <v-btn icon="mdi-pencil" size="small" variant="text" :aria-label="`Rename ${tag.name}`" @click="startRename(tag)" />
-            <v-btn icon="mdi-delete" size="small" variant="text" :aria-label="`Delete ${tag.name}`" @click="startDelete(tag)" />
-          </td>
-        </tr>
-      </tbody>
-    </v-table>
+      <v-table v-else-if="loaded">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Photos</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="tag in tags.tags" :key="tag.id">
+            <td>
+              <router-link :to="{ path: '/', query: { tag: String(tag.id) } }">{{ tag.name }}</router-link>
+            </td>
+            <td>{{ tag.photoCount }}</td>
+            <td class="text-right">
+              <v-btn icon="mdi-pencil" size="small" variant="text" :aria-label="`Rename ${tag.name}`" @click="startRename(tag)" />
+              <v-btn icon="mdi-delete" size="small" variant="text" :aria-label="`Delete ${tag.name}`" @click="startDelete(tag)" />
+            </td>
+          </tr>
+        </tbody>
+      </v-table>
 
-    <NameDialog v-model="renameOpen" title="Rename tag" label="Name" action="Rename" :initial="renaming?.name" :save="rename" />
-    <ConfirmDialog
-      v-model="deleteOpen"
-      title="Delete this tag?"
-      :text="`${deleting?.name} will be removed from all photos. The photos stay in your library.`"
-      action="Delete"
-      @confirm="remove"
-    />
+      <NameDialog v-model="renameOpen" title="Rename tag" label="Name" action="Rename" :initial="renaming?.name" :save="rename" />
+      <ConfirmDialog
+        v-model="deleteOpen"
+        title="Delete this tag?"
+        :text="`${deleting?.name} will be removed from all photos. The photos stay in your library.`"
+        action="Delete"
+        @confirm="remove"
+      />
+    </div>
   </div>
 </template>
-
-<style scoped>
-.page {
-  height: 100%;
-  padding: 16px;
-  overflow-y: auto;
-}
-</style>

@@ -193,6 +193,7 @@ defineExpose({ clearSelection, say })
 
 <template>
   <div class="browser">
+    <slot name="header" />
     <v-toolbar v-if="selected.size > 0" density="compact" color="surface-variant" class="flex-grow-0">
       <v-btn icon="mdi-close" aria-label="Clear the selection" @click="clearSelection" />
       <v-toolbar-title>{{ selected.size }} selected</v-toolbar-title>

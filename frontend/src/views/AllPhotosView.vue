@@ -3,6 +3,7 @@ import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppAutocomplete from '../components/AppAutocomplete.vue'
+import AppPageHeader from '../components/AppPageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
 import { usePhotosStore } from '../stores/photos'
@@ -36,8 +37,11 @@ function chooseOwner(id: number | null) {
 
 <template>
   <PhotoBrowser mode="admin">
+    <template #header>
+      <AppPageHeader title="All photos" description="The photos of every user, for administrators." />
+    </template>
     <template #toolbar>
-      <div class="d-flex align-center pa-2 ga-2">
+      <div class="d-flex align-center px-4 px-sm-6 pb-2 ga-2">
         <AppAutocomplete
           :model-value="owner"
           :items="users.everyone"

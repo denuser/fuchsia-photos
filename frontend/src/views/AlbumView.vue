@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef, useTemplateRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { api, type Album } from '../api/client'
+import AppPageHeader from '../components/AppPageHeader.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import NameDialog from '../components/NameDialog.vue'
@@ -24,6 +25,11 @@ const deleteOpen = ref(false)
 const shareOpen = ref(false)
 // Another user's album is read-only here, even for an administrator.
 const owned = computed(() => album.value?.ownerId === auth.user?.id)
+const breadcrumbs = computed(() => [owned.value ? { title: 'Albums', to: '/albums' } : { title: 'Shared with me', to: '/shared' }])
+const photoCount = computed(() => {
+  const n = album.value?.photoCount ?? 0
+  return n === 1 ? '1 photo' : `${n} photos`
+})
 
 onMounted(async () => {
   await loadAlbum()
@@ -85,23 +91,22 @@ async function resetCover() {
 
 <template>
   <PhotoBrowser v-if="album" ref="browser" :mode="owned ? 'library' : 'shared'" @tagged="loadAlbum">
-    <template #toolbar>
-      <div class="d-flex align-center pa-2 ga-1">
-        <v-btn :to="owned ? '/albums' : '/shared'" icon="mdi-arrow-left" size="small" variant="text" :aria-label="owned ? 'Albums' : 'Shared with me'" />
-        <h1 class="album-name text-truncate">{{ album?.name }}</h1>
-        <div class="text-medium-emphasis ml-2 flex-grow-1">{{ album?.photoCount }} photos</div>
-        <v-menu v-if="owned">
-          <template #activator="{ props }">
-            <v-btn v-bind="props" icon="mdi-dots-vertical" size="small" variant="text" aria-label="Album actions" />
-          </template>
-          <v-list density="compact">
-            <v-list-item title="Rename" prepend-icon="mdi-pencil" @click="renameOpen = true" />
-            <v-list-item title="Share" prepend-icon="mdi-share-variant-outline" @click="shareOpen = true" />
-            <v-list-item v-if="album?.coverChosen" title="Use the newest photo as the cover" prepend-icon="mdi-image-refresh" @click="resetCover" />
-            <v-list-item title="Delete album" prepend-icon="mdi-delete" @click="deleteOpen = true" />
-          </v-list>
-        </v-menu>
-      </div>
+    <template #header>
+      <AppPageHeader :title="album.name" :description="photoCount" :breadcrumbs="breadcrumbs">
+        <template v-if="owned" #actions>
+          <v-menu>
+            <template #activator="{ props }">
+              <v-btn v-bind="props" icon="mdi-dots-vertical" variant="text" aria-label="Album actions" />
+            </template>
+            <v-list density="compact">
+              <v-list-item title="Rename" prepend-icon="mdi-pencil" @click="renameOpen = true" />
+              <v-list-item title="Share" prepend-icon="mdi-share-variant-outline" @click="shareOpen = true" />
+              <v-list-item v-if="album.coverChosen" title="Use the newest photo as the cover" prepend-icon="mdi-image-refresh" @click="resetCover" />
+              <v-list-item title="Delete album" prepend-icon="mdi-delete" @click="deleteOpen = true" />
+            </v-list>
+          </v-menu>
+        </template>
+      </AppPageHeader>
     </template>
     <template #selection-actions="{ ids, run }">
       <v-btn v-if="ids.length === 1" prepend-icon="mdi-image-check" text="Set as cover" @click="run(() => setCover(ids[0]!), 'Cover changed')" />
@@ -127,10 +132,3 @@ async function resetCover() {
     @confirm="remove"
   />
 </template>
-
-<style scoped>
-/* The album name heads the page from inside the toolbar, at the size of a section title. */
-.album-name {
-  font-size: 1.125rem;
-}
-</style>

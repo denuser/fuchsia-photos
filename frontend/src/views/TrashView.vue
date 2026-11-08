@@ -2,6 +2,7 @@
 import { onMounted, ref, useTemplateRef } from 'vue'
 
 import { api } from '../api/client'
+import AppPageHeader from '../components/AppPageHeader.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
@@ -27,19 +28,20 @@ async function empty() {
 
 <template>
   <PhotoBrowser ref="browser" mode="trash">
-    <template #toolbar>
-      <div class="d-flex align-center pa-2 ga-2">
-        <div class="text-medium-emphasis flex-grow-1">Photos stay here until you restore or delete them.</div>
-        <v-btn
-          prepend-icon="mdi-delete-sweep"
-          text="Empty trash"
-          color="error"
-          variant="text"
-          :disabled="photos.photos.length === 0"
-          :loading="emptying"
-          @click="confirmOpen = true"
-        />
-      </div>
+    <template #header>
+      <AppPageHeader title="Trash" description="Photos stay here until you restore or delete them.">
+        <template #actions>
+          <v-btn
+            prepend-icon="mdi-delete-sweep"
+            text="Empty trash"
+            color="error"
+            variant="outlined"
+            :disabled="photos.photos.length === 0"
+            :loading="emptying"
+            @click="confirmOpen = true"
+          />
+        </template>
+      </AppPageHeader>
     </template>
     <template #empty>
       <EmptyState icon="mdi-trash-can-outline" title="The trash is empty" />
