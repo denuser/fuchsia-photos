@@ -157,6 +157,7 @@ Revoking access takes effect on the server at once. Previews are cached for a ye
 - [ ] **Stage 6: WebDAV (hypothesis, starts as a spike).** Per-user upload folder, separate app password, files go through ingest. Tested with real mobile clients such as PhotoSync and FolderSync. If they work poorly, the feature is dropped and the outcome recorded here.
   - [x] Spike: the WebDAV tree at `/webdav/`, app passwords in the profile, uploads through ingest
   - [ ] Tests with PhotoSync and FolderSync on the NAS, with the outcome recorded here
+    - FolderSync on Android connects only over HTTPS. With `http://` in the address it still starts a TLS handshake and fails with "unable to parse TLS packet header". A self-signed certificate works once "Allow self-signed certificate" is on. Checked against the development server on 2026-11-09; uploads not tested yet
 - [ ] **Stage 7: ML (later).** An `embed_photo` job sends a preview to an external server. The NAS stays the source of truth, and a FAISS index can be rebuilt. Search results are filtered by the permission predicate. The protocol (gRPC or HTTP) and the choice of FAISS or `pgvector` are decided at this stage.
 
 ## Acceptance criteria

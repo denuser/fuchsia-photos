@@ -93,6 +93,8 @@ A scan continues after a restart, from where it stopped. After a clean stop, thi
 
 WebDAV is a hypothesis being tested, see stage 6 of the [roadmap](../README.md#roadmap). Sync apps such as PhotoSync and FolderSync can upload photos to `https://<address>/webdav/`, or `http://<address>:10303/webdav/` [without TLS](#running-from-an-image-without-tls).
 
+FolderSync needs HTTPS: given an `http://` address, it still tries TLS and reports "unable to parse TLS packet header". With the certificate from Caddy's local CA, turn on "Allow self-signed certificate" in the account settings.
+
 1. In the web interface, open **Profile**. Under **Upload from a phone**, choose **New app password** and name the device.
 2. In the app, add a WebDAV server with the address, your login and the app password. The account password does not work there.
 3. Set the app to upload only, and to send photos only: videos and other files are refused.
