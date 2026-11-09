@@ -188,6 +188,15 @@
     outline: 1px solid rgb(var(--v-border-color));
   }
 
+  /* Icons. Font Awesome glyphs fill their box, while Vuetify sizes icon boxes
+     for Material Design Icons, which leave a margin inside. The glyph takes two
+     thirds of the box: 16px in a 24px box, PatternFly's large icon, and 14px in
+     a button, its medium one. */
+  .v-icon__svg {
+    width: 66.667%;
+    height: 66.667%;
+  }
+
   /* Keyboard focus: a 2px ring in the accent around the control, as
      PatternFly draws it, in place of Vuetify's tinted overlay (turned off
      through focus-opacity in plugins/vuetify.ts) and its faint inner border.

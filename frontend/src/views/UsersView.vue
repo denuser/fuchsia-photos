@@ -77,7 +77,7 @@ async function savePassword() {
   <div class="page">
     <AppPageHeader title="Users">
       <template #actions>
-        <v-btn color="primary" prepend-icon="mdi-account-plus" text="Add user" @click="openCreate" />
+        <v-btn color="primary" prepend-icon="fa-user-plus" text="Add user" @click="openCreate" />
       </template>
     </AppPageHeader>
     <div class="page-section users">

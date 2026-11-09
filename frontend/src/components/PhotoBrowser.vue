@@ -196,20 +196,20 @@ defineExpose({ clearSelection, say })
   <div class="browser">
     <slot name="header" />
     <v-toolbar v-if="selected.size > 0" density="compact" color="surface-variant" class="flex-grow-0">
-      <v-btn icon="mdi-close" aria-label="Clear the selection" @click="clearSelection" />
+      <v-btn icon="fa-xmark" aria-label="Clear the selection" @click="clearSelection" />
       <v-toolbar-title>{{ selected.size }} selected</v-toolbar-title>
       <slot name="selection-actions" :ids="selectedIds" :run="run" />
       <template v-if="canManage">
         <template v-if="props.mode === 'library'">
-          <v-btn prepend-icon="mdi-image-album" text="Add to album" :disabled="busy" @click="albumDialog = true" />
-          <v-btn prepend-icon="mdi-tag-outline" text="Tags" :disabled="busy" @click="openSelectionTags" />
+          <v-btn prepend-icon="fa-book-open" text="Add to album" :disabled="busy" @click="albumDialog = true" />
+          <v-btn prepend-icon="fa-tag" text="Tags" :disabled="busy" @click="openSelectionTags" />
         </template>
-        <v-btn prepend-icon="mdi-share-variant-outline" text="Share" :disabled="busy" @click="openSelectionSharing" />
-        <v-btn prepend-icon="mdi-trash-can-outline" text="Move to trash" :loading="busy" @click="trashSelected" />
+        <v-btn prepend-icon="fa-share-nodes" text="Share" :disabled="busy" @click="openSelectionSharing" />
+        <v-btn prepend-icon="fa-trash-can" text="Move to trash" :loading="busy" @click="trashSelected" />
       </template>
       <template v-else>
-        <v-btn prepend-icon="mdi-restore" text="Restore" :loading="busy" @click="restoreSelected" />
-        <v-btn prepend-icon="mdi-delete-forever" text="Delete" color="error" :disabled="busy" @click="purgeDialog = true" />
+        <v-btn prepend-icon="fa-trash-can-arrow-up" text="Restore" :loading="busy" @click="restoreSelected" />
+        <v-btn prepend-icon="fa-trash-can" text="Delete" color="error" :disabled="busy" @click="purgeDialog = true" />
       </template>
     </v-toolbar>
     <slot v-else name="toolbar" />
@@ -217,7 +217,7 @@ defineExpose({ clearSelection, say })
     <div class="content">
       <EmptyState
         v-if="photos.failedToOpen"
-        icon="mdi-cloud-alert-outline"
+        icon="fa-circle-exclamation"
         title="The photos could not be loaded"
         text="Check the connection and try again."
         danger

@@ -96,33 +96,33 @@ async function resetCover() {
         <template v-if="owned" #actions>
           <v-menu>
             <template #activator="{ props }">
-              <v-btn v-bind="props" icon="mdi-dots-vertical" variant="text" aria-label="Album actions" />
+              <v-btn v-bind="props" icon="fa-ellipsis-vertical" variant="text" aria-label="Album actions" />
             </template>
             <v-list density="compact">
-              <v-list-item title="Rename" prepend-icon="mdi-pencil" @click="renameOpen = true" />
-              <v-list-item title="Share" prepend-icon="mdi-share-variant-outline" @click="shareOpen = true" />
-              <v-list-item v-if="album.coverChosen" title="Use the newest photo as the cover" prepend-icon="mdi-image-refresh" @click="resetCover" />
-              <v-list-item title="Delete album" prepend-icon="mdi-delete" @click="deleteOpen = true" />
+              <v-list-item title="Rename" prepend-icon="fa-pen" @click="renameOpen = true" />
+              <v-list-item title="Share" prepend-icon="fa-share-nodes" @click="shareOpen = true" />
+              <v-list-item v-if="album.coverChosen" title="Use the newest photo as the cover" prepend-icon="fa-arrow-rotate-left" @click="resetCover" />
+              <v-list-item title="Delete album" prepend-icon="fa-trash-can" @click="deleteOpen = true" />
             </v-list>
           </v-menu>
         </template>
       </AppPageHeader>
     </template>
     <template #selection-actions="{ ids, run }">
-      <v-btn v-if="ids.length === 1" prepend-icon="mdi-image-check" text="Set as cover" @click="run(() => setCover(ids[0]!), 'Cover changed')" />
+      <v-btn v-if="ids.length === 1" prepend-icon="fa-image" text="Set as cover" @click="run(() => setCover(ids[0]!), 'Cover changed')" />
       <v-btn
-        prepend-icon="mdi-image-remove"
+        prepend-icon="fa-circle-minus"
         text="Remove from album"
         @click="run(() => removeFromAlbum(ids), ids.length === 1 ? '1 photo removed from the album' : `${ids.length} photos removed from the album`)"
       />
     </template>
     <template #empty>
-      <EmptyState v-if="owned" icon="mdi-image-album" title="This album is empty" text="Select photos in the timeline and add them here.">
+      <EmptyState v-if="owned" icon="fa-book-open" title="This album is empty" text="Select photos in the timeline and add them here.">
         <template #actions>
           <v-btn text="Open the timeline" color="primary" to="/" />
         </template>
       </EmptyState>
-      <EmptyState v-else icon="mdi-image-album" title="This album is empty" />
+      <EmptyState v-else icon="fa-book-open" title="This album is empty" />
     </template>
   </PhotoBrowser>
 

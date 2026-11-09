@@ -32,7 +32,7 @@ async function empty() {
       <AppPageHeader title="Trash" description="Photos stay here until you restore or delete them.">
         <template #actions>
           <v-btn
-            prepend-icon="mdi-delete-sweep"
+            prepend-icon="fa-trash-can"
             text="Empty trash"
             color="error"
             variant="outlined"
@@ -44,7 +44,7 @@ async function empty() {
       </AppPageHeader>
     </template>
     <template #empty>
-      <EmptyState icon="mdi-trash-can-outline" title="The trash is empty" />
+      <EmptyState icon="fa-trash-can" title="The trash is empty" />
     </template>
   </PhotoBrowser>
   <ConfirmDialog

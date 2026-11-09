@@ -73,7 +73,7 @@ function startDelete(album: Album) {
   <div class="page">
     <AppPageHeader title="Albums">
       <template #actions>
-        <v-btn color="primary" prepend-icon="mdi-plus" text="New album" @click="createOpen = true" />
+        <v-btn color="primary" prepend-icon="fa-plus" text="New album" @click="createOpen = true" />
       </template>
     </AppPageHeader>
     <div class="page-section">
@@ -81,27 +81,27 @@ function startDelete(album: Album) {
 
       <EmptyState
         v-if="loaded && albums.length === 0"
-        icon="mdi-image-album"
+        icon="fa-book-open"
         title="No albums yet"
         text="Create an album here, or select photos in the timeline and add them to a new one."
       >
         <template #actions>
-          <v-btn text="Create an album" color="primary" prepend-icon="mdi-plus" @click="createOpen = true" />
+          <v-btn text="Create an album" color="primary" prepend-icon="fa-plus" @click="createOpen = true" />
         </template>
       </EmptyState>
 
       <div class="albums">
         <AlbumCard v-for="album in albums" :key="album.id" :album="album" :subtitle="`${album.photoCount} photos`">
           <template #actions>
-            <v-icon v-if="album.shared" icon="mdi-account-multiple-outline" size="small" class="mr-1" aria-label="Shared" />
+            <v-icon v-if="album.shared" icon="fa-users" size="small" class="mr-1" aria-label="Shared" />
             <v-menu>
               <template #activator="{ props }">
-                <v-btn v-bind="props" icon="mdi-dots-vertical" size="small" variant="text" aria-label="Album actions" @click.prevent />
+                <v-btn v-bind="props" icon="fa-ellipsis-vertical" size="small" variant="text" aria-label="Album actions" @click.prevent />
               </template>
               <v-list density="compact">
-                <v-list-item title="Rename" prepend-icon="mdi-pencil" @click="startRename(album)" />
-                <v-list-item title="Share" prepend-icon="mdi-share-variant-outline" @click="startShare(album)" />
-                <v-list-item title="Delete" prepend-icon="mdi-delete" @click="startDelete(album)" />
+                <v-list-item title="Rename" prepend-icon="fa-pen" @click="startRename(album)" />
+                <v-list-item title="Share" prepend-icon="fa-share-nodes" @click="startShare(album)" />
+                <v-list-item title="Delete" prepend-icon="fa-trash-can" @click="startDelete(album)" />
               </v-list>
             </v-menu>
           </template>

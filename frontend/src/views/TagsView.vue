@@ -54,7 +54,7 @@ function startDelete(tag: Tag) {
     <div class="page-section">
       <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
-      <EmptyState v-if="loaded && tags.tags.length === 0" icon="mdi-tag-multiple-outline" title="No tags yet" text="Select photos in the timeline to tag them.">
+      <EmptyState v-if="loaded && tags.tags.length === 0" icon="fa-tags" title="No tags yet" text="Select photos in the timeline to tag them.">
         <template #actions>
           <v-btn text="Open the timeline" color="primary" to="/" />
         </template>
@@ -75,8 +75,8 @@ function startDelete(tag: Tag) {
             </td>
             <td>{{ tag.photoCount }}</td>
             <td class="text-right">
-              <v-btn icon="mdi-pencil" size="small" variant="text" :aria-label="`Rename ${tag.name}`" @click="startRename(tag)" />
-              <v-btn icon="mdi-delete" size="small" variant="text" :aria-label="`Delete ${tag.name}`" @click="startDelete(tag)" />
+              <v-btn icon="fa-pen" size="small" variant="text" :aria-label="`Rename ${tag.name}`" @click="startRename(tag)" />
+              <v-btn icon="fa-trash-can" size="small" variant="text" :aria-label="`Delete ${tag.name}`" @click="startDelete(tag)" />
             </td>
           </tr>
         </tbody>

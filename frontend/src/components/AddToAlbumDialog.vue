@@ -69,7 +69,7 @@ async function createAndAdd() {
         :title="album.name"
         :subtitle="`${album.photoCount} photos`"
         :disabled="saving"
-        prepend-icon="mdi-image-album"
+        prepend-icon="fa-book-open"
         @click="addTo(album)"
       />
     </v-list>

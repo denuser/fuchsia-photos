@@ -31,7 +31,7 @@ const shown = computed(() => props.groups.filter((group) => group.chips.length >
         {{ chip.title }}
       </v-chip>
       <v-btn
-        icon="mdi-close"
+        icon="fa-xmark"
         size="x-small"
         variant="text"
         density="comfortable"

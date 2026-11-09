@@ -23,9 +23,9 @@ const contrasts: { value: Contrast; title: string }[] = [
 
 const icon = computed(() => {
   if (appearance.scheme === 'system') {
-    return 'mdi-theme-light-dark'
+    return 'fa-circle-half-stroke'
   }
-  return appearance.scheme === 'dark' ? 'mdi-weather-night' : 'mdi-white-balance-sunny'
+  return appearance.scheme === 'dark' ? 'fa-moon' : 'fa-sun'
 })
 </script>
 
@@ -35,7 +35,7 @@ const icon = computed(() => {
       <v-btn v-if="xs" v-bind="props" :icon="icon" aria-label="Appearance" />
       <v-btn v-else v-bind="props" variant="outlined" class="mr-2 appearance-button" aria-label="Appearance">
         <v-icon :icon="icon" />
-        <v-icon icon="mdi-menu-down" end />
+        <v-icon icon="fa-caret-down" end />
       </v-btn>
     </template>
     <v-card class="appearance-menu">

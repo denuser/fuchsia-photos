@@ -1,6 +1,7 @@
 import { createVuetify, type ThemeDefinition } from 'vuetify'
 
 import { initialThemeName } from '../stores/appearance'
+import { aliases, fontAwesome } from './icons'
 
 // The colors follow the PatternFly 6 design tokens, with fuchsia in place of
 // the PatternFly blue. Background is the page chrome around the main panel,
@@ -120,6 +121,7 @@ export const vuetify = createVuetify({
   // Dates are typed, shown and laid out in calendars the way the browser's
   // language writes them, while Vuetify's own words stay English.
   date: { locale: { en: navigator.language } },
+  icons: { defaultSet: 'fa', aliases, sets: { fa: fontAwesome } },
   defaults: {
     VAppBar: { color: 'background', flat: true },
     VNavigationDrawer: { color: 'background', border: 0 },

@@ -7,7 +7,7 @@ defineProps<{ album: Album; subtitle: string }>()
 <template>
   <v-card :to="`/albums/${album.id}`" variant="flat" border>
     <v-img v-if="album.coverPhotoId" :src="previewUrl(album.coverPhotoId, 'grid')" :alt="album.name" aspect-ratio="1.33" cover />
-    <div v-else class="no-cover"><v-icon icon="mdi-image-album" size="48" /></div>
+    <div v-else class="no-cover"><v-icon icon="fa-book-open" size="48" /></div>
     <v-card-item :title="album.name" :subtitle="subtitle">
       <template v-if="$slots.actions" #append>
         <slot name="actions" />

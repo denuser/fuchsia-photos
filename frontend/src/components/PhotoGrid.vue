@@ -255,7 +255,7 @@ onBeforeUnmount(() => {
             <v-progress-circular v-else-if="photo.status === 'pending'" indeterminate size="24" width="2" />
             <v-tooltip v-else :text="`${photo.name} could not be processed`" location="top">
               <template #activator="{ props: tooltip }">
-                <v-icon v-bind="tooltip" icon="mdi-image-broken-variant" />
+                <v-icon v-bind="tooltip" icon="fa-triangle-exclamation" />
               </template>
             </v-tooltip>
           </button>
@@ -269,7 +269,7 @@ onBeforeUnmount(() => {
             :aria-label="`Select ${photo.name}`"
             @click="emit('toggle', photo, $event.shiftKey)"
           >
-            <v-icon :icon="selected.has(photo.id) ? 'mdi-check-circle' : 'mdi-circle-outline'" size="22" />
+            <v-icon :icon="selected.has(photo.id) ? 'fa-circle-check' : 'fa-regular-circle'" size="22" />
           </button>
         </div>
       </div>

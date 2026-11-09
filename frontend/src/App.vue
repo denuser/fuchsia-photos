@@ -49,12 +49,12 @@ function toggleNav() {
 const navShownInFull = computed(() => (navOverlay.value ? navOpen.value : navExpanded.value))
 
 const navItems = computed(() => [
-  { to: '/', icon: 'mdi-image-multiple-outline', title: 'Photos', exact: true },
-  { to: '/albums', icon: 'mdi-image-album', title: 'Albums' },
-  { to: '/shared', icon: 'mdi-account-multiple-outline', title: 'Shared with me' },
-  { to: '/tags', icon: 'mdi-tag-multiple-outline', title: 'Tags' },
-  { to: '/trash', icon: 'mdi-trash-can-outline', title: 'Trash' },
-  ...(auth.isAdmin ? [{ to: '/all', icon: 'mdi-shield-account-outline', title: 'All photos' }] : []),
+  { to: '/', icon: 'fa-images', title: 'Photos', exact: true },
+  { to: '/albums', icon: 'fa-book-open', title: 'Albums' },
+  { to: '/shared', icon: 'fa-users', title: 'Shared with me' },
+  { to: '/tags', icon: 'fa-tags', title: 'Tags' },
+  { to: '/trash', icon: 'fa-trash-can', title: 'Trash' },
+  ...(auth.isAdmin ? [{ to: '/all', icon: 'fa-user-shield', title: 'All photos' }] : []),
 ])
 const fileInput = ref<HTMLInputElement>()
 provide(pickUploadsKey, () => fileInput.value?.click())
@@ -95,18 +95,18 @@ window.addEventListener('beforeunload', (event) => {
         </router-link>
       </v-app-bar-title>
 
-      <v-chip v-if="photos.pending > 0" class="mr-2" size="small" prepend-icon="mdi-cog-outline">
+      <v-chip v-if="photos.pending > 0" class="mr-2" size="small" prepend-icon="fa-gear">
         Processing {{ photos.pending }}
       </v-chip>
 
       <v-btn
         v-if="xs"
         color="primary"
-        icon="mdi-upload"
+        icon="fa-upload"
         aria-label="Upload"
         @click="fileInput?.click()"
       />
-      <v-btn v-else color="primary" variant="flat" prepend-icon="mdi-upload" class="mr-2" @click="fileInput?.click()">
+      <v-btn v-else color="primary" variant="flat" prepend-icon="fa-upload" class="mr-2" @click="fileInput?.click()">
         Upload
       </v-btn>
       <input
@@ -122,16 +122,16 @@ window.addEventListener('beforeunload', (event) => {
 
       <v-menu>
         <template #activator="{ props }">
-          <v-btn v-bind="props" icon="mdi-account-circle" aria-label="Account" />
+          <v-btn v-bind="props" icon="fa-circle-user" aria-label="Account" />
         </template>
         <v-list density="compact">
           <v-list-item :subtitle="auth.isAdmin ? 'Administrator' : 'User'" :title="auth.user.login" />
           <v-divider />
-          <v-list-item v-if="auth.isAdmin" to="/users" prepend-icon="mdi-account-multiple" title="Users" />
-          <v-list-item v-if="auth.isAdmin" to="/import" prepend-icon="mdi-folder-arrow-down-outline" title="Import from folder" />
-          <v-list-item v-if="auth.isAdmin" to="/admin" prepend-icon="mdi-cog-outline" title="Administration" />
-          <v-list-item to="/profile" prepend-icon="mdi-account-cog-outline" title="Profile" />
-          <v-list-item prepend-icon="mdi-logout" title="Log out" @click="logout" />
+          <v-list-item v-if="auth.isAdmin" to="/users" prepend-icon="fa-users" title="Users" />
+          <v-list-item v-if="auth.isAdmin" to="/import" prepend-icon="fa-file-import" title="Import from folder" />
+          <v-list-item v-if="auth.isAdmin" to="/admin" prepend-icon="fa-gear" title="Administration" />
+          <v-list-item to="/profile" prepend-icon="fa-user-gear" title="Profile" />
+          <v-list-item prepend-icon="fa-right-from-bracket" title="Log out" @click="logout" />
         </v-list>
       </v-menu>
     </v-app-bar>

@@ -21,7 +21,7 @@ defineProps<{
       <ol class="page-header__breadcrumbs">
         <li v-for="crumb in breadcrumbs" :key="crumb.to">
           <router-link :to="crumb.to">{{ crumb.title }}</router-link>
-          <v-icon icon="mdi-chevron-right" size="x-small" class="page-header__divider" aria-hidden="true" />
+          <v-icon icon="fa-angle-right" size="x-small" class="page-header__divider" aria-hidden="true" />
         </li>
         <li aria-current="page">{{ title }}</li>
       </ol>

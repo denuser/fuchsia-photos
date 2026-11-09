@@ -101,7 +101,7 @@ function setShown(value: ViewerField[] | null) {
       />
 
       <h2 class="mb-2">Password</h2>
-      <v-btn prepend-icon="mdi-lock-reset" variant="tonal" text="Change password" @click="passwordDialog = true" />
+      <v-btn prepend-icon="fa-key" variant="tonal" text="Change password" @click="passwordDialog = true" />
       <ChangePasswordDialog v-model="passwordDialog" />
     </div>
   </div>

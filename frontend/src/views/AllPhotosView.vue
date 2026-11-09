@@ -58,7 +58,7 @@ function chooseOwner(id: number | null) {
       </div>
     </template>
     <template #empty>
-      <EmptyState icon="mdi-image-multiple-outline" title="No photos" />
+      <EmptyState icon="fa-images" title="No photos" />
     </template>
   </PhotoBrowser>
 </template>

@@ -505,13 +505,13 @@ onBeforeUnmount(() => {
         <div class="name">{{ photo.name }}</div>
         <div class="details">{{ details }}</div>
       </div>
-      <v-btn v-if="canTag" icon="mdi-tag-outline" variant="text" aria-label="Tags" @click="emit('tags', photo)" />
+      <v-btn v-if="canTag" icon="fa-tag" variant="text" aria-label="Tags" @click="emit('tags', photo)" />
       <template v-if="canManage">
-        <v-btn icon="mdi-share-variant-outline" variant="text" aria-label="Share" @click="emit('share', photo)" />
-        <v-btn icon="mdi-trash-can-outline" variant="text" aria-label="Move to trash" @click="emit('trash', photo)" />
+        <v-btn icon="fa-share-nodes" variant="text" aria-label="Share" @click="emit('share', photo)" />
+        <v-btn icon="fa-trash-can" variant="text" aria-label="Move to trash" @click="emit('trash', photo)" />
       </template>
-      <v-btn :href="originalUrl(photo.id)" icon="mdi-download" variant="text" aria-label="Download the original" />
-      <v-btn icon="mdi-close" variant="text" aria-label="Close" @click="emit('close')" />
+      <v-btn :href="originalUrl(photo.id)" icon="fa-download" variant="text" aria-label="Download the original" />
+      <v-btn icon="fa-xmark" variant="text" aria-label="Close" @click="emit('close')" />
     </div>
 
     <div v-if="camera || location" class="bar bottom">
@@ -526,7 +526,7 @@ onBeforeUnmount(() => {
     <v-btn
       v-if="previous"
       class="nav left"
-      icon="mdi-chevron-left"
+      icon="fa-angle-left"
       variant="text"
       size="x-large"
       aria-label="Previous photo"
@@ -535,7 +535,7 @@ onBeforeUnmount(() => {
     <v-btn
       v-if="next"
       class="nav right"
-      icon="mdi-chevron-right"
+      icon="fa-angle-right"
       variant="text"
       size="x-large"
       aria-label="Next photo"

@@ -1,4 +1,3 @@
-import '@mdi/font/css/materialdesignicons.css'
 import '@fontsource-variable/red-hat-display'
 import '@fontsource-variable/red-hat-text'
 import 'vuetify/styles'

@@ -244,9 +244,9 @@ function onDrop(event: DragEvent) {
             class="scope"
             @update:model-value="setWithShared($event === 'all')"
           >
-            <v-btn v-if="xs" value="mine" icon="mdi-account-outline" aria-label="Mine" />
+            <v-btn v-if="xs" value="mine" icon="fa-user" aria-label="Mine" />
             <v-btn v-else value="mine" text="Mine" />
-            <v-btn v-if="xs" value="all" icon="mdi-account-multiple-outline" aria-label="All" />
+            <v-btn v-if="xs" value="all" icon="fa-users" aria-label="All" />
             <v-btn v-else value="all" text="All" />
           </v-btn-toggle>
           <AppAutocomplete
@@ -268,7 +268,7 @@ function onDrop(event: DragEvent) {
             <template #activator="{ props: menu }">
               <v-btn
                 v-bind="menu"
-                icon="mdi-tune-variant"
+                icon="fa-filter"
                 :color="moreFiltered ? 'primary' : undefined"
                 variant="text"
                 aria-label="More filters"
@@ -300,7 +300,7 @@ function onDrop(event: DragEvent) {
                 :aria-label="field.label"
                 persistent-placeholder
                 prepend-icon=""
-                append-inner-icon="mdi-calendar-month-outline"
+                append-inner-icon="fa-regular-calendar-days"
                 density="compact"
                 hide-details
                 @update:model-value="setFilter({ [field.key]: asDay($event) })"
@@ -333,7 +333,7 @@ function onDrop(event: DragEvent) {
               :aria-label="field.label"
               persistent-placeholder
               prepend-icon=""
-              append-inner-icon="mdi-calendar-month-outline"
+              append-inner-icon="fa-regular-calendar-days"
               density="compact"
               hide-details
               class="date-filter"
@@ -344,14 +344,14 @@ function onDrop(event: DragEvent) {
         <FilterChips :groups="filterGroups" @remove="removeChip" @clear="clearGroup" @clear-all="router.replace({ query: {} })" />
       </template>
       <template #empty>
-        <EmptyState v-if="filtered" icon="mdi-image-search-outline" title="No photos match these filters" text="Change the filters, or clear them to see every photo.">
+        <EmptyState v-if="filtered" icon="fa-magnifying-glass" title="No photos match these filters" text="Change the filters, or clear them to see every photo.">
           <template #actions>
             <v-btn text="Clear all filters" variant="text" color="primary" @click="router.replace({ query: {} })" />
           </template>
         </EmptyState>
-        <EmptyState v-else icon="mdi-image-multiple-outline" title="No photos yet" text="Upload photos from this device, or drag them here.">
+        <EmptyState v-else icon="fa-images" title="No photos yet" text="Upload photos from this device, or drag them here.">
           <template #actions>
-            <v-btn text="Upload photos" color="primary" prepend-icon="mdi-upload" @click="pickUploads" />
+            <v-btn text="Upload photos" color="primary" prepend-icon="fa-upload" @click="pickUploads" />
           </template>
         </EmptyState>
       </template>

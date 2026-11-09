@@ -26,7 +26,7 @@ const subtitle = computed(() => {
   <v-card v-if="uploads.visible" class="upload-panel" elevation="8" width="360">
     <v-card-item :title="title" :subtitle="subtitle">
       <template #append>
-        <v-btn v-if="!uploads.running" icon="mdi-close" size="small" variant="text" aria-label="Close" @click="uploads.dismiss()" />
+        <v-btn v-if="!uploads.running" icon="fa-xmark" size="small" variant="text" aria-label="Close" @click="uploads.dismiss()" />
       </template>
     </v-card-item>
     <v-progress-linear :model-value="uploads.progress" color="primary" />
@@ -38,7 +38,7 @@ const subtitle = computed(() => {
           :key="failure.file.name + failure.file.size"
           :title="failure.file.name"
           :subtitle="failure.error"
-          prepend-icon="mdi-alert-circle-outline"
+          prepend-icon="fa-circle-exclamation"
         />
       </v-list>
       <v-card-actions v-if="!uploads.running">

@@ -96,7 +96,7 @@ function albumSubtitle(album: Album) {
     </div>
 
     <div v-if="tab === 'albums'" class="page page-section pt-2">
-      <EmptyState v-if="albumsLoaded && albums.length === 0" icon="mdi-image-album" title="No albums are shared with you" />
+      <EmptyState v-if="albumsLoaded && albums.length === 0" icon="fa-book-open" title="No albums are shared with you" />
       <div class="albums">
         <AlbumCard v-for="album in albums" :key="album.id" :album="album" :subtitle="albumSubtitle(album)" />
       </div>
@@ -109,7 +109,7 @@ function albumSubtitle(album: Album) {
         </div>
       </template>
       <template #empty>
-        <EmptyState icon="mdi-account-multiple-outline" title="No photos are shared with you" />
+        <EmptyState icon="fa-users" title="No photos are shared with you" />
       </template>
     </PhotoBrowser>
   </div>

@@ -32,6 +32,12 @@ defineProps<{ icon: string; title: string; text?: string; danger?: boolean }>()
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
+.empty-state__icon :deep(.v-icon__svg) {
+  /* PatternFly draws the empty state icon at 56px, the whole box. */
+  width: 100%;
+  height: 100%;
+}
+
 .empty-state__icon--danger {
   color: rgb(var(--v-theme-error));
 }
