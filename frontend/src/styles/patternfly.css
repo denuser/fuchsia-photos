@@ -188,6 +188,49 @@
     outline: 1px solid rgb(var(--v-border-color));
   }
 
+  /* Keyboard focus: a 2px ring in the accent around the control, as
+     PatternFly draws it, in place of Vuetify's tinted overlay (turned off
+     through focus-opacity in plugins/vuetify.ts) and its faint inner border.
+     Fields keep their own focus, a 2px outline in the accent. */
+  a:focus-visible,
+  button:focus-visible,
+  [role='button']:focus-visible,
+  .v-btn:focus-visible,
+  .v-chip:focus-visible,
+  .v-card:focus-visible,
+  .v-list-item:focus-visible,
+  .v-list-item--focus-visible {
+    outline: 2px solid rgb(var(--v-theme-primary));
+    outline-offset: 2px;
+  }
+
+  .v-btn::after,
+  .v-icon-btn::after,
+  .v-list-item::after {
+    display: none;
+  }
+
+  /* List items, tabs and joined buttons sit in containers that clip what
+     sticks out, so their ring is drawn inside. */
+  .v-list-item:focus-visible,
+  .v-list-item--focus-visible,
+  .v-tab.v-btn:focus-visible,
+  .v-btn-toggle > .v-btn:focus-visible {
+    outline-offset: -2px;
+  }
+
+  /* A switch or a checkbox focuses a hidden input: the ring goes around the
+     track or the box instead. */
+  .v-selection-control--focus-visible .v-switch__track,
+  .v-checkbox .v-selection-control--focus-visible .v-selection-control__input > .v-icon {
+    outline: 2px solid rgb(var(--v-theme-primary));
+    outline-offset: 2px;
+  }
+
+  .v-checkbox .v-selection-control__input > .v-icon {
+    border-radius: 4px;
+  }
+
   /* Buttons */
 
   /* Button text at the regular body weight, as PatternFly sets it. */

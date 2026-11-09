@@ -35,6 +35,8 @@ const light: ThemeDefinition = {
     'border-opacity': 1,
     'high-emphasis-opacity': 1,
     'medium-emphasis-opacity': 0.78,
+    // Keyboard focus is a ring (styles/patternfly.css), not a tinted overlay.
+    'focus-opacity': 0,
   },
 }
 
@@ -64,6 +66,8 @@ const dark: ThemeDefinition = {
     'border-opacity': 1,
     'high-emphasis-opacity': 1,
     'medium-emphasis-opacity': 0.78,
+    // Keyboard focus is a ring (styles/patternfly.css), not a tinted overlay.
+    'focus-opacity': 0,
   },
 }
 
@@ -105,7 +109,8 @@ const darkHighContrast: ThemeDefinition = {
   },
 }
 
-const field = { variant: 'outlined', density: 'compact' } as const
+// A focused field draws its outline in the accent, as PatternFly does.
+const field = { variant: 'outlined', density: 'compact', color: 'primary' } as const
 
 export const vuetify = createVuetify({
   theme: {

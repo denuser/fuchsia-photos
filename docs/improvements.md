@@ -67,10 +67,10 @@ Done:
 - PatternFly tables and tabs. Tables are compact, with a line under every row including the last, column titles at 12px in bold, and the outer columns lined up with the page title. Tabs have a line under the whole row, the current tab underlined in fuchsia with rounded ends, the others in the subtle text color, and 8px of padding at the sides.
 - PatternFly empty states on the `EmptyState` component: a 56px icon in a subtle color, red for a failure, the title, a line of text and the action that leads out. The empty timeline offers "Upload photos", no matching photos "Clear all filters", no albums "Create an album", an empty album and no tags "Open the timeline", and a failed load "Retry".
 - Date filters on Vuetify's `VDateInput` instead of the browser's own date field: an outlined field with "From" or "To" and the format hint inside, a calendar button, and a calendar popover in the application's theme. Dates are typed and shown the way the browser's language writes them, in the fields, the calendar and the filter chips, while the address keeps YYYY-MM-DD.
+- Focus rings: a 2px outline in fuchsia on keyboard focus, in place of Vuetify's tinted overlay. It sits 2px outside buttons, links, chips and cards, inside list items, tabs, joined buttons and the logo link where the container would cut it off, and around the track of a switch and the box of a checkbox. A focused field draws its outline in fuchsia too.
 
-Left, in order of priority:
+Left:
 
-1. **Focus rings.** A 2px accent outline on keyboard focus, which PatternFly draws on every control. Vuetify shows an overlay instead.
-2. **Icons.** PatternFly uses its own icons and Font Awesome; the application uses Material Design Icons. Changing them is a new dependency and touches every page, so it comes last.
+1. **Icons.** PatternFly uses its own icons and Font Awesome; the application uses Material Design Icons. Changing them is a new dependency and touches every page, so it comes last.
 
 A second visual style like PatternFly's Project Felt is out of scope for now.

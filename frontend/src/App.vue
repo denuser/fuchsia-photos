@@ -177,11 +177,18 @@ html {
 }
 
 .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding: 4px;
+  border-radius: var(--radius-small);
   color: inherit;
   text-decoration: none;
+}
+
+/* The app bar title clips what sticks out of it, so the focus ring is drawn inside. */
+.brand:focus-visible {
+  outline-offset: -2px;
 }
 
 .brand-logo {
