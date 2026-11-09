@@ -57,6 +57,17 @@ type Result struct {
 
 // Ingest stores the photo read from r and queues its processing.
 func (s *Service) Ingest(ctx context.Context, ownerID int64, r io.Reader, name string, priority int) (Result, error) {
+	return s.ingest(ctx, ownerID, r, name, priority, false)
+}
+
+// Receive adds a photo a sync client sends, such as one over WebDAV. Like a
+// folder scan, it leaves photos the owner has deleted as they are: a phone that
+// sends its camera roll again gives no sign that the owner wants them back.
+func (s *Service) Receive(ctx context.Context, ownerID int64, r io.Reader, name string) (Result, error) {
+	return s.ingest(ctx, ownerID, r, name, PriorityBulk, true)
+}
+
+func (s *Service) ingest(ctx context.Context, ownerID int64, r io.Reader, name string, priority int, keepDeleted bool) (Result, error) {
 	buffered := bufio.NewReaderSize(r, 4096)
 	head, err := buffered.Peek(512)
 	if err != nil && !errors.Is(err, io.EOF) {
@@ -79,7 +90,7 @@ func (s *Service) Ingest(ctx context.Context, ownerID int64, r io.Reader, name s
 		Mime:         mime,
 		Size:         size,
 		OriginalName: cleanName(name),
-	}, priority, false)
+	}, priority, keepDeleted)
 }
 
 // Import adds a photo found by a folder scan. Unlike an upload, it leaves photos
@@ -229,7 +240,8 @@ func (s *Service) writeTemp(r io.Reader) (path string, sum []byte, size int64, e
 // store moves the temporary file into the library and creates the photo and its
 // job in one transaction, so neither the record nor the job can exist alone. An
 // original left behind by a failure here is harmless, and the next upload reuses it.
-func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhotoParams, priority int, fromScan bool) (Result, error) {
+// With keepDeleted, a photo in the trash or deleted permanently stays that way.
+func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhotoParams, priority int, keepDeleted bool) (Result, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return Result{}, fmt.Errorf("begin transaction: %w", err)
@@ -244,7 +256,7 @@ func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhot
 
 	existing, err := queries.GetPhotoByHash(ctx, store.GetPhotoByHashParams{OwnerID: params.OwnerID, Sha256: params.Sha256})
 	switch {
-	case err == nil && fromScan:
+	case err == nil && keepDeleted:
 		return importedDuplicate(existing), nil
 	case err == nil && existing.PurgedAt == nil:
 		return s.duplicate(ctx, tx, queries, existing)

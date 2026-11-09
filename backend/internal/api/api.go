@@ -33,6 +33,8 @@ type Deps struct {
 	Scan         *scan.Service
 	Layout       storage.Layout
 	CookieSecure bool
+	// WebDAV serves the WebDAV tree under /webdav, if set.
+	WebDAV http.Handler
 	// Static serves everything outside /api/.
 	Static http.Handler
 }
@@ -53,6 +55,9 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.getMe))
 	mux.HandleFunc("PATCH /api/v1/me", s.authenticated(s.updateMe))
 	mux.HandleFunc("POST /api/v1/me/password", s.authenticated(s.changePassword))
+	mux.HandleFunc("GET /api/v1/me/app-passwords", s.authenticated(s.listAppPasswords))
+	mux.HandleFunc("POST /api/v1/me/app-passwords", s.authenticated(s.createAppPassword))
+	mux.HandleFunc("DELETE /api/v1/me/app-passwords/{id}", s.authenticated(s.deleteAppPassword))
 
 	mux.HandleFunc("GET /api/v1/users", s.admin(s.listUsers))
 	mux.HandleFunc("POST /api/v1/users", s.admin(s.createUser))
@@ -113,6 +118,12 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
+	if deps.WebDAV != nil {
+		// Both, as a client may be set up with either, and a redirect would lose
+		// the method of a WebDAV request.
+		mux.Handle("/webdav", deps.WebDAV)
+		mux.Handle("/webdav/", deps.WebDAV)
+	}
 	mux.Handle("/", deps.Static)
 	return mux
 }

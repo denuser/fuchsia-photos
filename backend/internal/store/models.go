@@ -29,6 +29,15 @@ type AlbumShare struct {
 	CreatedAt time.Time
 }
 
+type AppPassword struct {
+	ID         int64
+	UserID     int64
+	Name       string
+	TokenHash  []byte
+	CreatedAt  time.Time
+	LastUsedAt *time.Time
+}
+
 type ImportFile struct {
 	RunID int64
 	Path  string
@@ -136,4 +145,14 @@ type User struct {
 	NavigationHiddenOnPhones bool
 	GridSquares              bool
 	TimelineIncludesShared   bool
+}
+
+type WebdavEntry struct {
+	UserID     int64
+	Path       string
+	Parent     string
+	IsDir      bool
+	Size       int64
+	ModifiedAt time.Time
+	PhotoID    *int64
 }

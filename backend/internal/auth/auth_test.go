@@ -1,6 +1,10 @@
 package auth
 
-import "testing"
+import (
+	"bytes"
+	"regexp"
+	"testing"
+)
 
 func TestPassword(t *testing.T) {
 	hash, err := HashPassword("correct horse")
@@ -29,5 +33,26 @@ func TestValidate(t *testing.T) {
 	}
 	if ValidatePassword("short") == nil {
 		t.Error("a short password was accepted")
+	}
+}
+
+func TestNewAppPassword(t *testing.T) {
+	format := regexp.MustCompile(`^[0-9a-hjkmnp-tv-z]{5}(-[0-9a-hjkmnp-tv-z]{5}){3}$`)
+	seen := map[string]bool{}
+	for range 100 {
+		password, hash, err := NewAppPassword()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !format.MatchString(password) {
+			t.Errorf("password %q does not have the expected format", password)
+		}
+		if !bytes.Equal(hash, HashAppPassword(password)) {
+			t.Errorf("hash of %q does not match HashAppPassword", password)
+		}
+		if seen[password] {
+			t.Errorf("password %q repeated", password)
+		}
+		seen[password] = true
 	}
 }

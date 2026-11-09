@@ -17,7 +17,7 @@
 
 A self-hosted application for organizing photos, designed to run on a home NAS (Intel N150, 4 cores, 16 GB DDR5).
 
-**Status:** stage 4. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work. The stage 0 benchmark set the preview format and worker count for JPEG photos. This document records the decisions made so far and the roadmap.
+**Status:** stage 4. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work. The stage 6 WebDAV spike works and waits for tests with real phone clients. The stage 0 benchmark set the preview format and worker count for JPEG photos. This document records the decisions made so far and the roadmap.
 
 ## Features
 
@@ -69,6 +69,10 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | Album covers | The newest processed photo, unless the owner chooses one | Works without effort, and can still be set by hand |
 | Trash | Photos stay until the owner restores or permanently deletes them, with no automatic expiry | Nothing is lost by waiting. Emptying the trash is the way to free disk space |
 | Uploading a photo that is in the trash | Restores it, with its albums and tags | Uploading it again shows that the owner wants it back |
+| WebDAV contents | Each user has a folder tree of their own, kept in the database. A file in it records an upload and points to the photo it became; the file itself is not kept, as the library has the original. A GET returns that original | Sync clients compare the server's listing with the phone to decide what to send. An empty folder would make them send everything again on every sync |
+| WebDAV passwords | App passwords, any number per user, named after the device. The server makes a random one, shows it once and stores its SHA-256. Each can be revoked on its own. The account password does not work over WebDAV | Basic Auth sends the password with every request, too often for argon2id, and a random password needs no slow hash. A lost phone is revoked without logging out the others |
+| Deleting over WebDAV | Removes the file from the WebDAV tree only. The photo stays in the library | Sync apps delete on the server what is gone from the phone, and clearing space on a phone must not delete its photos here |
+| WebDAV and the trash | As with a folder scan: a photo in the trash stays there, and a permanently deleted one is not added again. Files that are not supported photos, such as videos, are refused with 415 | A phone that sends its camera roll again gives no sign that the owner wants a deleted photo back |
 | TLS and HTTP/2 | Caddy in front of the application | The grid loads hundreds of previews, and HTTP/1.1 allows few connections. WebDAV Basic Auth requires TLS |
 
 The main hardware constraints are CPU time for decoding photos and, probably, HDD throughput. Memory is not scarce.
@@ -86,6 +90,8 @@ All sources (browser, folder scan, WebDAV) go through a single `Ingest(file, own
 7. Permanently deleting a photo from the trash removes its original and previews, and leaves a record with only its hash. A database lock on the owner and hash keeps this from colliding with an upload of the same file.
 
 A folder scan lists the files in the chosen folder with their sizes and modification times, waits, and passes each file to ingest if neither has changed. It hashes a file before copying it, so a repeat scan reads everything but writes only what is new. Duplicates in the trash stay there, unlike with an upload.
+
+WebDAV serves each user's tree at `/webdav/`. `x/net/webdav` handles listings, folders, moves, deletes and locks over the tree in the database. Uploads and downloads bypass it: a PUT streams the file into ingest, which treats the trash as a folder scan does, and records the file with its size and the modification time the client sends in `X-OC-Mtime`. While WebDAV is a hypothesis, the server logs every WebDAV request with its client.
 
 Queue behavior:
 
@@ -118,6 +124,7 @@ The built frontend is embedded in the binary with `go:embed`. The image is built
 - `photo_shares`, `albums` (with private/all visibility), `album_photos`, `album_shares`
 - `tags` (owner, name), `photo_tags`
 - `preview_settings` (one row: format, quality and preview sizes), `metadata_settings` (one row: whether the API returns locations)
+- `app_passwords` (user, device name, SHA-256 of the password, last use), `webdav_entries` (user, path, folder or file, size, modification time, the photo)
 - `import_runs` (scan report: found, added, duplicates, in the trash, permanently deleted, unsupported, still changing, failed), `import_files` (files still to process, and the ones to report)
 
 ### Access control
@@ -148,6 +155,8 @@ Revoking access takes effect on the server at once. Previews are cached for a ye
 - [x] **Stage 4: folder scan.** Admin only: fixed root, owner selection, safe re-runs thanks to hashing. Skips files still being copied (size and mtime unchanged for N seconds). Report in `import_runs`. A re-run must not restore photos the owner moved to the trash, unlike a browser upload.
 - [ ] **Stage 5: operations.** Nightly `pg_dump`, backup and tested restore instructions, logs and queue metrics.
 - [ ] **Stage 6: WebDAV (hypothesis, starts as a spike).** Per-user upload folder, separate app password, files go through ingest. Tested with real mobile clients such as PhotoSync and FolderSync. If they work poorly, the feature is dropped and the outcome recorded here.
+  - [x] Spike: the WebDAV tree at `/webdav/`, app passwords in the profile, uploads through ingest
+  - [ ] Tests with PhotoSync and FolderSync on the NAS, with the outcome recorded here
 - [ ] **Stage 7: ML (later).** An `embed_photo` job sends a preview to an external server. The NAS stays the source of truth, and a FAISS index can be rebuilt. Search results are filtered by the permission predicate. The protocol (gRPC or HTTP) and the choice of FAISS or `pgvector` are decided at this stage.
 
 ## Acceptance criteria

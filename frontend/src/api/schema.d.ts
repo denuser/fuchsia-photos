@@ -90,6 +90,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/app-passwords": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the current user's app passwords for WebDAV clients */
+        get: operations["listAppPasswords"];
+        put?: never;
+        /**
+         * Create an app password for a WebDAV client
+         * @description The server makes the password and keeps only its hash, so this is the only response that contains it. A user can have at most 20.
+         */
+        post: operations["createAppPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/app-passwords/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke an app password */
+        delete: operations["deleteAppPassword"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -1056,6 +1096,23 @@ export interface components {
             id: number;
             name: string;
         };
+        AppPassword: {
+            /** Format: int64 */
+            id: number;
+            /** @description The device or client it is for */
+            name: string;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description When a client last logged in with it, to within an hour
+             */
+            lastUsedAt: string | null;
+        };
+        NewAppPassword: components["schemas"]["AppPassword"] & {
+            /** @description Four groups of five characters, shown only once */
+            password: string;
+        };
         Tag: {
             /** Format: int64 */
             id: number;
@@ -1260,6 +1317,69 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             403: components["responses"]["Error"];
+        };
+    };
+    listAppPasswords: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The app passwords, oldest first, without the passwords themselves */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppPassword"][];
+                };
+            };
+        };
+    };
+    createAppPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Name"];
+        responses: {
+            /** @description The new app password */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewAppPassword"];
+                };
+            };
+            400: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    deleteAppPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The password no longer logs in */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
         };
     };
     listUsers: {

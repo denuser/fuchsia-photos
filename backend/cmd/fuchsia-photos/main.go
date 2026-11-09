@@ -29,6 +29,7 @@ import (
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 	"github.com/denuser/fuchsia-photos/backend/internal/web"
+	"github.com/denuser/fuchsia-photos/backend/internal/webdav"
 )
 
 const usage = `usage: fuchsia-photos <command>
@@ -172,6 +173,7 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		Scan:         scanner,
 		Layout:       layout,
 		CookieSecure: cfg.CookieSecure,
+		WebDAV:       &webdav.Handler{Queries: store.New(pool), Ingest: ingester, Layout: layout},
 		Static:       static,
 	})
 	return listen(ctx, cfg.HTTPAddr, handler)

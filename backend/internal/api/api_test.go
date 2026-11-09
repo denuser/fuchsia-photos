@@ -666,3 +666,48 @@ func (e *eventReader) next() ([]byte, error) {
 		e.buf = append(e.buf, chunk[:n]...)
 	}
 }
+
+func TestAppPasswords(t *testing.T) {
+	e := setup(t)
+	e.addUser("anna", auth.RoleUser)
+	e.addUser("boris", auth.RoleUser)
+	anna := e.loggedIn("anna")
+	boris := e.loggedIn("boris")
+
+	wantStatus(t, anna.json(http.MethodPost, "/api/v1/me/app-passwords", map[string]string{"name": " "}), http.StatusBadRequest)
+
+	res := anna.json(http.MethodPost, "/api/v1/me/app-passwords", map[string]string{"name": "iPhone"})
+	wantStatus(t, res, http.StatusCreated)
+	created := decode[struct {
+		ID       int64  `json:"id"`
+		Name     string `json:"name"`
+		Password string `json:"password"`
+	}](t, res)
+	if created.Name != "iPhone" || created.Password == "" {
+		t.Fatalf("created = %+v", created)
+	}
+	stored, err := e.queries.GetAppPasswordUser(context.Background(), auth.HashAppPassword(created.Password))
+	if err != nil || stored.User.Login != "anna" {
+		t.Fatalf("the password does not log in as anna: %v", err)
+	}
+
+	res = anna.get("/api/v1/me/app-passwords")
+	wantStatus(t, res, http.StatusOK)
+	listed := decode[[]map[string]any](t, res)
+	if len(listed) != 1 || listed[0]["name"] != "iPhone" {
+		t.Fatalf("listed = %v", listed)
+	}
+	if _, ok := listed[0]["password"]; ok {
+		t.Error("the list shows the password")
+	}
+
+	res = boris.get("/api/v1/me/app-passwords")
+	if listed := decode[[]map[string]any](t, res); len(listed) != 0 {
+		t.Errorf("boris sees anna's app passwords: %v", listed)
+	}
+	wantStatus(t, boris.json(http.MethodDelete, "/api/v1/me/app-passwords/"+itoa(created.ID), nil), http.StatusNotFound)
+	wantStatus(t, anna.json(http.MethodDelete, "/api/v1/me/app-passwords/"+itoa(created.ID), nil), http.StatusNoContent)
+	if _, err := e.queries.GetAppPasswordUser(context.Background(), auth.HashAppPassword(created.Password)); err == nil {
+		t.Error("a deleted app password still logs in")
+	}
+}

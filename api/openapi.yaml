@@ -126,6 +126,49 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /me/app-passwords:
+    get:
+      operationId: listAppPasswords
+      summary: List the current user's app passwords for WebDAV clients
+      responses:
+        "200":
+          description: The app passwords, oldest first, without the passwords themselves
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppPassword"
+    post:
+      operationId: createAppPassword
+      summary: Create an app password for a WebDAV client
+      description: >-
+        The server makes the password and keeps only its hash, so this is the
+        only response that contains it. A user can have at most 20.
+      requestBody:
+        $ref: "#/components/requestBodies/Name"
+      responses:
+        "201":
+          description: The new app password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewAppPassword"
+        "400":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /me/app-passwords/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    delete:
+      operationId: deleteAppPassword
+      summary: Revoke an app password
+      responses:
+        "204":
+          description: The password no longer logs in
+        "404":
+          $ref: "#/components/responses/Error"
   /users:
     get:
       operationId: listUsers
@@ -1659,6 +1702,32 @@ components:
           format: int64
         name:
           type: string
+    AppPassword:
+      type: object
+      required: [id, name, createdAt, lastUsedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          description: The device or client it is for
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          description: When a client last logged in with it, to within an hour
+          type: [string, "null"]
+          format: date-time
+    NewAppPassword:
+      allOf:
+        - $ref: "#/components/schemas/AppPassword"
+        - type: object
+          required: [password]
+          properties:
+            password:
+              description: Four groups of five characters, shown only once
+              type: string
     Tag:
       type: object
       required: [id, name, photoCount]

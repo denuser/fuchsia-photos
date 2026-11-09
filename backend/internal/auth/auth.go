@@ -112,3 +112,32 @@ func HashSessionToken(token string) []byte {
 	sum := sha256.Sum256([]byte(token))
 	return sum[:]
 }
+
+// appPasswordAlphabet is Crockford's base32 in lower case. It leaves out i, l, o
+// and u, so a password typed on a phone has no characters that look alike. Its
+// 32 characters divide 256 evenly, so each is equally likely.
+const appPasswordAlphabet = "0123456789abcdefghjkmnpqrstvwxyz"
+
+// NewAppPassword returns a random password for a WebDAV client, in four groups
+// of five characters, and the hash to store. With 100 bits of randomness it
+// needs no slow hash: it cannot be guessed, unlike a password a person picks.
+func NewAppPassword() (password string, hash []byte, err error) {
+	raw := make([]byte, 20)
+	if _, err := rand.Read(raw); err != nil {
+		return "", nil, err
+	}
+	var b strings.Builder
+	for i, v := range raw {
+		if i > 0 && i%5 == 0 {
+			b.WriteByte('-')
+		}
+		b.WriteByte(appPasswordAlphabet[int(v)%len(appPasswordAlphabet)])
+	}
+	return b.String(), HashAppPassword(b.String()), nil
+}
+
+// HashAppPassword returns the stored form of an app password.
+func HashAppPassword(password string) []byte {
+	sum := sha256.Sum256([]byte(password))
+	return sum[:]
+}

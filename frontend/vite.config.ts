@@ -9,6 +9,7 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': 'http://localhost:8080',
+      '/webdav': 'http://localhost:8080',
     },
   },
 })

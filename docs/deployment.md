@@ -89,6 +89,20 @@ A scan first lists the files, waits for `IMPORT_STABLE_SECONDS`, and skips any f
 
 A scan continues after a restart, from where it stopped. After a clean stop, this happens shortly after the next start. After a crash or power loss, it can take up to 30 minutes.
 
+## Uploading from a phone over WebDAV
+
+WebDAV is a hypothesis being tested, see stage 6 of the [roadmap](../README.md#roadmap). Sync apps such as PhotoSync and FolderSync can upload photos to `https://<address>/webdav/`, or `http://<address>:10303/webdav/` [without TLS](#running-from-an-image-without-tls).
+
+1. In the web interface, open **Profile**. Under **Upload from a phone**, choose **New app password** and name the device.
+2. In the app, add a WebDAV server with the address, your login and the app password. The account password does not work there.
+3. Set the app to upload only, and to send photos only: videos and other files are refused.
+
+Files deleted in the app, or by the app's sync, disappear from the WebDAV folder and stay in the library. Photos in the trash stay there when the app sends them again. A file can be up to 512 MiB.
+
+Without TLS, the app password crosses the network unencrypted with every request. Whoever reads it can upload photos as that user and download the originals uploaded over WebDAV, but not log in to the web interface. Use it only on a trusted home network, and revoke a password in the profile if a device is lost.
+
+The server logs every WebDAV request with its method, path, status and client, to see how real clients behave.
+
 ## Backups
 
 Backups are not set up yet. They are planned for stage 5.
