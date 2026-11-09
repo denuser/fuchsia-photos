@@ -1,3 +1,11 @@
+{
+	# Clients that connect by IP address send no server name, and without this
+	# Caddy finds no certificate for them.
+	default_sni {$SITE_ADDRESS}
+	# The local CA cannot be installed into the container's trust store.
+	skip_install_trust
+}
+
 {$SITE_ADDRESS} {
 	# A certificate from Caddy's local CA, for a NAS without a public domain.
 	# Remove this line to get a public certificate for a real domain name.

@@ -91,7 +91,7 @@ A scan continues after a restart, from where it stopped. After a clean stop, thi
 
 ## Uploading from a phone over WebDAV
 
-WebDAV is a hypothesis being tested, see stage 6 of the [roadmap](../README.md#roadmap). Sync apps such as PhotoSync and FolderSync can upload photos to `https://<address>/webdav/`, or `http://<address>:10303/webdav/` [without TLS](#running-from-an-image-without-tls).
+WebDAV is a hypothesis being tested, see stage 6 of the [roadmap](../README.md#roadmap). Sync apps such as PhotoSync and FolderSync can upload photos to `https://<address>/webdav/`, or `https://<address>:10304/webdav/` when [running from an image](#running-from-an-image).
 
 FolderSync needs HTTPS: given an `http://` address, it still tries TLS and reports "unable to parse TLS packet header". With the certificate from Caddy's local CA, turn on "Allow self-signed certificate" in the account settings.
 
@@ -101,7 +101,7 @@ FolderSync needs HTTPS: given an `http://` address, it still tries TLS and repor
 
 Files deleted in the app, or by the app's sync, disappear from the WebDAV folder and stay in the library. Photos in the trash stay there when the app sends them again. A file can be up to 512 MiB.
 
-Without TLS, the app password crosses the network unencrypted with every request. Whoever reads it can upload photos as that user and download the originals uploaded over WebDAV, but not log in to the web interface. Use it only on a trusted home network, and revoke a password in the profile if a device is lost.
+Revoke a password in the profile if a device is lost. Whoever has it can upload photos as that user and download the originals uploaded over WebDAV, but not log in to the web interface.
 
 The server logs every WebDAV request with its method, path, status and client, to see how real clients behave.
 
@@ -126,20 +126,28 @@ docker compose -f deploy/compose.yaml up -d
 
 On an ARM machine such as an Apple Silicon Mac, `make image` runs under emulation and is noticeably slower.
 
-## Running from an image without TLS
+## Running from an image
 
-`deploy/compose.image.yaml` needs only the image, so the NAS does not need the source code. It leaves out Caddy and serves plain HTTP on port 10303, which has these costs:
+`deploy/compose.image.yaml` needs only the image, so the NAS does not need the source code. The Caddyfile is written into it. Caddy serves HTTPS on port 10304, as ports 80 and 443 are often taken, for example by the TrueNAS web interface, and there is no plain HTTP port. Open the application at `https://<address>:10304/`. The certificate comes from Caddy's local CA, as in [First start](#first-start).
 
-- Passwords, session cookies and photos cross the network unencrypted, so use it only on a trusted home network and do not forward the port to the internet.
-- Without HTTP/2, browsers open few connections at once, so the grid loads previews more slowly.
-- Responses are not compressed.
+Caddy runs on the host network, and the application listens only on `127.0.0.1:10303` for it. This lets the NAS have several addresses, such as one at home and one in a VPN: a client that connects by IP address sends no server name, and Caddy then picks the certificate by the address the connection came to, which it cannot see from a Docker network.
+
+This file uses Compose `configs` with `content`, which needs Docker Compose 2.23 or later.
 
 It uses the image that CI publishes to `ghcr.io/denuser/fuchsia-photos` on every push to `master`, for `linux/amd64`. Each image has two tags:
 
 - `latest`, the newest build of `master`;
 - `sha-<commit>`, for example `sha-6593702`, which never changes.
 
-Copy `deploy/compose.image.yaml` to a folder on the NAS as `docker-compose.yml`. Next to it, create a `.env` file with `POSTGRES_PASSWORD` and any of the other variables from [First start](#first-start), apart from `SITE_ADDRESS`, `HTTP_PORT` and `HTTPS_PORT`. Prepare the folders as described there.
+Copy `deploy/compose.image.yaml` to a folder on the NAS as `docker-compose.yml`. Next to it, create a `.env` file with `POSTGRES_PASSWORD`, `SITE_ADDRESS` and any of the other variables from [First start](#first-start), apart from `HTTP_PORT`. Some of them differ here:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SITE_ADDRESS` | required | Addresses of the NAS separated by commas, for example `192.168.0.101, 10.8.1.7` |
+| `HTTPS_PORT` | `10304` | HTTPS port on the host |
+| `CADDY_DIR` | `./data/caddy` | Caddy's certificates and local CA. Keep it, or browsers and phones that trust the CA have to accept a new one |
+
+Prepare the folders as described there.
 
 Run these commands from that folder:
 
@@ -159,9 +167,9 @@ To run a specific build, set `IMAGE_TAG=sha-<commit>` in `.env`. Going back to a
 
 ## Running on TrueNAS
 
-On TrueNAS, the image from [Running from an image without TLS](#running-from-an-image-without-tls) runs as a custom app, with the same trade-offs. TrueNAS does not read a `.env` file, so the values go into the YAML itself.
+On TrueNAS, the setup from [Running from an image](#running-from-an-image) runs as a custom app. TrueNAS does not read a `.env` file, so the values go into the YAML itself.
 
-Both containers run as the TrueNAS `apps` user and group, UID and GID 568. Create a dataset for the application, and inside it a dataset or folder for each of `library`, `cache`, `import` and `postgres`. In **Datasets**, select the parent dataset and choose **Edit** on the **Permissions** card. Set the owner and the owning group to `apps`, give `owner@` full control and `group@` modify, and apply the permissions to the child datasets. The application only reads `import`, so files copied there by other users need to be readable by `apps`.
+Both containers run as the TrueNAS `apps` user and group, UID and GID 568. Create a dataset for the application, and inside it a dataset or folder for each of `library`, `cache`, `import`, `postgres` and `caddy`. In **Datasets**, select the parent dataset and choose **Edit** on the **Permissions** card. Set the owner and the owning group to `apps`, give `owner@` full control and `group@` modify, and apply the permissions to the child datasets. The application only reads `import`, so files copied there by other users need to be readable by `apps`.
 
 In **Apps**, choose **Discover Apps**, then **Install via YAML** from the menu, and paste this, with your paths and password:
 
@@ -195,16 +203,48 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://photos:change-me@postgres:5432/photos
-      COOKIE_INSECURE: 'true'
       WORKERS: 3
       IMPORT_STABLE_SECONDS: 60
     ports:
-      - '10303:8080'
+      - '127.0.0.1:10303:8080'
     volumes:
       - /mnt/pool/fuchsia/library:/data/library
       - /mnt/pool/fuchsia/cache:/data/cache
       - /mnt/pool/fuchsia/import:/data/import:ro
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    user: '568:568'
+    depends_on:
+      - app
+    network_mode: host
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - /mnt/pool/fuchsia/caddy:/data
+
+configs:
+  caddyfile:
+    content: |
+      {
+        https_port 10304
+        auto_https disable_redirects
+        skip_install_trust
+        admin off
+      }
+
+      192.168.0.101, 10.8.1.7 {
+        tls internal
+        encode zstd gzip
+        reverse_proxy 127.0.0.1:10303
+      }
 ```
+
+Replace `192.168.0.101, 10.8.1.7` with the addresses that browsers and phones use for the NAS, separated by commas. Each address gets its own certificate.
+
+An app installed from the earlier YAML, which served plain HTTP on port 10303, changes over when you edit its YAML to this one. The session cookie then needs HTTPS, so log in again at the new address.
 
 The password appears twice, in `POSTGRES_PASSWORD` and in `DATABASE_URL`, and both must match. Use only URL-safe characters.
 

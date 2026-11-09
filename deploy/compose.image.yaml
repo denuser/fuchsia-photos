@@ -1,6 +1,6 @@
-# Runs a ready image over plain HTTP, without Caddy and without the source code.
-# Copy this file to the NAS as docker-compose.yml. Relative paths are relative to
-# its folder. See "Running from an image without TLS" in docs/deployment.md.
+# Runs a ready image behind Caddy, without the source code. Copy this file to the
+# NAS as docker-compose.yml. Relative paths are relative to its folder. See
+# "Running from an image" in docs/deployment.md.
 name: fuchsia-photos
 
 services:
@@ -29,12 +29,45 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://photos:${POSTGRES_PASSWORD}@postgres:5432/photos
-      COOKIE_INSECURE: "true"
       WORKERS: ${WORKERS:-3}
       IMPORT_STABLE_SECONDS: ${IMPORT_STABLE_SECONDS:-60}
+    # Only Caddy, on the host network, reaches the application.
     ports:
-      - "10303:8080"
+      - "127.0.0.1:10303:8080"
     volumes:
       - ${LIBRARY_DIR:-./data/library}:/data/library
       - ${CACHE_DIR:-./data/cache}:/data/cache
       - ${IMPORT_DIR:-./data/import}:/data/import:ro
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    # On the host network, Caddy sees which address of the NAS a client
+    # connected to, and picks that address's certificate when the client sends
+    # no server name, as clients that connect by IP address do.
+    network_mode: host
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - ${CADDY_DIR:-./data/caddy}:/data
+
+# The Caddyfile is part of this file, so the NAS needs nothing else.
+# SITE_ADDRESS lists the addresses of the NAS, separated by commas.
+configs:
+  caddyfile:
+    content: |
+      {
+        https_port ${HTTPS_PORT:-10304}
+        auto_https disable_redirects
+        skip_install_trust
+        admin off
+      }
+
+      ${SITE_ADDRESS:?set SITE_ADDRESS in .env} {
+        tls internal
+        encode zstd gzip
+        reverse_proxy 127.0.0.1:10303
+      }
