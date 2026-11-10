@@ -7,6 +7,7 @@
 - Node.js 24 and pnpm 12
 - Google Chrome, for `make e2e`
 - libvips, pkg-config and exiftool: `brew install vips pkg-config exiftool`
+- uv, for the ML service: `brew install uv`
 
 The backend links against libvips through cgo, so it needs a working C toolchain on the host.
 
@@ -74,6 +75,9 @@ The server reads its settings from environment variables:
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. `debug` logs every request |
 | `LOG_FORMAT` | `text` | `text` or `json` |
 | `COOKIE_INSECURE` | unset | Set to `true` to allow the session cookie over plain HTTP. For local development and the e2e stack |
+| `ML_URL` | unset | Address of the ML service, such as `http://mac.local:8090`. Without it search by description is off. `make dev-backend` sets `http://127.0.0.1:8090` |
+| `ML_TOKEN` | unset | Bearer token the ML service requires, if it was started with one |
+| `ML_MODEL` | `google/siglip2-base-patch16-384@1` | The model whose vectors the application uses, as the service's `/health` names it. A service with another model is not used. Changing it makes the application embed all photos again |
 
 ### Database and migrations
 
@@ -102,6 +106,24 @@ A new migration file has an empty `Up` and `Down` section, and both must be fill
 1. Update the handlers in `backend/internal/api`. They are written by hand.
 2. Run `make api-types` to regenerate the frontend types, and commit the result.
 
+## ML service
+
+`ml/` holds the ML service: Python, FastAPI and PyTorch, with dependencies managed by uv. It runs natively, as Docker on macOS has no access to the GPU.
+
+| Task | Command |
+|---|---|
+| Run the service | `make ml` |
+| Run it with a token | `ML_TOKEN=<token> make ml` |
+| Add a dependency | `cd ml && uv add <package>` |
+
+The first start downloads the model from Hugging Face, about 1.5 GB, into `~/.cache/huggingface`. The service picks CUDA, then Apple's GPU (MPS), then the CPU. It listens on all interfaces, so the NAS can reach it; set `ML_TOKEN` there and on the service when it runs outside your own machine.
+
+`ML_MODEL` on the service picks a Hugging Face model of the SigLIP 2 family, by default `google/siglip2-base-patch16-384`. The application's `ML_MODEL` must then name it too, with the `@` suffix the service reports.
+
+Text search leaves out photos less similar to the query than a threshold the service gives for its model: `MIN_SIMILARITY` in `ml/server.py`, or `ML_MIN_SIMILARITY` on the service to try another value. A model without one returns the nearest photos, matching or not. To calibrate a new model, look at the distances of the photos `/api/v1/search` returns for queries with known answers and put the threshold between the last match and the first unrelated photo.
+
+Once the service is up, the application finds it within 30 seconds and embeds all processed photos in the background. The administration page shows the progress. The service has no automated tests during the stage 7 spike; the backend tests use a fake service.
+
 ## Frontend
 
 | Task | Command |
@@ -129,7 +151,7 @@ TypeScript stays on version 5, because `vue-tsc` does not work with version 7 ye
 To run everything on the host, use a scratch database rather than the development one:
 
 ```sh
-docker run -d --rm --name fuchsia-photos-test-db -p 127.0.0.1:5433:5432 -e POSTGRES_PASSWORD=test postgres:18
+docker run -d --rm --name fuchsia-photos-test-db -p 127.0.0.1:5433:5432 -e POSTGRES_PASSWORD=test pgvector/pgvector:pg18-trixie
 cd backend && TEST_DATABASE_URL=postgres://postgres:test@localhost:5433/postgres go test ./...
 docker stop fuchsia-photos-test-db
 ```

@@ -612,6 +612,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/photos/{id}/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Photos the current user can see that look like this one, nearest first
+         * @description Uses the stored vectors, so it works while the ML service is off. A photo without a vector yet has no similar photos
+         */
+        get: operations["listSimilarPhotos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Photos the current user can see that match a description, best first
+         * @description Administrators search like other users; all users' photos stay on the administration page
+         */
+        get: operations["searchPhotos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/search/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether search by description works now */
+        get: operations["getSearchStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The ML service, the embedding progress and the latest failures (administrators only) */
+        get: operations["getMLStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/albums": {
         parameters: {
             query?: never;
@@ -967,7 +1041,7 @@ export interface components {
         };
         /** @description Jobs of one kind. Finished jobs are kept for a day, so the finished counts cover a day at most */
         JobKindStats: {
-            /** @description process_photo, render_grid, render_previews, folder_scan or cleanup */
+            /** @description process_photo, render_grid, render_previews, folder_scan, embed_photos or cleanup */
             kind: string;
             /** Format: int64 */
             waiting: number;
@@ -1216,6 +1290,57 @@ export interface components {
             items: components["schemas"]["Photo"][];
             nextCursor: string | null;
         };
+        SearchResults: {
+            items: components["schemas"]["Photo"][];
+            /** @description The cosine distance of each photo to the query, in the order of items. 0 is the same direction */
+            distances: number[];
+        };
+        /**
+         * @description disabled when no service is configured, mismatch when it runs another model than the configured one
+         * @enum {string}
+         */
+        MLState: "disabled" | "unavailable" | "available" | "mismatch";
+        SearchStatus: {
+            available: boolean;
+            state: components["schemas"]["MLState"];
+        };
+        MLStatus: {
+            state: components["schemas"]["MLState"];
+            /** @description The configured model, with the version of the service's preprocessing */
+            model: string;
+            /** @description The model the service reported, if it answered */
+            serviceModel?: string;
+            /** @description Where the service runs the model, such as mps or cuda */
+            device?: string;
+            error?: string;
+            /** Format: date-time */
+            checkedAt: string | null;
+            /**
+             * Format: int64
+             * @description Processed photos
+             */
+            photos: number;
+            /**
+             * Format: int64
+             * @description Processed photos with a vector of the configured model
+             */
+            embedded: number;
+            /**
+             * Format: int64
+             * @description Photos skipped after failing too often
+             */
+            failed: number;
+            /** @description The latest failures, newest first, at most 10 */
+            failures: components["schemas"]["MLFailure"][];
+        };
+        MLFailure: {
+            /** Format: int64 */
+            photoId: number;
+            attempts: number;
+            error: string;
+            /** Format: date-time */
+            failedAt: string;
+        };
         PhotoIds: number[];
         UploadResult: {
             photo: components["schemas"]["Photo"];
@@ -1305,6 +1430,7 @@ export interface components {
     };
     parameters: {
         Id: number;
+        SearchLimit: number;
     };
     requestBodies: {
         PhotoIds: {
@@ -2293,6 +2419,99 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+        };
+    };
+    listSimilarPhotos: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["SearchLimit"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The nearest photos, without the photo itself */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    searchPhotos: {
+        parameters: {
+            query: {
+                /** @description What the photos show, in any language */
+                q: string;
+                limit?: components["parameters"]["SearchLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The nearest photos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            400: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    getSearchStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state of the ML service */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchStatus"];
+                };
+            };
+        };
+    };
+    getMLStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state of ML */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MLStatus"];
+                };
+            };
+            403: components["responses"]["Error"];
         };
     };
     listAlbums: {

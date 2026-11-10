@@ -6,8 +6,23 @@ import { useAuthStore } from '../stores/auth'
 import { useUsersStore } from '../stores/users'
 
 // paused leaves the keyboard to a dialog opened over the viewer.
-const props = defineProps<{ photos: Photo[]; photo: Photo; canTag: boolean; canManage: boolean; paused: boolean }>()
-const emit = defineEmits<{ close: []; navigate: [photo: Photo]; trash: [photo: Photo]; tags: [photo: Photo]; share: [photo: Photo] }>()
+const props = defineProps<{
+  photos: Photo[]
+  photo: Photo
+  canTag: boolean
+  canManage: boolean
+  // Whether the viewer offers to find photos that look like this one.
+  canFindSimilar: boolean
+  paused: boolean
+}>()
+const emit = defineEmits<{
+  close: []
+  navigate: [photo: Photo]
+  trash: [photo: Photo]
+  tags: [photo: Photo]
+  share: [photo: Photo]
+  similar: [photo: Photo]
+}>()
 
 const auth = useAuthStore()
 const users = useUsersStore()
@@ -505,6 +520,14 @@ onBeforeUnmount(() => {
         <div class="name">{{ photo.name }}</div>
         <div class="details">{{ details }}</div>
       </div>
+      <v-btn
+        v-if="canFindSimilar"
+        icon="fa-clone"
+        variant="text"
+        aria-label="Similar photos"
+        title="Similar photos"
+        @click="emit('similar', photo)"
+      />
       <v-btn v-if="canTag" icon="fa-tag" variant="text" aria-label="Tags" @click="emit('tags', photo)" />
       <template v-if="canManage">
         <v-btn icon="fa-share-nodes" variant="text" aria-label="Share" @click="emit('share', photo)" />

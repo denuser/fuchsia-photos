@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import type { Photo } from '../api/client'
 import { useAuthStore } from '../stores/auth'
@@ -22,6 +23,7 @@ import TagDialog from './TagDialog.vue'
 const props = defineProps<{ mode: 'library' | 'trash' | 'admin' | 'shared' }>()
 const emit = defineEmits<{ tagged: [] }>()
 
+const router = useRouter()
 const auth = useAuthStore()
 const photos = usePhotosStore()
 const notices = useNoticesStore()
@@ -189,6 +191,11 @@ async function trashOpened(photo: Photo) {
   }
 }
 
+function findSimilar(photo: Photo) {
+  opened.value = null
+  void router.push({ path: '/search', query: { similar: String(photo.id) } })
+}
+
 defineExpose({ clearSelection, say })
 </script>
 
@@ -246,12 +253,14 @@ defineExpose({ clearSelection, say })
       :photo="opened"
       :can-tag="viewerCanTag"
       :can-manage="viewerCanManage"
+      :can-find-similar="props.mode !== 'trash'"
       :paused="dialogOpen"
       @close="opened = null"
       @navigate="opened = $event"
       @trash="trashOpened"
       @tags="openViewerTags"
       @share="openViewerSharing"
+      @similar="findSimilar"
     />
 
     <TagDialog v-model="tagDialog" :photo-ids="tagTargets" @done="onTagged" />

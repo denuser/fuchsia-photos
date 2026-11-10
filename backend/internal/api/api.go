@@ -18,6 +18,7 @@ import (
 
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
 	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
+	"github.com/denuser/fuchsia-photos/backend/internal/ml"
 	"github.com/denuser/fuchsia-photos/backend/internal/scan"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
@@ -32,11 +33,13 @@ type Pinger interface {
 type Deps struct {
 	DB Pinger
 	// Pool reads the job queue, which the generated queries do not cover.
-	Pool         *pgxpool.Pool
-	Queries      *store.Queries
-	Ingest       *ingest.Service
-	Scan         *scan.Service
-	Layout       storage.Layout
+	Pool    *pgxpool.Pool
+	Queries *store.Queries
+	Ingest  *ingest.Service
+	Scan    *scan.Service
+	Layout  storage.Layout
+	// ML embeds search texts. Its monitor tells whether the service is up.
+	ML           *ml.Service
 	CookieSecure bool
 	// WebDAV serves the WebDAV tree under /webdav, if set.
 	WebDAV http.Handler
@@ -50,6 +53,9 @@ type server struct {
 
 // NewHandler returns the application handler.
 func NewHandler(deps Deps) http.Handler {
+	if deps.ML == nil {
+		deps.ML = &ml.Service{Monitor: ml.NewMonitor(nil, "")}
+	}
 	s := &server{deps}
 	mux := http.NewServeMux()
 
@@ -94,6 +100,11 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/photos/{id}/sharing", s.authenticated(s.getPhotoSharing))
 	mux.HandleFunc("GET /api/v1/photos/{id}/previews/{kind}", s.authenticated(s.getPreview))
 	mux.HandleFunc("GET /api/v1/photos/{id}/original", s.authenticated(s.getOriginal))
+	mux.HandleFunc("GET /api/v1/photos/{id}/similar", s.authenticated(s.listSimilarPhotos))
+
+	mux.HandleFunc("GET /api/v1/search", s.authenticated(s.searchPhotos))
+	mux.HandleFunc("GET /api/v1/search/status", s.authenticated(s.getSearchStatus))
+	mux.HandleFunc("GET /api/v1/ml", s.admin(s.getMLStatus))
 
 	mux.HandleFunc("GET /api/v1/albums", s.authenticated(s.listAlbums))
 	mux.HandleFunc("POST /api/v1/albums", s.authenticated(s.createAlbum))

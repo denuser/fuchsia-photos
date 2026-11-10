@@ -10,3 +10,6 @@ deploy/data/
 .bench/
 
 .DS_Store
+
+ml/.venv/
+__pycache__/

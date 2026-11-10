@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"time"
@@ -368,6 +369,10 @@ type Config struct {
 	Workers  int
 	// Register adds workers that live in packages depending on this one.
 	Register func(*river.Workers)
+	// PeriodicJobs are started besides the cleanup.
+	PeriodicJobs []*river.PeriodicJob
+	// Queues are added to the default and import queues, such as the ML queue.
+	Queues map[string]river.QueueConfig
 }
 
 // QueueImport runs folder scans. It is separate so that a scan takes no worker
@@ -388,20 +393,24 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 		cfg.Register(workers)
 	}
 
+	queues := map[string]river.QueueConfig{
+		river.QueueDefault: {MaxWorkers: cfg.Workers},
+		QueueImport:        {MaxWorkers: 1},
+	}
+	maps.Copy(queues, cfg.Queues)
+	periodic := append([]*river.PeriodicJob{
+		river.NewPeriodicJob(
+			river.PeriodicInterval(24*time.Hour),
+			func() (river.JobArgs, *river.InsertOpts) { return CleanupArgs{}, nil },
+			&river.PeriodicJobOpts{RunOnStart: true},
+		),
+	}, cfg.PeriodicJobs...)
+
 	return river.NewClient(riverpgxv5.New(pool), &river.Config{
-		Queues: map[string]river.QueueConfig{
-			river.QueueDefault: {MaxWorkers: cfg.Workers},
-			QueueImport:        {MaxWorkers: 1},
-		},
+		Queues:               queues,
 		Workers:              workers,
 		RescueStuckJobsAfter: rescueAfter,
-		PeriodicJobs: []*river.PeriodicJob{
-			river.NewPeriodicJob(
-				river.PeriodicInterval(24*time.Hour),
-				func() (river.JobArgs, *river.InsertOpts) { return CleanupArgs{}, nil },
-				&river.PeriodicJobOpts{RunOnStart: true},
-			),
-		},
+		PeriodicJobs:         periodic,
 	})
 }
 

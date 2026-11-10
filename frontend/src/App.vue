@@ -50,6 +50,7 @@ const navShownInFull = computed(() => (navOverlay.value ? navOpen.value : navExp
 
 const navItems = computed(() => [
   { to: '/', icon: 'fa-images', title: 'Photos', exact: true },
+  { to: '/search', icon: 'fa-magnifying-glass', title: 'Search' },
   { to: '/albums', icon: 'fa-book-open', title: 'Albums' },
   { to: '/shared', icon: 'fa-users', title: 'Shared with me' },
   { to: '/tags', icon: 'fa-tags', title: 'Tags' },

@@ -17,7 +17,7 @@
 
 A self-hosted application for organizing photos, designed to run on a home NAS (Intel N150, 4 cores, 16 GB DDR5).
 
-**Status:** stage 6. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work, with nightly database dumps, a tested restore, request logs and the job queue on the administration page. Phones upload over WebDAV, checked with PhotoSync and FolderSync on the NAS. The stage 0 benchmark set the preview format and worker count for JPEG photos. This document records the decisions made so far and the roadmap.
+**Status:** stage 6, with the stage 7 spike in progress: search by description and similar photos, with the ML service on a Mac. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work, with nightly database dumps, a tested restore, request logs and the job queue on the administration page. Phones upload over WebDAV, checked with PhotoSync and FolderSync on the NAS. The stage 0 benchmark set the preview format and worker count for JPEG photos. This document records the decisions made so far and the roadmap.
 
 ## Features
 
@@ -81,7 +81,7 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | ML service | A separate stateless service in Python that turns a viewer preview or a search text into a vector. It has no access to the database: the application calls it, stores the vectors and checks permissions. Its address and a token are set in the environment. It runs on a Mac first, natively with PyTorch on the GPU, and can move to a cloud GPU without recomputing vectors | The service can run anywhere, including outside the home network, with no database credentials. Docker on macOS has no GPU access. The same model weights and preprocessing give the same vectors on any hardware |
 | ML availability | The application asks the service for its health every 30 seconds and keeps its state: unavailable, available, or running a model other than the configured one. Embedding runs only while it is available. The interface disables text search while the service is down, and the administration page shows the state, the model and the progress | The test machine is often switched off, and the library must work without it. A different model would mix incomparable vectors |
 | Embedding queue | No job per photo. A periodic job on its own queue with one worker takes processed photos that have no vector for the configured model, in batches, and stops when none are left or the service goes away. A photo that fails three times is skipped and listed on the administration page | Per-photo jobs would fail or pile up while the service is off for days. New photos, a first run over the library and a change of model need nothing extra: they all show up as photos without a vector |
-| Embedding storage | `pgvector` in the main database, half-precision vectors keyed by photo and model. No FAISS. Search starts with an exact scan, and an HNSW index per model is added only if it gets slow. The PostgreSQL image becomes `pgvector/pgvector` | The permission predicate and the vector search run in one query. Filtering FAISS results afterwards would leave a user who sees a small part of the library with few or no results. A home library is small enough for an exact scan |
+| Embedding storage | `pgvector` in the main database, half-precision vectors keyed by photo and model. No FAISS. Search starts with an exact scan, and an HNSW index per model is added only if it gets slow. The database runs on `pgvector/pgvector:pg18-trixie`, and the `backup` container stays on `postgres:18` | The permission predicate and the vector search run in one query. Filtering FAISS results afterwards would leave a user who sees a small part of the library with few or no results. A home library is small enough for an exact scan. The `trixie` image is built on the same Debian release as `postgres:18`, so an existing database keeps its collations; the plain `pg18` tag is an older release with an older glibc |
 | TLS and HTTP/2 | Caddy in front of the application | The grid loads hundreds of previews, and HTTP/1.1 allows few connections. WebDAV Basic Auth requires TLS |
 
 The main hardware constraints are CPU time for decoding photos and, probably, HDD throughput. Memory is not scarce.
@@ -113,8 +113,8 @@ Queue behavior:
 The ML service has three endpoints: `GET /health` returns the model, the vector size and the preprocessing version; `POST /embed/image` takes a batch of viewer previews; `POST /embed/text` takes a search text. The model name stored with a vector includes the preprocessing version, as resizing and normalization happen in the service.
 
 - **Embedding:** while the service is available, a periodic job on the `ml` queue selects processed photos without a vector for the configured model, sends their viewer previews in batches and writes the vectors. It starts every minute and as soon as the service becomes available.
-- **Text search:** a page of its own. The application gets the vector of the text from the service, then sorts the photos the user can see by their distance to it. Results are ordered by relevance, not by date, so they do not fit the timeline with its months.
-- **Similar photos:** the application takes the photo's vector from the database and finds the nearest ones the user can see. This needs no ML service.
+- **Text search:** a page of its own. The application gets the vector of the text from the service, then sorts the photos the user can see by their distance to it and leaves out those below the model's similarity threshold, which the service gives with the vector. Without the threshold a query with no match would still return the nearest photos. Results are ordered by relevance, not by date, so they do not fit the timeline with its months.
+- **Similar photos:** the application takes the photo's vector from the database and finds the nearest ones the user can see, with no threshold. This needs no ML service.
 - **Deleting:** the permission predicate hides photos in the trash, and permanently deleting a photo removes its vectors with its previews.
 
 ### Repository layout
@@ -182,11 +182,14 @@ Revoking access takes effect on the server at once. Previews are cached for a ye
     - FolderSync on Android connects only over HTTPS. With `http://` in the address it still starts a TLS handshake and fails with "unable to parse TLS packet header". A self-signed certificate works once "Allow self-signed certificate" is on. Checked against the development server on 2026-11-09, where uploads over HTTPS work
   - [x] Albums for WebDAV folders, as described under "WebDAV albums" above
 - [ ] **Stage 7: ML (starts as a spike).** Text search and similar photos from one image embedding, as described under [Machine learning](#machine-learning). The service runs on a Mac for the spike.
-  - [ ] Model: SigLIP 2, which was trained on many languages including Russian. Choose its size by comparing the base and so400m variants on 20–30 real queries
-  - [ ] The ML service in `ml/`, with the health check and both embedding endpoints
-  - [ ] `pgvector` image in every compose file, the embedding tables, the availability monitor and the embedding job
-  - [ ] Text search on a page of its own and similar photos in the viewer, in the API and the interface
+  - [x] Model: SigLIP 2 base (`google/siglip2-base-patch16-384`), chosen over so400m
+    - Compared on 2026-11-10 on the development library of 117 photos with 8 Russian queries. Base ranked the matches first in more queries: so400m put the only dog third, after a black frame and a screenshot, and lost the fuchsia photos for "flowers". It understood whole scenes better, finding selfies against mountains for "mountains". So400m embedded 3.5 times slower, weighs 4.5 GB against 1.5 GB, and its text encoder would be much harder to move to the NAS
+    - Text search needs a similarity threshold, or a query with no match returns the nearest photos anyway. With base, matches came down to a cosine similarity of 0.068 and unrelated photos up to 0.072, so no value separates them. 0.070 keeps nearly all matches and lets a few unrelated photos in at the end of the list. Query templates such as "a photo of …" and a threshold relative to each query's distances separated them worse
+  - [x] The ML service in `ml/`, with the health check and both embedding endpoints
+  - [x] `pgvector` image in every compose file, the embedding tables, the availability monitor and the embedding job
+  - [x] Text search on a page of its own and similar photos in the viewer, in the API and the interface
   - [ ] Measure embedding speed on the Mac and search time on the NAS
+    - On a Mac with an M5 Pro, the application embedded the 117 photos of the development library in 4 seconds with base and 14 seconds with so400m, reading viewer previews. The NAS is not measured yet
   - Later candidates, on the same embedding: near-duplicates and bursts, tag suggestions, separating screenshots and documents. Faces need a model of their own and are processed at home only, as face vectors are biometric data
 
 ## Acceptance criteria

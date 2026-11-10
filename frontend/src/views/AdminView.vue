@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { api, type MetadataSettings, type PreviewSettings } from '../api/client'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
+import MLStatus from '../components/MLStatus.vue'
 import QueueStatus from '../components/QueueStatus.vue'
 import { useNoticesStore } from '../stores/notices'
 
@@ -172,6 +173,7 @@ async function save() {
         <v-btn type="submit" color="primary" text="Save" :disabled="!valid" :loading="saving" />
       </v-form>
 
+      <MLStatus class="mt-10" />
       <QueueStatus class="mt-10" />
     </div>
   </div>

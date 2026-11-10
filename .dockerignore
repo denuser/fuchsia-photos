@@ -5,3 +5,4 @@ deploy/data
 deploy/.env
 samples
 .bench
+ml/.venv

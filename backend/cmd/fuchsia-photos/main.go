@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
 
 	"github.com/denuser/fuchsia-photos/backend/db"
 	"github.com/denuser/fuchsia-photos/backend/internal/api"
@@ -25,6 +26,7 @@ import (
 	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
 	"github.com/denuser/fuchsia-photos/backend/internal/media"
 	"github.com/denuser/fuchsia-photos/backend/internal/metadata"
+	"github.com/denuser/fuchsia-photos/backend/internal/ml"
 	"github.com/denuser/fuchsia-photos/backend/internal/scan"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
@@ -150,11 +152,27 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 
 	ingester := &ingest.Service{Pool: pool, Layout: layout}
 	scanner := &scan.Service{Ingest: ingester, Dir: cfg.ImportDir, Stable: cfg.ImportStable}
+	var mlClient *ml.Client
+	if cfg.MLURL != "" {
+		mlClient = ml.NewClient(cfg.MLURL, cfg.MLToken)
+	}
+	embedder := &ml.Service{
+		Monitor: ml.NewMonitor(mlClient, cfg.MLModel),
+		Client:  mlClient,
+		Model:   cfg.MLModel,
+		Layout:  layout,
+		Queries: store.New(pool),
+	}
 	jobClient, err := jobs.NewClient(pool, jobs.Config{
 		Layout:   layout,
 		Metadata: reader,
 		Workers:  cfg.Workers,
-		Register: scanner.Register,
+		Register: func(workers *river.Workers) {
+			scanner.Register(workers)
+			embedder.Register(workers)
+		},
+		Queues:       map[string]river.QueueConfig{ml.QueueML: {MaxWorkers: 1}},
+		PeriodicJobs: []*river.PeriodicJob{ml.PeriodicJob()},
 	})
 	if err != nil {
 		return fmt.Errorf("create job client: %w", err)
@@ -172,6 +190,14 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		}
 	}()
 
+	// A run starts as soon as the service comes up, rather than within a minute.
+	embedder.Monitor.OnAvailable(func() {
+		if _, err := jobClient.Insert(ctx, ml.EmbedPhotosArgs{}, nil); err != nil {
+			slog.Error("queue embedding", "error", err)
+		}
+	})
+	go embedder.Monitor.Run(ctx)
+
 	static, err := web.Handler()
 	if err != nil {
 		return err
@@ -183,6 +209,7 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		Ingest:       ingester,
 		Scan:         scanner,
 		Layout:       layout,
+		ML:           embedder,
 		CookieSecure: cfg.CookieSecure,
 		WebDAV:       &webdav.Handler{Queries: store.New(pool), Ingest: ingester, Layout: layout},
 		Static:       static,

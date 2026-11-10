@@ -78,6 +78,12 @@ type env struct {
 
 func setup(t *testing.T) *env {
 	t.Helper()
+	return setupWith(t, nil)
+}
+
+// setupWith lets a test change the handler's dependencies before it starts.
+func setupWith(t *testing.T, change func(*Deps)) *env {
+	t.Helper()
 	pool := testdb.New(t)
 	layout := storage.Layout{Library: t.TempDir(), Cache: t.TempDir()}
 	if err := layout.Ensure(); err != nil {
@@ -90,7 +96,7 @@ func setup(t *testing.T) *env {
 	queries := store.New(pool)
 	importDir := t.TempDir()
 	ingester := &ingest.Service{Pool: pool, Jobs: client, Layout: layout}
-	server := httptest.NewServer(NewHandler(Deps{
+	deps := Deps{
 		DB:      pool,
 		Pool:    pool,
 		Queries: queries,
@@ -98,7 +104,11 @@ func setup(t *testing.T) *env {
 		Scan:    &scan.Service{Ingest: ingester, Dir: importDir},
 		Layout:  layout,
 		Static:  http.NotFoundHandler(),
-	}))
+	}
+	if change != nil {
+		change(&deps)
+	}
+	server := httptest.NewServer(NewHandler(deps))
 	t.Cleanup(server.Close)
 	return &env{t, server, pool, queries, layout, importDir}
 }

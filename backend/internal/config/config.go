@@ -22,6 +22,12 @@ type Config struct {
 	LogLevel     slog.Level
 	// LogFormat is "text" or "json".
 	LogFormat string
+	// MLURL is the address of the ML service. Without it ML is off.
+	MLURL   string
+	MLToken string
+	// MLModel is the model whose vectors the application uses, as the service
+	// names it, with the version of its preprocessing.
+	MLModel string
 }
 
 // Load reads the settings from the environment.
@@ -33,6 +39,9 @@ func Load() (Config, error) {
 		CacheDir:     getenv("CACHE_DIR", "/data/cache"),
 		ImportDir:    getenv("IMPORT_DIR", "/data/import"),
 		CookieSecure: os.Getenv("COOKIE_INSECURE") != "true",
+		MLURL:        os.Getenv("ML_URL"),
+		MLToken:      os.Getenv("ML_TOKEN"),
+		MLModel:      getenv("ML_MODEL", "google/siglip2-base-patch16-384@1"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")

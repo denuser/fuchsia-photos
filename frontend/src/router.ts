@@ -8,6 +8,7 @@ import AlbumView from './views/AlbumView.vue'
 import ImportView from './views/ImportView.vue'
 import LoginView from './views/LoginView.vue'
 import ProfileView from './views/ProfileView.vue'
+import SearchView from './views/SearchView.vue'
 import SharedView from './views/SharedView.vue'
 import TagsView from './views/TagsView.vue'
 import TimelineView from './views/TimelineView.vue'
@@ -19,6 +20,7 @@ export const router = createRouter({
   routes: [
     { path: '/login', component: LoginView, meta: { public: true } },
     { path: '/', component: TimelineView },
+    { path: '/search', component: SearchView },
     { path: '/albums', component: AlbumsView },
     { path: '/albums/:id(\\d+)', component: AlbumView },
     { path: '/shared', component: SharedView },

@@ -928,6 +928,75 @@ paths:
                 format: binary
         "404":
           $ref: "#/components/responses/Error"
+  /photos/{id}/similar:
+    get:
+      operationId: listSimilarPhotos
+      summary: Photos the current user can see that look like this one, nearest first
+      description: Uses the stored vectors, so it works while the ML service is off. A photo without a vector yet has no similar photos
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - $ref: "#/components/parameters/SearchLimit"
+      responses:
+        "200":
+          description: The nearest photos, without the photo itself
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /search:
+    get:
+      operationId: searchPhotos
+      summary: Photos the current user can see that match a description, best first
+      description: Administrators search like other users; all users' photos stay on the administration page
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: What the photos show, in any language
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - $ref: "#/components/parameters/SearchLimit"
+      responses:
+        "200":
+          description: The nearest photos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+        "400":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+  /search/status:
+    get:
+      operationId: getSearchStatus
+      summary: Whether search by description works now
+      responses:
+        "200":
+          description: The state of the ML service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchStatus"
+  /ml:
+    get:
+      operationId: getMLStatus
+      summary: The ML service, the embedding progress and the latest failures (administrators only)
+      responses:
+        "200":
+          description: The state of ML
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MLStatus"
+        "403":
+          $ref: "#/components/responses/Error"
   /albums:
     get:
       operationId: listAlbums
@@ -1387,6 +1456,14 @@ components:
       schema:
         type: integer
         format: int64
+    SearchLimit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 100
   requestBodies:
     PhotoIds:
       required: true
@@ -1435,7 +1512,7 @@ components:
       required: [kind, waiting, running, retrying, doneHour, doneDay, failedDay]
       properties:
         kind:
-          description: process_photo, render_grid, render_previews, folder_scan or cleanup
+          description: process_photo, render_grid, render_previews, folder_scan, embed_photos or cleanup
           type: string
         waiting:
           type: integer
@@ -1817,6 +1894,82 @@ components:
             $ref: "#/components/schemas/Photo"
         nextCursor:
           type: [string, "null"]
+    SearchResults:
+      type: object
+      required: [items, distances]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Photo"
+        distances:
+          description: The cosine distance of each photo to the query, in the order of items. 0 is the same direction
+          type: array
+          items:
+            type: number
+    MLState:
+      description: disabled when no service is configured, mismatch when it runs another model than the configured one
+      type: string
+      enum: [disabled, unavailable, available, mismatch]
+    SearchStatus:
+      type: object
+      required: [available, state]
+      properties:
+        available:
+          type: boolean
+        state:
+          $ref: "#/components/schemas/MLState"
+    MLStatus:
+      type: object
+      required: [state, model, checkedAt, photos, embedded, failed, failures]
+      properties:
+        state:
+          $ref: "#/components/schemas/MLState"
+        model:
+          description: The configured model, with the version of the service's preprocessing
+          type: string
+        serviceModel:
+          description: The model the service reported, if it answered
+          type: string
+        device:
+          description: Where the service runs the model, such as mps or cuda
+          type: string
+        error:
+          type: string
+        checkedAt:
+          type: [string, "null"]
+          format: date-time
+        photos:
+          description: Processed photos
+          type: integer
+          format: int64
+        embedded:
+          description: Processed photos with a vector of the configured model
+          type: integer
+          format: int64
+        failed:
+          description: Photos skipped after failing too often
+          type: integer
+          format: int64
+        failures:
+          description: The latest failures, newest first, at most 10
+          type: array
+          items:
+            $ref: "#/components/schemas/MLFailure"
+    MLFailure:
+      type: object
+      required: [photoId, attempts, error, failedAt]
+      properties:
+        photoId:
+          type: integer
+          format: int64
+        attempts:
+          type: integer
+        error:
+          type: string
+        failedAt:
+          type: string
+          format: date-time
     PhotoIds:
       type: array
       minItems: 1

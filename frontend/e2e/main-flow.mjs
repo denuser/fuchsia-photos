@@ -152,7 +152,7 @@ const steps = {
   },
   'filter by one tag from the tags page': async () => {
     await page.goto(`${BASE}/tags`)
-    await page.getByRole('link', { name: 'Sea' }).click()
+    await page.getByRole('link', { name: 'Sea', exact: true }).click()
     await tiles(2)
   },
   'a second tag widens the search': async () => {
@@ -185,6 +185,19 @@ const steps = {
     await page.keyboard.press('Escape')
     await page.getByTestId('applied-filters').getByRole('button', { name: 'Clear all filters' }).click()
     await tiles(5)
+  },
+  'without the ML service, search says so and similar photos open from the viewer': async () => {
+    await page.goto(`${BASE}/search`)
+    await page.getByText('Search by description is unavailable').waitFor()
+    if (await page.getByLabel('Search by description').isEnabled()) {
+      throw new Error('the search field is enabled without the ML service')
+    }
+    await page.goto(BASE)
+    await page.getByTestId('tile-open').first().click()
+    await page.getByTestId('viewer').waitFor()
+    await button('Similar photos').click()
+    await page.waitForURL(/\/search\?similar=\d+$/)
+    await page.getByText('No similar photos yet').waitFor()
   },
   'open the album and choose a cover': async () => {
     await page.goto(`${BASE}/albums`)

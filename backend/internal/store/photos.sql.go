@@ -115,7 +115,9 @@ func (q *Queries) CountTimelineMonths(ctx context.Context, arg CountTimelineMont
 const deletePhotoLinks = `-- name: DeletePhotoLinks :exec
 WITH albums_removed AS (DELETE FROM album_photos ap WHERE ap.photo_id = $1),
      tags_removed AS (DELETE FROM photo_tags pt WHERE pt.photo_id = $1),
-     covers_cleared AS (UPDATE albums a SET cover_photo_id = NULL WHERE a.cover_photo_id = $1)
+     covers_cleared AS (UPDATE albums a SET cover_photo_id = NULL WHERE a.cover_photo_id = $1),
+     embeddings_removed AS (DELETE FROM photo_embeddings e WHERE e.photo_id = $1),
+     failures_removed AS (DELETE FROM photo_embedding_failures f WHERE f.photo_id = $1)
 DELETE FROM photo_shares s WHERE s.photo_id = $1
 `
 

@@ -97,6 +97,21 @@ type Photo struct {
 	PreviewVersion int32
 }
 
+type PhotoEmbedding struct {
+	PhotoID   int64
+	Model     string
+	Embedding interface{}
+	CreatedAt time.Time
+}
+
+type PhotoEmbeddingFailure struct {
+	PhotoID  int64
+	Model    string
+	Attempts int32
+	Error    string
+	FailedAt time.Time
+}
+
 type PhotoShare struct {
 	PhotoID   int64
 	UserID    int64

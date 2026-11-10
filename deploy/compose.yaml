@@ -2,7 +2,7 @@ name: fuchsia-photos
 
 services:
   postgres:
-    image: postgres:18
+    image: pgvector/pgvector:pg18-trixie
     restart: unless-stopped
     environment:
       POSTGRES_USER: photos

@@ -1,14 +1,15 @@
-.PHONY: help dev-db dev-clean dev-admin dev-migrate dev-goose dev-psql migration dev-backend dev-frontend dev-cert test e2e image bench fixtures api-types sqlc
+.PHONY: help dev-db dev-clean dev-admin dev-migrate dev-goose dev-psql migration dev-backend dev-frontend dev-cert ml test e2e image bench fixtures api-types sqlc
 
 COMPOSE_TEST = docker compose -f deploy/compose.test.yaml
 COMPOSE_E2E = docker compose -f deploy/compose.e2e.yaml
 E2E_PASSWORD = e2e-password
 DEV_DATABASE_URL = postgres://photos:photos@localhost:5432/photos
 BENCH_OUT ?= .bench
+ML_PORT ?= 8090
 DEV_DATA = $(CURDIR)/deploy/data/dev
 # Outside DEV_DATA, so that dev-clean keeps the certificate phones accepted.
 DEV_TLS = $(CURDIR)/deploy/data/dev-tls
-DEV_ENV = DATABASE_URL=$(DEV_DATABASE_URL) LIBRARY_DIR=$(DEV_DATA)/library CACHE_DIR=$(DEV_DATA)/cache IMPORT_DIR=$(DEV_DATA)/import COOKIE_INSECURE=true
+DEV_ENV = DATABASE_URL=$(DEV_DATABASE_URL) LIBRARY_DIR=$(DEV_DATA)/library CACHE_DIR=$(DEV_DATA)/cache IMPORT_DIR=$(DEV_DATA)/import COOKIE_INSECURE=true ML_URL=http://127.0.0.1:$(ML_PORT)
 
 # Keep the version in step with backend/go.mod. Without cgo and the other
 # database drivers, the CLI builds on macOS and needs no C toolchain.
@@ -26,6 +27,7 @@ help:
 	@echo "migration     create a migration file, for example NAME=add_albums"
 	@echo "dev-backend   run the server locally against dev-db"
 	@echo "dev-frontend  run the Vite dev server over HTTPS on port 443"
+	@echo "ml            run the ML service on this machine, on port 8090 of all interfaces"
 	@echo "test          run backend tests in a container with PostgreSQL"
 	@echo "e2e           run the main flow in Chrome against the production image"
 	@echo "image         build the production image for the NAS (linux/amd64)"
@@ -36,7 +38,7 @@ help:
 
 dev-db:
 	docker run --rm --name fuchsia-photos-dev-db -p 127.0.0.1:5432:5432 -v fuchsia-photos-dev-db:/var/lib/postgresql \
-		-e POSTGRES_USER=photos -e POSTGRES_PASSWORD=photos -e POSTGRES_DB=photos postgres:18
+		-e POSTGRES_USER=photos -e POSTGRES_PASSWORD=photos -e POSTGRES_DB=photos pgvector/pgvector:pg18-trixie
 
 dev-clean:
 	docker volume rm fuchsia-photos-dev-db
@@ -67,6 +69,11 @@ dev-frontend: dev-cert
 	cd frontend && DEV_TLS_DIR="$(DEV_TLS)" pnpm dev --port 443 --strictPort
 
 dev-cert: $(DEV_TLS)/cert.pem
+
+# Natively rather than in Docker, which has no GPU access on macOS. Set
+# ML_TOKEN to require a token, as for a server the NAS calls over the network.
+ml:
+	cd ml && uv run uvicorn server:app --host 0.0.0.0 --port $(ML_PORT)
 
 $(DEV_TLS)/cert.pem:
 	mkdir -p "$(DEV_TLS)"

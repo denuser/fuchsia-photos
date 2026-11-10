@@ -249,7 +249,7 @@ In **Apps**, choose **Discover Apps**, then **Install via YAML** from the menu, 
 ```yaml
 services:
   postgres:
-    image: postgres:18
+    image: pgvector/pgvector:pg18-trixie
     restart: unless-stopped
     user: '568:568'
     environment:
@@ -383,3 +383,5 @@ sudo midclt call app.image.op.check_update
 ```
 
 On newer TrueNAS releases the method is `app.image.check_update`.
+
+Since stage 7 the database needs the `vector` extension, and the `postgres` service uses `pgvector/pgvector:pg18-trixie` instead of `postgres:18`. Before updating an installation from an older YAML, change that line in **Edit**. Both images are PostgreSQL 18 on the same Debian release, so the existing database starts as it is. Without the change the application stops at start with an error about the `vector` extension. The `backup` service stays on `postgres:18`.

@@ -8,6 +8,7 @@ const kindNames: Record<string, string> = {
   render_grid: 'Grid previews',
   render_previews: 'Previews from originals',
   folder_scan: 'Folder scans',
+  embed_photos: 'Machine learning',
   cleanup: 'Cleanup',
 }
 

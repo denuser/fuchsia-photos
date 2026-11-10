@@ -21,6 +21,25 @@ export interface PhotoQuery {
   lenses?: string[]
   from?: string
   to?: string
+  // Photos that match a description, best first.
+  search?: string
+  // Photos that look like this one, nearest first.
+  similarTo?: number
+}
+
+// Search results come in one piece, nearest first.
+const RANKED_LIMIT = 200
+
+// Whether the list is ordered by how well photos match, rather than by date.
+function ranked({ search, similarTo }: PhotoQuery) {
+  return Boolean(search) || similarTo !== undefined
+}
+
+async function fetchRanked({ search, similarTo }: PhotoQuery) {
+  const { data } = search
+    ? await api.GET('/search', { params: { query: { q: search, limit: RANKED_LIMIT } } })
+    : await api.GET('/photos/{id}/similar', { params: { path: { id: similarTo! }, query: { limit: RANKED_LIMIT } } })
+  return { data: data ? { items: data.items, nextCursor: null as string | null } : undefined }
 }
 
 function newestFirst(a: Photo, b: Photo) {
@@ -106,6 +125,9 @@ function earlier(a: string | undefined, b: string | undefined) {
 function fetchPage(query: PhotoQuery, section: Section) {
   const cursor = section.cursor ?? undefined
   const { trash, shared, everyone, owner, album } = query
+  if (ranked(query)) {
+    return fetchRanked(query)
+  }
   if (trash) {
     return api.GET('/photos/trash', { params: { query: { cursor } } })
   }
@@ -153,18 +175,30 @@ export const usePhotosStore = defineStore('photos', () => {
   const pending = ref(0)
   const failed = ref(0)
 
-  // The trash is ordered by when photos were deleted, so it is not split into months.
-  const byMonth = computed(() => !query.value.trash)
+  // The trash is ordered by when photos were deleted, and search results by
+  // how well they match, so neither is split into months.
+  const byMonth = computed(() => !query.value.trash && !ranked(query.value))
   // All loaded photos in order. Months not loaded yet leave gaps.
   const photos = computed(() => sections.value.flatMap((s) => s.photos))
   const empty = computed(() => loadedOnce.value && sections.value.every((s) => s.complete && s.photos.length === 0))
 
-  const order = computed(() => (query.value.trash ? deletedFirst : newestFirst))
+  // Search results keep the server's order: sorting is stable.
+  const order = computed(() => (ranked(query.value) ? () => 0 : query.value.trash ? deletedFirst : newestFirst))
   // Only the whole library and the trash can tell from a photo alone that it
   // belongs in the list. Other lists learn about new members by loading.
   const unfiltered = computed(() => {
     const { shared, everyone, album, tags, cameras, lenses, from, to } = query.value
-    return !shared && !everyone && album === undefined && !tags?.length && !cameras?.length && !lenses?.length && !from && !to
+    return (
+      !ranked(query.value) &&
+      !shared &&
+      !everyone &&
+      album === undefined &&
+      !tags?.length &&
+      !cameras?.length &&
+      !lenses?.length &&
+      !from &&
+      !to
+    )
   })
 
   let events: EventSource | null = null
@@ -321,6 +355,9 @@ export const usePhotosStore = defineStore('photos', () => {
     for (const photo of changed) {
       if (Boolean(photo.deletedAt) !== inTrash) {
         gone.add(photo.id)
+      } else if (known.has(photo.id) && ranked(query.value)) {
+        // A search result keeps its place.
+        sections.value = sections.value.map((s) => ({ ...s, photos: s.photos.map((p) => (p.id === photo.id ? photo : p)) }))
       } else if (known.has(photo.id)) {
         // It may have moved to another month once its EXIF was read.
         gone.add(photo.id)

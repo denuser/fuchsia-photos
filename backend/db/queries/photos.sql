@@ -195,7 +195,9 @@ RETURNING *;
 -- name: DeletePhotoLinks :exec
 WITH albums_removed AS (DELETE FROM album_photos ap WHERE ap.photo_id = @id),
      tags_removed AS (DELETE FROM photo_tags pt WHERE pt.photo_id = @id),
-     covers_cleared AS (UPDATE albums a SET cover_photo_id = NULL WHERE a.cover_photo_id = @id)
+     covers_cleared AS (UPDATE albums a SET cover_photo_id = NULL WHERE a.cover_photo_id = @id),
+     embeddings_removed AS (DELETE FROM photo_embeddings e WHERE e.photo_id = @id),
+     failures_removed AS (DELETE FROM photo_embedding_failures f WHERE f.photo_id = @id)
 DELETE FROM photo_shares s WHERE s.photo_id = @id;
 
 -- An upload brings a purged photo back as a new one, as photo ids are never reused.
