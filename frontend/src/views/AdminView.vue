@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { api, type MetadataSettings, type PreviewSettings } from '../api/client'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
+import QueueStatus from '../components/QueueStatus.vue'
 import { useNoticesStore } from '../stores/notices'
 
 const formats = [
@@ -80,12 +81,12 @@ async function save() {
 
 <template>
   <div class="page">
-    <AppPageHeader title="Administration" description="How photos are processed and which of their details users see." />
-    <div class="page-section admin">
+    <AppPageHeader title="Administration" description="How photos are processed, which of their details users see, and the background jobs." />
+    <div class="page-section">
 
       <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
-      <v-form v-if="settings && metadata" @submit.prevent="save">
+      <v-form v-if="settings && metadata" class="settings" @submit.prevent="save">
         <h2 class="mb-2">Previews</h2>
         <v-alert
           type="info"
@@ -170,12 +171,14 @@ async function save() {
 
         <v-btn type="submit" color="primary" text="Save" :disabled="!valid" :loading="saving" />
       </v-form>
+
+      <QueueStatus class="mt-10" />
     </div>
   </div>
 </template>
 
 <style scoped>
-.admin {
-  max-width: 648px;
+.settings {
+  max-width: 600px;
 }
 </style>

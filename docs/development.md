@@ -69,6 +69,8 @@ The server reads its settings from environment variables:
 | `IMPORT_DIR` | `/data/import` | The folder that scans read from. Only read, never changed |
 | `IMPORT_STABLE_SECONDS` | `60` | How long a file must stay unchanged before a scan imports it |
 | `WORKERS` | `3` | Photos processed at once |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. `debug` logs every request |
+| `LOG_FORMAT` | `text` | `text` or `json` |
 | `COOKIE_INSECURE` | unset | Set to `true` to allow the session cookie over plain HTTP. For local development and the e2e stack |
 
 ### Database and migrations

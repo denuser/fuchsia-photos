@@ -31,13 +31,60 @@ services:
       DATABASE_URL: postgres://photos:${POSTGRES_PASSWORD}@postgres:5432/photos
       WORKERS: ${WORKERS:-3}
       IMPORT_STABLE_SECONDS: ${IMPORT_STABLE_SECONDS:-60}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
     # Only Caddy, on the host network, reaches the application.
     ports:
       - "127.0.0.1:10303:8080"
+    # Docker keeps container logs forever unless told otherwise.
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
     volumes:
       - ${LIBRARY_DIR:-./data/library}:/data/library
       - ${CACHE_DIR:-./data/cache}:/data/cache
       - ${IMPORT_DIR:-./data/import}:/data/import:ro
+
+  # Dumps the database every night and keeps the latest dumps. See "Backups" in
+  # docs/deployment.md. $$ stands for $ in the script.
+  backup:
+    image: postgres:18
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: photos
+      PGDATABASE: photos
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_TIME: ${BACKUP_TIME:-03:00}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ${BACKUP_DIR:-./data/backups}:/backups
+    entrypoint: [sh, -c]
+    command:
+      - |
+        trap 'exit 0' TERM INT
+        echo "backup: every day at $$BACKUP_TIME $$TZ, keeping $$BACKUP_KEEP dumps"
+        while true; do
+          now=$$(date +%s)
+          next=$$(date -d "today $$BACKUP_TIME" +%s) || exit 1
+          [ "$$next" -gt "$$now" ] || next=$$(date -d "tomorrow $$BACKUP_TIME" +%s)
+          sleep $$((next - now)) & wait $$!
+          name=photos-$$(date +%Y-%m-%d-%H%M).dump
+          if pg_dump --format=custom --file=/backups/.partial; then
+            mv /backups/.partial "/backups/$$name"
+            echo "backup: wrote $$name, $$(du -h "/backups/$$name" | cut -f1)"
+            ls -1 /backups/photos-*.dump | head -n -"$$BACKUP_KEEP" | xargs -r rm -v
+          else
+            echo "backup: pg_dump failed" >&2
+            rm -f /backups/.partial
+          fi
+        done
 
   caddy:
     image: caddy:2

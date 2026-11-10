@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -70,6 +71,60 @@ func (s *server) photoEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if _, err := fmt.Fprintf(w, "event: photos\ndata: %s\n\n", payload); err != nil {
+				return
+			}
+			if err := controller.Flush(); err != nil {
+				return
+			}
+		} else if idleTicks++; idleTicks >= keepAliveEvery {
+			idleTicks = 0
+			if _, err := fmt.Fprint(w, ": keep-alive\n\n"); err != nil {
+				return
+			}
+			if err := controller.Flush(); err != nil {
+				return
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// queueEvents streams the state of the job queue: once at the start, then
+// whenever it changes. River does not report finished jobs, so the stream reads
+// the queue at the same interval as photo events.
+func (s *server) queueEvents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+
+	controller := http.NewResponseController(w)
+	if err := controller.Flush(); err != nil {
+		return
+	}
+
+	ctx := r.Context()
+	var last []byte
+	idleTicks := 0
+	ticker := time.NewTicker(eventInterval)
+	defer ticker.Stop()
+	for {
+		stats, err := s.readQueue(ctx)
+		if err != nil {
+			return
+		}
+		payload, err := json.Marshal(stats)
+		if err != nil {
+			return
+		}
+		if !bytes.Equal(payload, last) {
+			last = payload
+			idleTicks = 0
+			if _, err := fmt.Fprintf(w, "event: queue\ndata: %s\n\n", payload); err != nil {
 				return
 			}
 			if err := controller.Flush(); err != nil {

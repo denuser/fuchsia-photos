@@ -3,6 +3,7 @@ package config
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
@@ -18,6 +19,9 @@ type Config struct {
 	ImportStable time.Duration
 	Workers      int
 	CookieSecure bool
+	LogLevel     slog.Level
+	// LogFormat is "text" or "json".
+	LogFormat string
 }
 
 // Load reads the settings from the environment.
@@ -43,6 +47,13 @@ func Load() (Config, error) {
 		return Config{}, errors.New("IMPORT_STABLE_SECONDS must be zero or a positive number")
 	}
 	cfg.ImportStable = time.Duration(stable) * time.Second
+	if err := cfg.LogLevel.UnmarshalText([]byte(getenv("LOG_LEVEL", "info"))); err != nil {
+		return Config{}, errors.New("LOG_LEVEL must be debug, info, warn or error")
+	}
+	cfg.LogFormat = getenv("LOG_FORMAT", "text")
+	if cfg.LogFormat != "text" && cfg.LogFormat != "json" {
+		return Config{}, errors.New("LOG_FORMAT must be text or json")
+	}
 	return cfg, nil
 }
 

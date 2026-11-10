@@ -20,6 +20,12 @@ Edit `deploy/.env`:
 | `IMPORT_DIR` | `./data/import` | Folder scanned for imports, mounted read-only |
 | `IMPORT_STABLE_SECONDS` | `60` | How long a file must stay unchanged before a folder scan imports it |
 | `WORKERS` | `3` | Photos processed at once. Keep at least one core free for the UI |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. See [Logs](#logs) |
+| `LOG_FORMAT` | `text` | `text`, or `json` for a log collector |
+| `BACKUP_DIR` | `./data/backups` | Nightly database dumps. See [Backups](#backups) |
+| `BACKUP_TIME` | `03:00` | When the nightly dump runs, as `HH:MM` |
+| `BACKUP_KEEP` | `14` | How many nightly dumps are kept |
+| `TZ` | `UTC` | Time zone of `BACKUP_TIME`, for example `Europe/Moscow` |
 | `HTTP_PORT` | `80` | HTTP port on the host |
 | `HTTPS_PORT` | `443` | HTTPS port on the host |
 
@@ -56,10 +62,22 @@ Without a public domain, Caddy issues a certificate from its local CA, and brows
 | Update after pulling new code | `docker compose -f deploy/compose.yaml up -d --build` |
 | Apply migrations by hand | `docker compose -f deploy/compose.yaml exec app fuchsia-photos migrate` |
 | Open psql | `docker compose -f deploy/compose.yaml exec postgres psql -U photos photos` |
+| Dump the database now | `docker compose -f deploy/compose.yaml exec backup pg_dump --format=custom --file=/backups/manual.dump` |
+| Make all previews again | `docker compose -f deploy/compose.yaml exec app fuchsia-photos render-previews` |
 
 Migrations are also applied automatically each time the application starts.
 
 Processing continues after a restart. A job that was running during a clean stop runs again shortly after the next start. A job that was running during a crash or power loss resumes after about 3 minutes.
+
+### Logs
+
+The application writes its log to the container output, which `docker compose logs app` shows. At the default `info` level, it holds errors, requests that failed or took over a second, and every WebDAV request. `debug` adds every other request. Set `LOG_FORMAT=json` to feed the log to a collector.
+
+Docker keeps the application's log in five files of up to 10 MB, dropping the oldest.
+
+### Job queue
+
+The **Queue** section of the administration page shows the background jobs by kind: waiting, running, waiting for another attempt, and finished or failed in the last hour and day. Under it are the latest errors, with the photo each job worked on. It updates on its own while the page is open. Finished jobs are kept for a day.
 
 ### Making grid previews again
 
@@ -107,7 +125,61 @@ The server logs every WebDAV request with its method, path, status and client, t
 
 ## Backups
 
-Backups are not set up yet. They are planned for stage 5.
+| What | Where | How |
+|---|---|---|
+| Database | `BACKUP_DIR` | Dumped every night by the `backup` container |
+| Originals | `LIBRARY_DIR` | Snapshots of the folder, for example ZFS snapshots on TrueNAS |
+| Previews | `CACHE_DIR` | Not backed up. After a restore, `render-previews` makes them again from the originals |
+
+Back up the dumps and the originals together, and keep a copy off the NAS: a snapshot on the same pool does not survive the loss of the pool. On TrueNAS, add a periodic snapshot task for the `backups` and `library` datasets that runs daily, shortly after `BACKUP_TIME`, and a replication task to another disk or machine.
+
+### Nightly dumps
+
+The `backup` container runs `pg_dump` every day at `BACKUP_TIME` in the `TZ` time zone. It writes `photos-YYYY-MM-DD-HHMM.dump` in the PostgreSQL custom format and keeps the latest `BACKUP_KEEP` of them. Its log shows each dump with its size, or the error:
+
+```sh
+docker compose -f deploy/compose.yaml logs backup
+```
+
+A dump made by hand, as in [Operations](#operations), is kept as long as its name does not start with `photos-`.
+
+The dump and the snapshot of the originals are taken at different times. A photo uploaded in between has an original but no record after a restore, which is harmless: uploading it again reuses the original. A photo permanently deleted in between has a record but no original, and shows as failed after a restore. Taking the snapshot shortly after the dump keeps this window small.
+
+### Restoring
+
+This works on the same installation or on a new one. Use the same version of the application or a newer one: migrations run forward only, so a newer version upgrades an older dump when it starts.
+
+1. Restore the originals into `LIBRARY_DIR` from the snapshot, unless they are intact. Empty `CACHE_DIR`, as every preview is made again.
+2. Copy the dump into `BACKUP_DIR`.
+3. Stop the application, leaving the database and the `backup` container running. On a new installation, start only those two:
+
+   ```sh
+   docker compose -f deploy/compose.yaml stop app
+   docker compose -f deploy/compose.yaml up -d postgres backup
+   ```
+
+4. Replace the database with the dump:
+
+   ```sh
+   docker compose -f deploy/compose.yaml exec backup pg_restore --clean --if-exists --create --dbname=postgres /backups/photos-2026-11-10-0300.dump
+   ```
+
+5. Move photo numbers past the ones used since the dump. Browsers keep previews for a year by photo number, so a new photo must not get the number of one uploaded after the dump:
+
+   ```sh
+   docker compose -f deploy/compose.yaml exec backup psql -c "SELECT setval(pg_get_serial_sequence('photos', 'id'), nextval(pg_get_serial_sequence('photos', 'id')) + 1000000)"
+   ```
+
+6. Start everything and queue new previews of all photos:
+
+   ```sh
+   docker compose -f deploy/compose.yaml up -d
+   docker compose -f deploy/compose.yaml exec app fuchsia-photos render-previews
+   ```
+
+Logins and passwords are those of the dump. The previews are made in the background, after any new photos, and the **Queue** section of the administration page shows how far they are. Until a photo has them, its tile stays empty. A photo whose original is missing shows as failed.
+
+On TrueNAS, run the commands in the shell with `sudo docker exec` and the container name in place of `docker compose -f deploy/compose.yaml exec` and the service name, as in [Running on TrueNAS](#running-on-truenas). Stop and start the application container with `sudo docker stop` and `sudo docker start`.
 
 ## Building on another machine
 
@@ -169,7 +241,7 @@ To run a specific build, set `IMAGE_TAG=sha-<commit>` in `.env`. Going back to a
 
 On TrueNAS, the setup from [Running from an image](#running-from-an-image) runs as a custom app. TrueNAS does not read a `.env` file, so the values go into the YAML itself.
 
-Both containers run as the TrueNAS `apps` user and group, UID and GID 568. Create a dataset for the application, and inside it a dataset or folder for each of `library`, `cache`, `import`, `postgres` and `caddy`. In **Datasets**, select the parent dataset and choose **Edit** on the **Permissions** card. Set the owner and the owning group to `apps`, give `owner@` full control and `group@` modify, and apply the permissions to the child datasets. The application only reads `import`, so files copied there by other users need to be readable by `apps`.
+Both containers run as the TrueNAS `apps` user and group, UID and GID 568. Create a dataset for the application, and inside it a dataset or folder for each of `library`, `cache`, `import`, `postgres`, `backups` and `caddy`. Separate datasets for `library` and `backups` can be snapshotted on their own, as described in [Backups](#backups). In **Datasets**, select the parent dataset and choose **Edit** on the **Permissions** card. Set the owner and the owning group to `apps`, give `owner@` full control and `group@` modify, and apply the permissions to the child datasets. The application only reads `import`, so files copied there by other users need to be readable by `apps`.
 
 In **Apps**, choose **Discover Apps**, then **Install via YAML** from the menu, and paste this, with your paths and password:
 
@@ -205,12 +277,56 @@ services:
       DATABASE_URL: postgres://photos:change-me@postgres:5432/photos
       WORKERS: 3
       IMPORT_STABLE_SECONDS: 60
+      LOG_LEVEL: info
     ports:
       - '127.0.0.1:10303:8080'
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
     volumes:
       - /mnt/pool/fuchsia/library:/data/library
       - /mnt/pool/fuchsia/cache:/data/cache
       - /mnt/pool/fuchsia/import:/data/import:ro
+
+  backup:
+    image: postgres:18
+    restart: unless-stopped
+    user: '568:568'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: photos
+      PGDATABASE: photos
+      PGPASSWORD: change-me
+      BACKUP_TIME: '03:00'
+      BACKUP_KEEP: 14
+      TZ: Europe/Moscow
+    volumes:
+      - /mnt/pool/fuchsia/backups:/backups
+    entrypoint: [sh, -c]
+    command:
+      - |
+        trap 'exit 0' TERM INT
+        echo "backup: every day at $$BACKUP_TIME $$TZ, keeping $$BACKUP_KEEP dumps"
+        while true; do
+          now=$$(date +%s)
+          next=$$(date -d "today $$BACKUP_TIME" +%s) || exit 1
+          [ "$$next" -gt "$$now" ] || next=$$(date -d "tomorrow $$BACKUP_TIME" +%s)
+          sleep $$((next - now)) & wait $$!
+          name=photos-$$(date +%Y-%m-%d-%H%M).dump
+          if pg_dump --format=custom --file=/backups/.partial; then
+            mv /backups/.partial "/backups/$$name"
+            echo "backup: wrote $$name, $$(du -h "/backups/$$name" | cut -f1)"
+            ls -1 /backups/photos-*.dump | head -n -"$$BACKUP_KEEP" | xargs -r rm -v
+          else
+            echo "backup: pg_dump failed" >&2
+            rm -f /backups/.partial
+          fi
+        done
 
   caddy:
     image: caddy:2
@@ -246,7 +362,7 @@ Replace `192.168.0.101, 10.8.1.7` with the addresses that browsers and phones us
 
 An app installed from the earlier YAML, which served plain HTTP on port 10303, changes over when you edit its YAML to this one. The session cookie then needs HTTPS, so log in again at the new address.
 
-The password appears twice, in `POSTGRES_PASSWORD` and in `DATABASE_URL`, and both must match. Use only URL-safe characters.
+The password appears three times, in `POSTGRES_PASSWORD`, `DATABASE_URL` and `PGPASSWORD`, and all must match. Set `TZ` to your time zone for the nightly dump at `BACKUP_TIME`. In the `backup` script, `$$` stands for `$`, as Compose would otherwise fill in the variables itself. Use only URL-safe characters.
 
 Create the first administrator from the TrueNAS shell. Docker names the container after the app, so look it up first:
 

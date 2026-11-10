@@ -227,6 +227,16 @@ func (w *renderGridWorker) Work(ctx context.Context, job *river.Job[RenderGridAr
 // QueueGridRenders queues a new grid preview for every ready photo and returns
 // how many were queued. Running jobs are left to the server.
 func QueueGridRenders(ctx context.Context, pool *pgxpool.Pool) (int, error) {
+	return queueForReadyPhotos(ctx, pool, func(id int64) river.JobArgs { return RenderGridArgs{PhotoID: id} })
+}
+
+// QueuePreviewRenders queues new previews from the original for every ready
+// photo and returns how many were queued.
+func QueuePreviewRenders(ctx context.Context, pool *pgxpool.Pool) (int, error) {
+	return queueForReadyPhotos(ctx, pool, func(id int64) river.JobArgs { return RenderPreviewsArgs{PhotoID: id} })
+}
+
+func queueForReadyPhotos(ctx context.Context, pool *pgxpool.Pool, args func(id int64) river.JobArgs) (int, error) {
 	ids, err := store.New(pool).ListReadyPhotoIDs(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("list photos: %w", err)
@@ -239,13 +249,77 @@ func QueueGridRenders(ctx context.Context, pool *pgxpool.Pool) (int, error) {
 	for start := 0; start < len(ids); start += batch {
 		params := make([]river.InsertManyParams, 0, batch)
 		for _, id := range ids[start:min(start+batch, len(ids))] {
-			params = append(params, river.InsertManyParams{Args: RenderGridArgs{PhotoID: id}})
+			params = append(params, river.InsertManyParams{Args: args(id)})
 		}
 		if _, err := client.InsertMany(ctx, params); err != nil {
 			return start, fmt.Errorf("queue jobs: %w", err)
 		}
 	}
 	return len(ids), nil
+}
+
+// RenderPreviewsArgs queues making both previews of a ready photo again, from
+// its original, with the current settings. After a restore, this fills an
+// empty preview folder.
+type RenderPreviewsArgs struct {
+	PhotoID int64 `json:"photo_id"`
+}
+
+// Kind implements river.JobArgs.
+func (RenderPreviewsArgs) Kind() string { return "render_previews" }
+
+// InsertOpts implements river.JobArgsWithInsertOpts. New photos go first, and a
+// photo already waiting is not queued twice.
+func (RenderPreviewsArgs) InsertOpts() river.InsertOpts {
+	return RenderGridArgs{}.InsertOpts()
+}
+
+type renderPreviewsWorker struct {
+	river.WorkerDefaults[RenderPreviewsArgs]
+	process *processPhotoWorker
+}
+
+func (w *renderPreviewsWorker) Timeout(*river.Job[RenderPreviewsArgs]) time.Duration {
+	return processTimeout
+}
+
+func (w *renderPreviewsWorker) Work(ctx context.Context, job *river.Job[RenderPreviewsArgs]) error {
+	photo, err := w.process.queries.GetPhoto(ctx, job.Args.PhotoID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("load photo: %w", err)
+	}
+	if photo.Status != "ready" || photo.PurgedAt != nil {
+		return nil // Processing makes its previews, or it has none.
+	}
+
+	err = w.process.process(ctx, photo)
+	var unreadable *unreadableError
+	if errors.As(err, &unreadable) || err != nil && job.Attempt >= job.MaxAttempts {
+		// Such as an original missing after a restore: the photo shows its error.
+		return w.process.fail(ctx, photo.ID, err)
+	}
+	if err != nil {
+		return err
+	}
+
+	// A change of format leaves the old files behind.
+	if old := photo.PreviewFormat; old != nil {
+		if current, err := w.process.queries.GetPhoto(ctx, photo.ID); err == nil &&
+			current.PreviewFormat != nil && *current.PreviewFormat != *old {
+			for _, kind := range []string{storage.PreviewViewer, storage.PreviewGrid} {
+				if err := os.Remove(w.process.layout.Preview(photo.ID, kind, *old)); err != nil && !errors.Is(err, os.ErrNotExist) {
+					slog.Warn("remove old preview", "photo", photo.ID, "error", err)
+				}
+			}
+		}
+	}
+	if err := w.process.queries.BumpPreviewVersion(ctx, photo.ID); err != nil {
+		return fmt.Errorf("update photo: %w", err)
+	}
+	return nil
 }
 
 // CleanupArgs queues routine housekeeping.
@@ -305,7 +379,9 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 	queries := store.New(pool)
 
 	workers := river.NewWorkers()
-	river.AddWorker(workers, &processPhotoWorker{queries: queries, layout: cfg.Layout, metadata: cfg.Metadata})
+	process := &processPhotoWorker{queries: queries, layout: cfg.Layout, metadata: cfg.Metadata}
+	river.AddWorker(workers, process)
+	river.AddWorker(workers, &renderPreviewsWorker{process: process})
 	river.AddWorker(workers, &renderGridWorker{queries: queries, layout: cfg.Layout})
 	river.AddWorker(workers, &cleanupWorker{queries: queries, layout: cfg.Layout})
 	if cfg.Register != nil {

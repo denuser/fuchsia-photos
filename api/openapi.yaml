@@ -1269,6 +1269,33 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /queue:
+    get:
+      operationId: getQueue
+      summary: Background jobs by kind, and the latest job errors (administrators only)
+      responses:
+        "200":
+          description: The state of the job queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueueStats"
+        "403":
+          $ref: "#/components/responses/Error"
+  /queue/events:
+    get:
+      operationId: queueEvents
+      summary: Stream the state of the job queue (administrators only)
+      description: Server-sent events named `queue`, each holding QueueStats as JSON. The first comes at once, and the next whenever the queue changes. The server reads the queue every 2 seconds.
+      responses:
+        "200":
+          description: The event stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/QueueStats"
+        "403":
+          $ref: "#/components/responses/Error"
 security:
   - session: []
 components:
@@ -1314,6 +1341,74 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
   schemas:
+    QueueStats:
+      type: object
+      required: [kinds, errors]
+      properties:
+        kinds:
+          type: array
+          items:
+            $ref: "#/components/schemas/JobKindStats"
+        errors:
+          description: The latest errors of jobs that failed or wait for another attempt, newest first, at most 10
+          type: array
+          items:
+            $ref: "#/components/schemas/JobError"
+    JobKindStats:
+      description: Jobs of one kind. Finished jobs are kept for a day, so the finished counts cover a day at most
+      type: object
+      required: [kind, waiting, running, retrying, doneHour, doneDay, failedDay]
+      properties:
+        kind:
+          description: process_photo, render_grid, render_previews, folder_scan or cleanup
+          type: string
+        waiting:
+          type: integer
+          format: int64
+        running:
+          type: integer
+          format: int64
+        retrying:
+          description: Failed at least once and waiting for another attempt
+          type: integer
+          format: int64
+        doneHour:
+          description: Finished successfully in the last hour
+          type: integer
+          format: int64
+        doneDay:
+          description: Finished successfully in the last 24 hours
+          type: integer
+          format: int64
+        failedDay:
+          description: Gave up or were cancelled in the last 24 hours
+          type: integer
+          format: int64
+    JobError:
+      type: object
+      required: [jobId, kind, state, attempt, maxAttempts, photoId, error, at]
+      properties:
+        jobId:
+          type: integer
+          format: int64
+        kind:
+          type: string
+        state:
+          description: retryable while another attempt is coming, cancelled or discarded once the job gave up
+          type: string
+        attempt:
+          type: integer
+        maxAttempts:
+          type: integer
+        photoId:
+          description: The photo the job works on, if any
+          type: [integer, "null"]
+          format: int64
+        error:
+          type: string
+        at:
+          type: string
+          format: date-time
     MetadataSettings:
       type: object
       required: [showLocation]

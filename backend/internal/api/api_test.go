@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/denuser/fuchsia-photos/backend/internal/auth"
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
 	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
@@ -67,6 +69,7 @@ func TestRoutes(t *testing.T) {
 type env struct {
 	t       *testing.T
 	server  *httptest.Server
+	pool    *pgxpool.Pool
 	queries *store.Queries
 	layout  storage.Layout
 	// importDir is the root of folder scans.
@@ -89,6 +92,7 @@ func setup(t *testing.T) *env {
 	ingester := &ingest.Service{Pool: pool, Jobs: client, Layout: layout}
 	server := httptest.NewServer(NewHandler(Deps{
 		DB:      pool,
+		Pool:    pool,
 		Queries: queries,
 		Ingest:  ingester,
 		Scan:    &scan.Service{Ingest: ingester, Dir: importDir},
@@ -96,7 +100,7 @@ func setup(t *testing.T) *env {
 		Static:  http.NotFoundHandler(),
 	}))
 	t.Cleanup(server.Close)
-	return &env{t, server, queries, layout, importDir}
+	return &env{t, server, pool, queries, layout, importDir}
 }
 
 func (e *env) addUser(login, role string) store.User {

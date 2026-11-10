@@ -1,6 +1,6 @@
 # Improvements
 
-The current list of improvements, in order of priority. Stage 5 of the [roadmap](../README.md#roadmap) is on hold while this list is being worked on.
+The current list of improvements, in order of priority. All of them are done, and work returned to stage 5 of the [roadmap](../README.md#roadmap).
 
 ## 1. Administration page
 

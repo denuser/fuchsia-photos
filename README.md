@@ -17,7 +17,7 @@
 
 A self-hosted application for organizing photos, designed to run on a home NAS (Intel N150, 4 cores, 16 GB DDR5).
 
-**Status:** stage 4. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work. The stage 6 WebDAV spike works and waits for tests with real phone clients. The stage 0 benchmark set the preview format and worker count for JPEG photos. This document records the decisions made so far and the roadmap.
+**Status:** stage 5. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work, with nightly database dumps, a tested restore, request logs and the job queue on the administration page. The stage 6 WebDAV spike works and waits for tests with real phone clients. The stage 0 benchmark set the preview format and worker count for JPEG photos. This document records the decisions made so far and the roadmap.
 
 ## Features
 
@@ -74,6 +74,10 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | Deleting over WebDAV | Removes the file from the WebDAV tree only. The photo stays in the library | Sync apps delete on the server what is gone from the phone, and clearing space on a phone must not delete its photos here |
 | WebDAV and the trash | As with a folder scan: a photo in the trash stays there, and a permanently deleted one is not added again. Files that are not supported photos, such as videos, are refused with 415 | A phone that sends its camera roll again gives no sign that the owner wants a deleted photo back |
 | WebDAV albums (planned) | The owner links a folder of their WebDAV tree to one of their albums in the profile, and photos uploaded into that folder or its subfolders are added to the album. This includes a photo the library already has, unless it is in the trash. Folder names never create albums. Deleting or moving a file over WebDAV leaves the photo in its album | A sync app pairs each phone folder with a server folder, so the camera and a messenger can go to different albums with nothing set up on the phone. Albums made from folder names would fill the list with `DCIM` and `Screenshots`. Removing photos from an album on delete would contradict keeping them in the library |
+| Database backups | A `backup` container on the `postgres:18` image dumps the database every night with `pg_dump` and keeps the latest 14 dumps. Originals are backed up as folder snapshots, such as ZFS snapshots on TrueNAS. Previews are not backed up: the `render-previews` command makes them again from the originals | `pg_dump` always matches the server version, the application image stays as it is, and the setup stays a single YAML on TrueNAS. Previews take hours to remake, but nothing is lost without them |
+| Restoring a dump | Restoring moves the photo numbers a million past the dump's | Browsers cache previews for a year by photo number. Photos uploaded after the dump are lost from the database, and a new photo with the number of one of them would show its cached preview |
+| Logs | Plain text by default, or JSON, on the container output, at a level set in the environment. Each request is logged, at `info` when it fails or takes over a second and at `debug` otherwise. Docker keeps five files of 10 MB | Errors and slow requests are visible without the noise of every preview |
+| Queue metrics | A section of the administration page: jobs by kind and state, finished and failed in the last hour and day, and the latest errors. It updates through server-sent events, with the server reading the queue every 2 seconds and sending only changes | Visible without a monitoring system. SSE as for processing progress. River does not report finished jobs, so the server polls its table |
 | TLS and HTTP/2 | Caddy in front of the application | The grid loads hundreds of previews, and HTTP/1.1 allows few connections. WebDAV Basic Auth requires TLS |
 
 The main hardware constraints are CPU time for decoding photos and, probably, HDD throughput. Memory is not scarce.
@@ -112,7 +116,7 @@ backend/                Go module
   internal/             auth, users, photos, ingest, media, albums, tags, sharing, scan, webdav, jobs, api
   db/migrations, db/queries   goose + sqlc
 frontend/               Vue + Vuetify, TypeScript client generated from OpenAPI
-deploy/                 Dockerfile, compose.yaml (app, postgres, caddy), Caddyfile
+deploy/                 Dockerfile, compose.yaml (app, postgres, backup, caddy), Caddyfile
 docs/                   development, deployment and benchmark guides
 ```
 
@@ -154,7 +158,8 @@ Revoking access takes effect on the server at once. Previews are cached for a ye
 - [x] **Stage 2: organization.** Albums, tags, search by date and tag, bulk actions, trash with soft delete.
 - [x] **Stage 3: sharing.** Visibility for all users, sharing photos and albums by login, a "Shared with me" section, the admin view of everything. Test suite for the permission predicate.
 - [x] **Stage 4: folder scan.** Admin only: fixed root, owner selection, safe re-runs thanks to hashing. Skips files still being copied (size and mtime unchanged for N seconds). Report in `import_runs`. A re-run must not restore photos the owner moved to the trash, unlike a browser upload.
-- [ ] **Stage 5: operations.** Nightly `pg_dump`, backup and tested restore instructions, logs and queue metrics.
+- [x] **Stage 5: operations.** Nightly `pg_dump`, backup and tested restore instructions, logs and queue metrics.
+  - Restore checked on 2026-11-10 with `deploy/compose.yaml`: a nightly dump from one installation restored on a clean one, with the originals copied over and the previews made again by `render-previews`
 - [ ] **Stage 6: WebDAV (hypothesis, starts as a spike).** Per-user upload folder, separate app password, files go through ingest. Tested with real mobile clients such as PhotoSync and FolderSync. If they work poorly, the feature is dropped and the outcome recorded here.
   - [x] Spike: the WebDAV tree at `/webdav/`, app passwords in the profile, uploads through ingest
   - [ ] Tests with PhotoSync and FolderSync on the NAS, with the outcome recorded here

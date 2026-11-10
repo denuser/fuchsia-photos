@@ -853,10 +853,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Background jobs by kind, and the latest job errors (administrators only) */
+        get: operations["getQueue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queue/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream the state of the job queue (administrators only)
+         * @description Server-sent events named `queue`, each holding QueueStats as JSON. The first comes at once, and the next whenever the queue changes. The server reads the queue every 2 seconds.
+         */
+        get: operations["queueEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        QueueStats: {
+            kinds: components["schemas"]["JobKindStats"][];
+            /** @description The latest errors of jobs that failed or wait for another attempt, newest first, at most 10 */
+            errors: components["schemas"]["JobError"][];
+        };
+        /** @description Jobs of one kind. Finished jobs are kept for a day, so the finished counts cover a day at most */
+        JobKindStats: {
+            /** @description process_photo, render_grid, render_previews, folder_scan or cleanup */
+            kind: string;
+            /** Format: int64 */
+            waiting: number;
+            /** Format: int64 */
+            running: number;
+            /**
+             * Format: int64
+             * @description Failed at least once and waiting for another attempt
+             */
+            retrying: number;
+            /**
+             * Format: int64
+             * @description Finished successfully in the last hour
+             */
+            doneHour: number;
+            /**
+             * Format: int64
+             * @description Finished successfully in the last 24 hours
+             */
+            doneDay: number;
+            /**
+             * Format: int64
+             * @description Gave up or were cancelled in the last 24 hours
+             */
+            failedDay: number;
+        };
+        JobError: {
+            /** Format: int64 */
+            jobId: number;
+            kind: string;
+            /** @description retryable while another attempt is coming, cancelled or discarded once the job gave up */
+            state: string;
+            attempt: number;
+            maxAttempts: number;
+            /**
+             * Format: int64
+             * @description The photo the job works on, if any
+             */
+            photoId: number | null;
+            error: string;
+            /** Format: date-time */
+            at: string;
+        };
         MetadataSettings: {
             /** @description Whether photos include where they were taken, for everyone who may see them */
             showLocation: boolean;
@@ -2624,6 +2712,48 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    getQueue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state of the job queue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueStats"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    queueEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The event stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["QueueStats"];
+                };
+            };
             403: components["responses"]["Error"];
         };
     };

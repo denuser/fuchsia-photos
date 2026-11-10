@@ -334,8 +334,10 @@ const steps = {
     await expectRequest('/photos/trash/empty', () => dialog().getByRole('button', { name: 'Empty trash' }).click())
     await page.getByText('The trash is empty').first().waitFor()
   },
-  'an administrator changes the preview settings': async () => {
+  'an administrator sees the job queue and changes the preview settings': async () => {
     await page.goto(`${BASE}/admin`)
+    // The uploads so far were processed, and the queue streams in over SSE.
+    await page.getByTestId('queue').getByRole('cell', { name: 'Photo processing', exact: true }).waitFor()
     await page.getByLabel('Grid preview size').fill('300')
     await expectRequest('/settings/previews', () => button('Save').click())
     await page.reload()

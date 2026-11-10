@@ -14,7 +14,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
+	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
 	"github.com/denuser/fuchsia-photos/backend/internal/scan"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
@@ -27,7 +30,9 @@ type Pinger interface {
 
 // Deps are the handler's dependencies.
 type Deps struct {
-	DB           Pinger
+	DB Pinger
+	// Pool reads the job queue, which the generated queries do not cover.
+	Pool         *pgxpool.Pool
 	Queries      *store.Queries
 	Ingest       *ingest.Service
 	Scan         *scan.Service
@@ -115,6 +120,9 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/settings/metadata", s.admin(s.getMetadataSettings))
 	mux.HandleFunc("PUT /api/v1/settings/metadata", s.admin(s.updateMetadataSettings))
 
+	mux.HandleFunc("GET /api/v1/queue", s.admin(s.getQueue))
+	mux.HandleFunc("GET /api/v1/queue/events", s.admin(s.queueEvents))
+
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
@@ -125,7 +133,7 @@ func NewHandler(deps Deps) http.Handler {
 		mux.Handle("/webdav/", deps.WebDAV)
 	}
 	mux.Handle("/", deps.Static)
-	return mux
+	return logRequests(mux)
 }
 
 func (s *server) health(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +146,26 @@ func (s *server) health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *server) getQueue(w http.ResponseWriter, r *http.Request) {
+	stats, err := s.readQueue(r.Context())
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (s *server) readQueue(ctx context.Context) (jobs.QueueStats, error) {
+	stats, err := jobs.ReadQueueStats(ctx, s.Pool)
+	if stats.Kinds == nil {
+		stats.Kinds = []jobs.KindStats{}
+	}
+	if stats.Errors == nil {
+		stats.Errors = []jobs.JobError{}
+	}
+	return stats, err
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

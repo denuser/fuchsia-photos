@@ -39,7 +39,9 @@ commands:
   migrate               apply pending migrations and exit
   create-admin <login>  create an administrator, reading the password from stdin
   render-grid           queue new grid previews of all photos with the current
-                        settings; a running server makes them`
+                        settings; a running server makes them
+  render-previews       queue new grid and viewer previews of all photos from
+                        their originals, as after a restore`
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -58,6 +60,7 @@ func run(args []string) error {
 	case command == "migrate" && len(args) == 1:
 	case command == "create-admin" && len(args) == 2:
 	case command == "render-grid" && len(args) == 1:
+	case command == "render-previews" && len(args) == 1:
 	default:
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
@@ -67,6 +70,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	setupLogging(cfg)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -92,6 +96,12 @@ func run(args []string) error {
 			return err
 		}
 		fmt.Fprintf(os.Stderr, "Queued new grid previews of %d photos\n", count)
+	case "render-previews":
+		count, err := jobs.QueuePreviewRenders(ctx, pool)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "Queued new previews of %d photos\n", count)
 	}
 	return nil
 }
@@ -168,6 +178,7 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 	}
 	handler := api.NewHandler(api.Deps{
 		DB:           pool,
+		Pool:         pool,
 		Queries:      store.New(pool),
 		Ingest:       ingester,
 		Scan:         scanner,
@@ -209,4 +220,14 @@ func listen(ctx context.Context, addr string, handler http.Handler) error {
 		return err
 	}
 	return nil
+}
+
+// setupLogging writes logs to stderr, where Docker collects them.
+func setupLogging(cfg config.Config) {
+	opts := &slog.HandlerOptions{Level: cfg.LogLevel}
+	var handler slog.Handler = slog.NewTextHandler(os.Stderr, opts)
+	if cfg.LogFormat == "json" {
+		handler = slog.NewJSONHandler(os.Stderr, opts)
+	}
+	slog.SetDefault(slog.New(handler))
 }

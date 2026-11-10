@@ -232,6 +232,81 @@ func TestRenderGrid(t *testing.T) {
 	}
 }
 
+func TestRenderPreviewsAfterRestore(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	ingestFile := func(name string) store.Photo {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join("..", "media", "testdata", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := e.ingest.Ingest(ctx, e.owner, bytes.NewReader(data), name, ingest.PriorityInteractive)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return waitForStatus(t, e, res.Photo.ID, "ready")
+	}
+	photo := ingestFile("large.jpg")
+	lost := ingestFile("landscape.jpg")
+
+	// A restore with an empty preview folder, and an original lost since the dump.
+	for _, p := range []store.Photo{photo, lost} {
+		for _, kind := range []string{storage.PreviewViewer, storage.PreviewGrid} {
+			if err := os.Remove(e.layout.Preview(p.ID, kind, *p.PreviewFormat)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := os.Remove(e.layout.Original(lost.OwnerID, lost.Sha256, lost.Mime)); err != nil {
+		t.Fatal(err)
+	}
+	_, err := e.queries.UpdatePreviewSettings(ctx, store.UpdatePreviewSettingsParams{
+		Format: string(media.JPEG), WebpQuality: 75, WebpEffort: 2, JpegQuality: 80, GridEdge: 300, ViewerEdge: 1024,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err := jobs.QueuePreviewRenders(ctx, e.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Errorf("queued %d photos, want 2", count)
+	}
+
+	deadline := time.Now().Add(30 * time.Second)
+	for photo.PreviewVersion == 0 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+		if photo, err = e.queries.GetPhoto(ctx, photo.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if photo.PreviewVersion != 1 {
+		t.Fatalf("preview version = %d, want 1", photo.PreviewVersion)
+	}
+	// Previews are made again with the current settings, including the format.
+	if *photo.PreviewFormat != string(media.JPEG) {
+		t.Errorf("format = %s, want jpeg", *photo.PreviewFormat)
+	}
+	for kind, width := range map[string]int{storage.PreviewViewer: 1024, storage.PreviewGrid: 400} {
+		image, err := vips.NewImageFromFile(e.layout.Preview(photo.ID, kind, *photo.PreviewFormat))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if image.Width() != width {
+			t.Errorf("%s width = %d, want %d", kind, image.Width(), width)
+		}
+		image.Close()
+	}
+
+	lost = waitForStatus(t, e, lost.ID, "failed")
+	if lost.Error == nil || *lost.Error == "" {
+		t.Error("a photo without its original has no error")
+	}
+}
+
 func TestProcessPhotoKeepsGPSInDatabaseOnly(t *testing.T) {
 	e := setup(t)
 	data, err := os.ReadFile(filepath.Join("..", "media", "testdata", "rotated.jpg"))
