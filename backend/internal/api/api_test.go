@@ -715,3 +715,72 @@ func TestAppPasswords(t *testing.T) {
 		t.Error("a deleted app password still logs in")
 	}
 }
+
+func TestWebDAVAlbums(t *testing.T) {
+	e := setup(t)
+	anna := e.addUser("anna", auth.RoleUser)
+	boris := e.addUser("boris", auth.RoleUser)
+	annaB := e.loggedIn("anna")
+	borisB := e.loggedIn("boris")
+	ctx := context.Background()
+	album, err := e.queries.CreateAlbum(ctx, store.CreateAlbumParams{OwnerID: anna.ID, Name: "Camera"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	borisAlbum, err := e.queries.CreateAlbum(ctx, store.CreateAlbumParams{OwnerID: boris.ID, Name: "Boris"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = e.queries.CreateWebDAVDir(ctx, store.CreateWebDAVDirParams{UserID: anna.ID, Path: "/DCIM", Parent: "/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res := annaB.get("/api/v1/me/webdav-folders")
+	wantStatus(t, res, http.StatusOK)
+	if folders := decode[[]string](t, res); len(folders) != 1 || folders[0] != "/DCIM" {
+		t.Errorf("folders = %v", folders)
+	}
+	if folders := decode[[]string](t, borisB.get("/api/v1/me/webdav-folders")); len(folders) != 0 {
+		t.Errorf("boris sees anna's folders: %v", folders)
+	}
+
+	link := func(b *browser, path string, albumID int64) *http.Response {
+		return b.json(http.MethodPost, "/api/v1/me/webdav-albums", map[string]any{"path": path, "albumId": albumID})
+	}
+	res = link(annaB, " DCIM/Camera/ ", album)
+	wantStatus(t, res, http.StatusCreated)
+	created := decode[struct {
+		ID        int64  `json:"id"`
+		Path      string `json:"path"`
+		AlbumID   int64  `json:"albumId"`
+		AlbumName string `json:"albumName"`
+	}](t, res)
+	if created.Path != "/DCIM/Camera" || created.AlbumID != album || created.AlbumName != "Camera" {
+		t.Errorf("created = %+v", created)
+	}
+	wantStatus(t, link(annaB, "/DCIM/Camera", album), http.StatusConflict)
+	wantStatus(t, link(annaB, "/", album), http.StatusCreated)
+	wantStatus(t, link(annaB, "/Other", borisAlbum), http.StatusNotFound)
+	wantStatus(t, link(annaB, "/bad\x01name", album), http.StatusBadRequest)
+
+	res = annaB.get("/api/v1/me/webdav-albums")
+	wantStatus(t, res, http.StatusOK)
+	if listed := decode[[]map[string]any](t, res); len(listed) != 2 || listed[0]["path"] != "/" || listed[1]["path"] != "/DCIM/Camera" {
+		t.Errorf("listed = %v", listed)
+	}
+	if listed := decode[[]map[string]any](t, borisB.get("/api/v1/me/webdav-albums")); len(listed) != 0 {
+		t.Errorf("boris sees anna's links: %v", listed)
+	}
+
+	wantStatus(t, borisB.json(http.MethodDelete, "/api/v1/me/webdav-albums/"+itoa(created.ID), nil), http.StatusNotFound)
+	wantStatus(t, annaB.json(http.MethodDelete, "/api/v1/me/webdav-albums/"+itoa(created.ID), nil), http.StatusNoContent)
+
+	// Deleting the album removes its links.
+	if _, err := e.queries.DeleteAlbum(ctx, store.DeleteAlbumParams{ID: album, OwnerID: anna.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if listed := decode[[]map[string]any](t, annaB.get("/api/v1/me/webdav-albums")); len(listed) != 0 {
+		t.Errorf("links of a deleted album: %v", listed)
+	}
+}

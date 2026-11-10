@@ -52,3 +52,42 @@ WHERE user_id = @user_id AND (path = @old_path::text OR starts_with(path, @old_p
 -- name: GetWebDAVPhoto :one
 -- The photo behind a file, if its original is still there.
 SELECT * FROM photos WHERE id = @id AND owner_id = @owner_id AND purged_at IS NULL;
+
+-- name: ListWebDAVFolders :many
+-- Folders to offer when linking one to an album.
+SELECT path FROM webdav_entries WHERE user_id = @user_id AND is_dir ORDER BY path LIMIT 1000;
+
+-- name: ListWebDAVAlbums :many
+SELECT l.id, l.path, l.album_id, a.name AS album_name
+FROM webdav_albums l
+JOIN albums a ON a.id = l.album_id
+WHERE l.user_id = @user_id
+ORDER BY l.path;
+
+-- name: CountWebDAVAlbums :one
+SELECT count(*) FROM webdav_albums WHERE user_id = @user_id;
+
+-- name: CreateWebDAVAlbum :one
+-- Links a folder to an album of the same user. Returns no row if the album is
+-- not the user's, and fails on a unique violation if the folder is linked.
+WITH album AS (
+    SELECT a.id, a.owner_id, a.name FROM albums a WHERE a.id = @album_id AND a.owner_id = @user_id
+), link AS (
+    INSERT INTO webdav_albums (user_id, path, album_id)
+    SELECT album.owner_id, @path, album.id FROM album
+    RETURNING webdav_albums.id, webdav_albums.path, webdav_albums.album_id
+)
+SELECT link.id, link.path, link.album_id, album.name AS album_name
+FROM link JOIN album ON album.id = link.album_id;
+
+-- name: DeleteWebDAVAlbum :execrows
+DELETE FROM webdav_albums WHERE id = @id AND user_id = @user_id;
+
+-- name: FindWebDAVAlbum :one
+-- The album of the nearest linked folder that holds a file.
+SELECT album_id
+FROM webdav_albums
+WHERE user_id = @user_id
+  AND (path = '/' OR starts_with(@file_path::text, path || '/'))
+ORDER BY length(path) DESC
+LIMIT 1;

@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { api, type AppPassword, type ViewerField } from '../api/client'
+import { api, type AppPassword, type ViewerField, type WebDAVAlbum } from '../api/client'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
 import AppPasswordDialog from '../components/AppPasswordDialog.vue'
 import ChangePasswordDialog from '../components/ChangePasswordDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CopyField from '../components/CopyField.vue'
+import FolderAlbumDialog from '../components/FolderAlbumDialog.vue'
 import { viewerFields } from '../lib/viewerFields'
 import { useAuthStore } from '../stores/auth'
 import { useNoticesStore } from '../stores/notices'
@@ -77,11 +78,43 @@ async function revoke() {
   notices.notify(`Revoked the app password for ${password.name}`)
 }
 
+const folderAlbums = ref<WebDAVAlbum[]>([])
+const folderAlbumsLoaded = ref(false)
+const folderAlbumDialog = ref(false)
+
+async function loadFolderAlbums() {
+  const { data } = await api.GET('/me/webdav-albums')
+  if (!data) {
+    error.value = 'Folder albums could not be loaded'
+    return
+  }
+  folderAlbums.value = data
+  folderAlbumsLoaded.value = true
+}
+
+function linked(link: WebDAVAlbum) {
+  folderAlbums.value = [...folderAlbums.value, link].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+  notices.notify(`Photos uploaded to ${link.path} will go to ${link.albumName}`)
+}
+
+async function unlink(link: WebDAVAlbum) {
+  const { error: failure } = await api.DELETE('/me/webdav-albums/{id}', { params: { path: { id: link.id } } })
+  if (failure) {
+    error.value = failure.error
+    return
+  }
+  folderAlbums.value = folderAlbums.value.filter((l) => l.id !== link.id)
+  notices.notify(`Unlinked ${link.path} from ${link.albumName}`)
+}
+
 function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'Never'
 }
 
-onMounted(loadAppPasswords)
+onMounted(() => {
+  void loadAppPasswords()
+  void loadFolderAlbums()
+})
 </script>
 
 <template>
@@ -198,6 +231,36 @@ onMounted(loadAppPasswords)
         action="Revoke"
         @confirm="revoke"
       />
+
+      <h3 class="mt-6 mb-1">Albums for folders</h3>
+      <div class="text-medium-emphasis mb-2">
+        Photos uploaded into a linked folder, or a folder inside it, are added to its album, including photos already in your
+        library. Point each folder pair of the sync app to its own server folder to sort the camera and a messenger into different
+        albums. Deleting or moving files in the app leaves the photos in the album.
+      </div>
+      <v-table v-if="folderAlbums.length > 0" class="mb-4">
+        <thead>
+          <tr>
+            <th>Folder</th>
+            <th>Album</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="link in folderAlbums" :key="link.id">
+            <td>{{ link.path }}</td>
+            <td>
+              <router-link :to="`/albums/${link.albumId}`">{{ link.albumName }}</router-link>
+            </td>
+            <td class="text-right">
+              <v-btn icon="fa-link-slash" size="small" variant="text" :aria-label="`Unlink ${link.path}`" @click="unlink(link)" />
+            </td>
+          </tr>
+        </tbody>
+      </v-table>
+      <div v-else-if="folderAlbumsLoaded" class="text-medium-emphasis mb-4">No folders linked yet.</div>
+      <v-btn prepend-icon="fa-link" variant="tonal" text="Link a folder" @click="folderAlbumDialog = true" />
+      <FolderAlbumDialog v-model="folderAlbumDialog" @created="linked" />
     </div>
   </div>
 </template>

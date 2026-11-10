@@ -147,6 +147,14 @@ type User struct {
 	TimelineIncludesShared   bool
 }
 
+type WebdavAlbum struct {
+	ID        int64
+	UserID    int64
+	Path      string
+	AlbumID   int64
+	CreatedAt time.Time
+}
+
 type WebdavEntry struct {
 	UserID     int64
 	Path       string

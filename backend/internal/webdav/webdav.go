@@ -10,6 +10,7 @@
 package webdav
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -164,6 +165,13 @@ func cleanPath(name string) string {
 	return path.Clean("/" + name)
 }
 
+// FolderPath returns the path in a user's tree that a folder link names, such
+// as "/Camera" for "Camera/". The root "/" links the whole tree.
+func FolderPath(name string) (string, bool) {
+	p := cleanPath(strings.TrimSpace(name))
+	return p, p == "/" || validPath(p)
+}
+
 // validPath reports whether a new file or folder may have this path.
 func validPath(p string) bool {
 	if p == "/" || len(p) > maxPathBytes || !utf8.ValidString(p) || strings.ContainsFunc(p, unicode.IsControl) {
@@ -221,6 +229,11 @@ func (h *Handler) put(w http.ResponseWriter, r *http.Request, fs *fileSystem) {
 		return
 	}
 
+	if err := h.addToAlbum(ctx, fs.userID, name, res.Photo); err != nil {
+		internalError(w, r, err)
+		return
+	}
+
 	modified := time.Now()
 	// Some clients send the file's own modification time this way, as ownCloud
 	// and Nextcloud accept it. Keeping it lets them see the file as unchanged.
@@ -248,6 +261,25 @@ func (h *Handler) put(w http.ResponseWriter, r *http.Request, fs *fileSystem) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
+}
+
+// addToAlbum adds an uploaded photo to the album linked to its folder. This
+// includes a photo the library already had, unless it is in the trash. It runs
+// before the file is recorded, so that a client sends a file again after a
+// failure.
+func (h *Handler) addToAlbum(ctx context.Context, userID int64, name string, photo store.Photo) error {
+	albumID, err := h.Queries.FindWebDAVAlbum(ctx, store.FindWebDAVAlbumParams{UserID: userID, FilePath: name})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("find the album of %s: %w", name, err)
+	}
+	err = h.Queries.AddPhotosToAlbum(ctx, store.AddPhotosToAlbumParams{AlbumID: albumID, OwnerID: userID, Ids: []int64{photo.ID}})
+	if err != nil {
+		return fmt.Errorf("add a photo to album %d: %w", albumID, err)
+	}
+	return nil
 }
 
 // get serves the original of the photo a file became, while it is there.

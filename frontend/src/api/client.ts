@@ -4,6 +4,7 @@ import type { components, paths } from './schema'
 
 export type Album = components['schemas']['Album']
 export type AppPassword = components['schemas']['AppPassword']
+export type WebDAVAlbum = components['schemas']['WebDAVAlbum']
 export type Camera = components['schemas']['Camera']
 export type JobError = components['schemas']['JobError']
 export type JobKindStats = components['schemas']['JobKindStats']

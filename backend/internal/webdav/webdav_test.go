@@ -335,3 +335,92 @@ func (e *env) photo(ownerID int64, fixture string) store.Photo {
 	}
 	return photo
 }
+
+func (e *env) addAlbum(owner *client, name string) int64 {
+	e.t.Helper()
+	id, err := e.queries.CreateAlbum(context.Background(), store.CreateAlbumParams{OwnerID: owner.user.ID, Name: name})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return id
+}
+
+func (e *env) link(owner *client, path string, albumID int64) {
+	e.t.Helper()
+	_, err := e.queries.CreateWebDAVAlbum(context.Background(), store.CreateWebDAVAlbumParams{UserID: owner.user.ID, Path: path, AlbumID: albumID})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+}
+
+func (e *env) albumSize(owner *client, albumID int64) int64 {
+	e.t.Helper()
+	albums, err := e.queries.ListAlbums(context.Background(), store.ListAlbumsParams{OwnerID: owner.user.ID, ID: &albumID})
+	if err != nil || len(albums) != 1 {
+		e.t.Fatalf("album %d: %v", albumID, err)
+	}
+	return albums[0].PhotoCount
+}
+
+func TestFolderAlbums(t *testing.T) {
+	e := setup(t)
+	anna := e.addUser("anna")
+	camera := e.addAlbum(anna, "Camera")
+	screenshots := e.addAlbum(anna, "Screenshots")
+	// A link may come before the folder exists.
+	e.link(anna, "/DCIM", camera)
+	e.link(anna, "/DCIM/Screenshots", screenshots)
+
+	wantStatus(t, anna.do("MKCOL", "/webdav/DCIM", nil, nil), http.StatusCreated)
+	wantStatus(t, anna.do("MKCOL", "/webdav/DCIM/Screenshots", nil, nil), http.StatusCreated)
+	wantStatus(t, anna.do("MKCOL", "/webdav/DCIM/2026", nil, nil), http.StatusCreated)
+	wantStatus(t, anna.do("MKCOL", "/webdav/DCIMX", nil, nil), http.StatusCreated)
+	wantStatus(t, anna.put("/webdav/DCIM/2026/a.jpg", "landscape.jpg"), http.StatusCreated)
+	wantStatus(t, anna.put("/webdav/DCIM/Screenshots/b.png", "landscape.png"), http.StatusCreated)
+	wantStatus(t, anna.put("/webdav/DCIMX/c.webp", "landscape.webp"), http.StatusCreated)
+	wantStatus(t, anna.put("/webdav/d.heic", "landscape.heic"), http.StatusCreated)
+	if got := e.albumSize(anna, camera); got != 1 {
+		t.Errorf("Camera has %d photos, want 1: the nearest linked folder decides", got)
+	}
+	if got := e.albumSize(anna, screenshots); got != 1 {
+		t.Errorf("Screenshots has %d photos, want 1", got)
+	}
+
+	// A photo the library already has goes to the album too.
+	wantStatus(t, anna.put("/webdav/DCIM/Screenshots/copy.jpg", "landscape.jpg"), http.StatusCreated)
+	if got := e.albumSize(anna, screenshots); got != 2 {
+		t.Errorf("Screenshots has %d photos, want 2", got)
+	}
+
+	// Deleting or moving files leaves their photos in the album.
+	wantStatus(t, anna.do("MOVE", "/webdav/DCIM/Screenshots/b.png", nil, map[string]string{"Destination": "/webdav/b.png"}), http.StatusCreated)
+	wantStatus(t, anna.do(http.MethodDelete, "/webdav/DCIM", nil, nil), http.StatusNoContent)
+	if got := e.albumSize(anna, screenshots); got != 2 {
+		t.Errorf("Screenshots has %d photos after the delete, want 2", got)
+	}
+
+	// A photo in the trash is not added.
+	trashed := e.photo(anna.user.ID, "landscape.webp")
+	err := e.queries.TrashPhotos(context.Background(), store.TrashPhotosParams{Ids: []int64{trashed.ID}, ActorID: anna.user.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantStatus(t, anna.do("MKCOL", "/webdav/DCIM", nil, nil), http.StatusCreated)
+	wantStatus(t, anna.put("/webdav/DCIM/c.webp", "landscape.webp"), http.StatusCreated)
+	err = e.queries.RestorePhotos(context.Background(), store.RestorePhotosParams{Ids: []int64{trashed.ID}, OwnerID: anna.user.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := e.albumSize(anna, camera); got != 1 {
+		t.Errorf("Camera has %d photos, want 1: a photo in the trash was added", got)
+	}
+
+	// The root links the whole tree.
+	boris := e.addUser("boris")
+	all := e.addAlbum(boris, "Phone")
+	e.link(boris, "/", all)
+	wantStatus(t, boris.put("/webdav/a.jpg", "landscape.jpg"), http.StatusCreated)
+	if got := e.albumSize(boris, all); got != 1 {
+		t.Errorf("Phone has %d photos, want 1", got)
+	}
+}

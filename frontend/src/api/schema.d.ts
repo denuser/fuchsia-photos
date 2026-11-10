@@ -130,6 +130,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/webdav-folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the folders of the current user's WebDAV tree
+         * @description To offer when linking a folder to an album. At most 1000.
+         */
+        get: operations["listWebDAVFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/webdav-albums": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the WebDAV folders linked to albums
+         * @description A photo uploaded over WebDAV into a linked folder, or a folder inside it, is added to the album of the nearest linked folder.
+         */
+        get: operations["listWebDAVAlbums"];
+        put?: never;
+        /**
+         * Link a WebDAV folder to one of the current user's albums
+         * @description The folder need not exist yet. "/" links the whole tree. A user can link at most 100 folders.
+         */
+        post: operations["createWebDAVAlbum"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/webdav-albums/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unlink a WebDAV folder from its album
+         * @description Photos already in the album stay there.
+         */
+        delete: operations["deleteWebDAVAlbum"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -1197,6 +1263,15 @@ export interface components {
              */
             lastUsedAt: string | null;
         };
+        WebDAVAlbum: {
+            /** Format: int64 */
+            id: number;
+            /** @description The folder, starting with a slash */
+            path: string;
+            /** Format: int64 */
+            albumId: number;
+            albumName: string;
+        };
         NewAppPassword: components["schemas"]["AppPassword"] & {
             /** @description Four groups of five characters, shown only once */
             password: string;
@@ -1461,6 +1536,99 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description The password no longer logs in */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listWebDAVFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Folder paths, starting with a slash, in order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+        };
+    };
+    listWebDAVAlbums: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The links, by folder */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebDAVAlbum"][];
+                };
+            };
+        };
+    };
+    createWebDAVAlbum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The folder, such as "/Camera"; slashes at the ends are optional */
+                    path: string;
+                    /** Format: int64 */
+                    albumId: number;
+                };
+            };
+        };
+        responses: {
+            /** @description The new link */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebDAVAlbum"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    deleteWebDAVAlbum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The link is removed */
             204: {
                 headers: {
                     [name: string]: unknown;

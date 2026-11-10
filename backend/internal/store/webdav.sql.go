@@ -21,6 +21,17 @@ func (q *Queries) CountAppPasswords(ctx context.Context, userID int64) (int64, e
 	return count, err
 }
 
+const countWebDAVAlbums = `-- name: CountWebDAVAlbums :one
+SELECT count(*) FROM webdav_albums WHERE user_id = $1
+`
+
+func (q *Queries) CountWebDAVAlbums(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countWebDAVAlbums, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAppPassword = `-- name: CreateAppPassword :one
 INSERT INTO app_passwords (user_id, name, token_hash) VALUES ($1, $2, $3) RETURNING id, user_id, name, token_hash, created_at, last_used_at
 `
@@ -41,6 +52,45 @@ func (q *Queries) CreateAppPassword(ctx context.Context, arg CreateAppPasswordPa
 		&i.TokenHash,
 		&i.CreatedAt,
 		&i.LastUsedAt,
+	)
+	return i, err
+}
+
+const createWebDAVAlbum = `-- name: CreateWebDAVAlbum :one
+WITH album AS (
+    SELECT a.id, a.owner_id, a.name FROM albums a WHERE a.id = $1 AND a.owner_id = $2
+), link AS (
+    INSERT INTO webdav_albums (user_id, path, album_id)
+    SELECT album.owner_id, $3, album.id FROM album
+    RETURNING webdav_albums.id, webdav_albums.path, webdav_albums.album_id
+)
+SELECT link.id, link.path, link.album_id, album.name AS album_name
+FROM link JOIN album ON album.id = link.album_id
+`
+
+type CreateWebDAVAlbumParams struct {
+	AlbumID int64
+	UserID  int64
+	Path    string
+}
+
+type CreateWebDAVAlbumRow struct {
+	ID        int64
+	Path      string
+	AlbumID   int64
+	AlbumName string
+}
+
+// Links a folder to an album of the same user. Returns no row if the album is
+// not the user's, and fails on a unique violation if the folder is linked.
+func (q *Queries) CreateWebDAVAlbum(ctx context.Context, arg CreateWebDAVAlbumParams) (CreateWebDAVAlbumRow, error) {
+	row := q.db.QueryRow(ctx, createWebDAVAlbum, arg.AlbumID, arg.UserID, arg.Path)
+	var i CreateWebDAVAlbumRow
+	err := row.Scan(
+		&i.ID,
+		&i.Path,
+		&i.AlbumID,
+		&i.AlbumName,
 	)
 	return i, err
 }
@@ -77,6 +127,23 @@ func (q *Queries) DeleteAppPassword(ctx context.Context, arg DeleteAppPasswordPa
 	return result.RowsAffected(), nil
 }
 
+const deleteWebDAVAlbum = `-- name: DeleteWebDAVAlbum :execrows
+DELETE FROM webdav_albums WHERE id = $1 AND user_id = $2
+`
+
+type DeleteWebDAVAlbumParams struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) DeleteWebDAVAlbum(ctx context.Context, arg DeleteWebDAVAlbumParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteWebDAVAlbum, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteWebDAVTree = `-- name: DeleteWebDAVTree :execrows
 DELETE FROM webdav_entries
 WHERE user_id = $1 AND (path = $2 OR starts_with(path, $2::text || '/'))
@@ -94,6 +161,28 @@ func (q *Queries) DeleteWebDAVTree(ctx context.Context, arg DeleteWebDAVTreePara
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const findWebDAVAlbum = `-- name: FindWebDAVAlbum :one
+SELECT album_id
+FROM webdav_albums
+WHERE user_id = $1
+  AND (path = '/' OR starts_with($2::text, path || '/'))
+ORDER BY length(path) DESC
+LIMIT 1
+`
+
+type FindWebDAVAlbumParams struct {
+	UserID   int64
+	FilePath string
+}
+
+// The album of the nearest linked folder that holds a file.
+func (q *Queries) FindWebDAVAlbum(ctx context.Context, arg FindWebDAVAlbumParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findWebDAVAlbum, arg.UserID, arg.FilePath)
+	var album_id int64
+	err := row.Scan(&album_id)
+	return album_id, err
 }
 
 const getAppPasswordUser = `-- name: GetAppPasswordUser :one
@@ -226,6 +315,46 @@ func (q *Queries) ListAppPasswords(ctx context.Context, userID int64) ([]AppPass
 	return items, nil
 }
 
+const listWebDAVAlbums = `-- name: ListWebDAVAlbums :many
+SELECT l.id, l.path, l.album_id, a.name AS album_name
+FROM webdav_albums l
+JOIN albums a ON a.id = l.album_id
+WHERE l.user_id = $1
+ORDER BY l.path
+`
+
+type ListWebDAVAlbumsRow struct {
+	ID        int64
+	Path      string
+	AlbumID   int64
+	AlbumName string
+}
+
+func (q *Queries) ListWebDAVAlbums(ctx context.Context, userID int64) ([]ListWebDAVAlbumsRow, error) {
+	rows, err := q.db.Query(ctx, listWebDAVAlbums, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListWebDAVAlbumsRow
+	for rows.Next() {
+		var i ListWebDAVAlbumsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Path,
+			&i.AlbumID,
+			&i.AlbumName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWebDAVChildren = `-- name: ListWebDAVChildren :many
 SELECT user_id, path, parent, is_dir, size, modified_at, photo_id FROM webdav_entries WHERE user_id = $1 AND parent = $2 ORDER BY path
 `
@@ -256,6 +385,31 @@ func (q *Queries) ListWebDAVChildren(ctx context.Context, arg ListWebDAVChildren
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWebDAVFolders = `-- name: ListWebDAVFolders :many
+SELECT path FROM webdav_entries WHERE user_id = $1 AND is_dir ORDER BY path LIMIT 1000
+`
+
+// Folders to offer when linking one to an album.
+func (q *Queries) ListWebDAVFolders(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, listWebDAVFolders, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		items = append(items, path)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

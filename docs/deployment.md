@@ -116,6 +116,7 @@ FolderSync needs HTTPS: given an `http://` address, it still tries TLS and repor
 1. In the web interface, open **Profile**. Under **Upload from a phone**, choose **New app password** and name the device.
 2. In the app, add a WebDAV server with the address, your login and the app password. The account password does not work there.
 3. Set the app to upload only, and to send photos only: videos and other files are refused.
+4. To sort uploads into albums, give each folder pair in the app its own server folder, such as `/Camera` and `/Telegram`. Then, under **Albums for folders** in the profile, choose **Link a folder** and pick the folder and the album. A folder can be linked before the app creates it, and `/` links the whole tree.
 
 Files deleted in the app, or by the app's sync, disappear from the WebDAV folder and stay in the library. Photos in the trash stay there when the app sends them again. A file can be up to 512 MiB.
 

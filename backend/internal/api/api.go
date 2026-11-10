@@ -63,6 +63,10 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/me/app-passwords", s.authenticated(s.listAppPasswords))
 	mux.HandleFunc("POST /api/v1/me/app-passwords", s.authenticated(s.createAppPassword))
 	mux.HandleFunc("DELETE /api/v1/me/app-passwords/{id}", s.authenticated(s.deleteAppPassword))
+	mux.HandleFunc("GET /api/v1/me/webdav-folders", s.authenticated(s.listWebDAVFolders))
+	mux.HandleFunc("GET /api/v1/me/webdav-albums", s.authenticated(s.listWebDAVAlbums))
+	mux.HandleFunc("POST /api/v1/me/webdav-albums", s.authenticated(s.createWebDAVAlbum))
+	mux.HandleFunc("DELETE /api/v1/me/webdav-albums/{id}", s.authenticated(s.deleteWebDAVAlbum))
 
 	mux.HandleFunc("GET /api/v1/users", s.admin(s.listUsers))
 	mux.HandleFunc("POST /api/v1/users", s.admin(s.createUser))

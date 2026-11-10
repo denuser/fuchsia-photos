@@ -169,6 +169,81 @@ paths:
           description: The password no longer logs in
         "404":
           $ref: "#/components/responses/Error"
+  /me/webdav-folders:
+    get:
+      operationId: listWebDAVFolders
+      summary: List the folders of the current user's WebDAV tree
+      description: To offer when linking a folder to an album. At most 1000.
+      responses:
+        "200":
+          description: Folder paths, starting with a slash, in order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+  /me/webdav-albums:
+    get:
+      operationId: listWebDAVAlbums
+      summary: List the WebDAV folders linked to albums
+      description: >-
+        A photo uploaded over WebDAV into a linked folder, or a folder inside it,
+        is added to the album of the nearest linked folder.
+      responses:
+        "200":
+          description: The links, by folder
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WebDAVAlbum"
+    post:
+      operationId: createWebDAVAlbum
+      summary: Link a WebDAV folder to one of the current user's albums
+      description: >-
+        The folder need not exist yet. "/" links the whole tree. A user can link
+        at most 100 folders.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, albumId]
+              properties:
+                path:
+                  description: The folder, such as "/Camera"; slashes at the ends are optional
+                  type: string
+                albumId:
+                  type: integer
+                  format: int64
+      responses:
+        "201":
+          description: The new link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebDAVAlbum"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /me/webdav-albums/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    delete:
+      operationId: deleteWebDAVAlbum
+      summary: Unlink a WebDAV folder from its album
+      description: Photos already in the album stay there.
+      responses:
+        "204":
+          description: The link is removed
+        "404":
+          $ref: "#/components/responses/Error"
   /users:
     get:
       operationId: listUsers
@@ -1814,6 +1889,21 @@ components:
           description: When a client last logged in with it, to within an hour
           type: [string, "null"]
           format: date-time
+    WebDAVAlbum:
+      type: object
+      required: [id, path, albumId, albumName]
+      properties:
+        id:
+          type: integer
+          format: int64
+        path:
+          description: The folder, starting with a slash
+          type: string
+        albumId:
+          type: integer
+          format: int64
+        albumName:
+          type: string
     NewAppPassword:
       allOf:
         - $ref: "#/components/schemas/AppPassword"
