@@ -71,15 +71,6 @@ defineProps<{
     overflow-wrap: anywhere;
   }
 
-  .page-header__breadcrumbs a {
-    color: rgb(var(--v-theme-primary));
-    text-decoration: none;
-  }
-
-  .page-header__breadcrumbs a:hover {
-    text-decoration: underline;
-  }
-
   .page-header__divider {
     margin: 0 8px;
     color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));

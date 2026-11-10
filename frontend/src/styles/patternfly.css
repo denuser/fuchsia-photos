@@ -46,6 +46,24 @@
 }
 
 @layer vuetify-overrides {
+  /* Plain links in text and tables, as PatternFly's link color: the accent,
+     underlined on hover. Links that Vuetify components render, and links with
+     a class of their own, keep their look. A router link renders an empty
+     class, and gains classes only while its route is active, so those count
+     as plain too. */
+  a:not([class]),
+  a[class=''],
+  a[class^='router-link'] {
+    color: rgb(var(--v-theme-primary));
+    text-decoration: none;
+  }
+
+  a:not([class]):hover,
+  a[class='']:hover,
+  a[class^='router-link']:hover {
+    text-decoration: underline;
+  }
+
   /* All the fonts are variable and cover every weight, so a bold made up by
      the browser is never needed. */
   body {
