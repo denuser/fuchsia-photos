@@ -40,9 +40,9 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | Backend | Go, modular monolith, single binary | Low memory use, simple deployment, `x/net/webdav` for WebDAV uploads |
 | Frontend | Vue 3, Vuetify, Vite, Pinia | Project requirement. The virtual-scrolling timeline grid is custom, as Vuetify has no such component |
 | Look | PatternFly 6, built on Vuetify: its tokens go into the Vuetify themes, component defaults and one stylesheet. Fuchsia replaces the PatternFly blue. Red Hat fonts, with Inter for Cyrillic, which they lack. Font Awesome Free icons, bundled one SVG at a time. A menu in the app bar chooses the color scheme and the contrast mode (default, high contrast, glass), kept in the browser | A clear, consistent design system without rewriting the frontend: PatternFly has no Vue components. A theme belongs to the device, as a phone and a laptop can sit in different light |
-| Database | PostgreSQL | Relations and permissions, JSONB for EXIF, search, `pgvector` as a fallback. Keep it on an SSD if the NAS has one |
+| Database | PostgreSQL | Relations and permissions, JSONB for EXIF, search, `pgvector` for photo embeddings. Keep it on an SSD if the NAS has one |
 | Job queue | River (on PostgreSQL), no Redis | A photo and its job are written in one transaction, and there is one service less to run. No official BullMQ client for Go was found |
-| API | REST with OpenAPI, SSE for progress | Works well with browsers, files and caching. A monolith needs no internal RPC. gRPC is only reconsidered when an ML service appears |
+| API | REST with OpenAPI, SSE for progress | Works well with browsers, files and caching. A monolith needs no internal RPC. The ML service is called over HTTP too: its requests are few and large, so gRPC would gain nothing |
 | Image processing | libvips through govips | libvips is fast and memory-efficient. govips has a long history, a large community, and is not tied to one libvips version |
 | Photo metadata | exiftool through go-exiftool | Handles HEIC and camera-specific tags. One long-running process avoids starting Perl for every photo |
 | Folder scan | Copy files into the library, leave the source folder untouched | One ingest path for all sources |
@@ -78,6 +78,10 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 | Restoring a dump | Restoring moves the photo numbers a million past the dump's | Browsers cache previews for a year by photo number. Photos uploaded after the dump are lost from the database, and a new photo with the number of one of them would show its cached preview |
 | Logs | Plain text by default, or JSON, on the container output, at a level set in the environment. Each request is logged, at `info` when it fails or takes over a second and at `debug` otherwise. Docker keeps five files of 10 MB | Errors and slow requests are visible without the noise of every preview |
 | Queue metrics | A section of the administration page: jobs by kind and state, finished and failed in the last hour and day, and the latest errors. It updates through server-sent events, with the server reading the queue every 2 seconds and sending only changes | Visible without a monitoring system. SSE as for processing progress. River does not report finished jobs, so the server polls its table |
+| ML service | A separate stateless service in Python that turns a viewer preview or a search text into a vector. It has no access to the database: the application calls it, stores the vectors and checks permissions. Its address and a token are set in the environment. It runs on a Mac first, natively with PyTorch on the GPU, and can move to a cloud GPU without recomputing vectors | The service can run anywhere, including outside the home network, with no database credentials. Docker on macOS has no GPU access. The same model weights and preprocessing give the same vectors on any hardware |
+| ML availability | The application asks the service for its health every 30 seconds and keeps its state: unavailable, available, or running a model other than the configured one. Embedding runs only while it is available. The interface disables text search while the service is down, and the administration page shows the state, the model and the progress | The test machine is often switched off, and the library must work without it. A different model would mix incomparable vectors |
+| Embedding queue | No job per photo. A periodic job on its own queue with one worker takes processed photos that have no vector for the configured model, in batches, and stops when none are left or the service goes away. A photo that fails three times is skipped and listed on the administration page | Per-photo jobs would fail or pile up while the service is off for days. New photos, a first run over the library and a change of model need nothing extra: they all show up as photos without a vector |
+| Embedding storage | `pgvector` in the main database, half-precision vectors keyed by photo and model. No FAISS. Search starts with an exact scan, and an HNSW index per model is added only if it gets slow. The PostgreSQL image becomes `pgvector/pgvector` | The permission predicate and the vector search run in one query. Filtering FAISS results afterwards would leave a user who sees a small part of the library with few or no results. A home library is small enough for an exact scan |
 | TLS and HTTP/2 | Caddy in front of the application | The grid loads hundreds of previews, and HTTP/1.1 allows few connections. WebDAV Basic Auth requires TLS |
 
 The main hardware constraints are CPU time for decoding photos and, probably, HDD throughput. Memory is not scarce.
@@ -104,6 +108,15 @@ Queue behavior:
 - Bulk imports run at low priority
 - Processing resumes where it stopped after a restart
 
+### Machine learning
+
+The ML service has three endpoints: `GET /health` returns the model, the vector size and the preprocessing version; `POST /embed/image` takes a batch of viewer previews; `POST /embed/text` takes a search text. The model name stored with a vector includes the preprocessing version, as resizing and normalization happen in the service.
+
+- **Embedding:** while the service is available, a periodic job on the `ml` queue selects processed photos without a vector for the configured model, sends their viewer previews in batches and writes the vectors. It starts every minute and as soon as the service becomes available.
+- **Text search:** a page of its own. The application gets the vector of the text from the service, then sorts the photos the user can see by their distance to it. Results are ordered by relevance, not by date, so they do not fit the timeline with its months.
+- **Similar photos:** the application takes the photo's vector from the database and finds the nearest ones the user can see. This needs no ML service.
+- **Deleting:** the permission predicate hides photos in the trash, and permanently deleting a photo removes its vectors with its previews.
+
 ### Repository layout
 
 This is a monorepo. The target layout is:
@@ -116,6 +129,7 @@ backend/                Go module
   internal/             auth, users, photos, ingest, media, albums, tags, sharing, scan, webdav, jobs, api
   db/migrations, db/queries   goose + sqlc
 frontend/               Vue + Vuetify, TypeScript client generated from OpenAPI
+ml/                     ML service: Python, FastAPI, PyTorch, uv
 deploy/                 Dockerfile, compose.yaml (app, postgres, backup, caddy), Caddyfile
 docs/                   development, deployment and benchmark guides
 ```
@@ -125,11 +139,12 @@ The built frontend is embedded in the binary with `go:embed`. The image is built
 ### Data model
 
 - `users` (login, argon2id password hash, admin/user role, disabled flag, whether "Shared with me" includes album photos, whether zooming in the viewer loads originals, which photo details it hides, whether the menu hides on a phone, whether the grid shows squares, whether the timeline includes shared photos), `sessions`
-- `photos` (`bigint` id, owner, SHA-256, MIME type, size, dimensions, `taken_at`, EXIF as JSONB, the camera and lens generated from it, status, preview format and version, private/all visibility, `deleted_at`, `purged_at`). A `bigint` id also fits future FAISS ids (int64).
+- `photos` (`bigint` id, owner, SHA-256, MIME type, size, dimensions, `taken_at`, EXIF as JSONB, the camera and lens generated from it, status, preview format and version, private/all visibility, `deleted_at`, `purged_at`).
 - `photo_shares`, `albums` (with private/all visibility), `album_photos`, `album_shares`
 - `tags` (owner, name), `photo_tags`
 - `preview_settings` (one row: format, quality and preview sizes), `metadata_settings` (one row: whether the API returns locations)
 - `app_passwords` (user, device name, SHA-256 of the password, last use), `webdav_entries` (user, path, folder or file, size, modification time, the photo), `webdav_albums` (user, folder path, album)
+- `photo_embeddings` (photo, model, vector), `photo_embedding_failures` (photo, model, attempts, the last error)
 - `import_runs` (scan report: found, added, duplicates, in the trash, permanently deleted, unsupported, still changing, failed), `import_files` (files still to process, and the ones to report)
 
 ### Access control
@@ -166,7 +181,13 @@ Revoking access takes effect on the server at once. Previews are cached for a ye
     - Checked on the NAS on 2026-11-10: uploads from both apps work, so WebDAV stays
     - FolderSync on Android connects only over HTTPS. With `http://` in the address it still starts a TLS handshake and fails with "unable to parse TLS packet header". A self-signed certificate works once "Allow self-signed certificate" is on. Checked against the development server on 2026-11-09, where uploads over HTTPS work
   - [x] Albums for WebDAV folders, as described under "WebDAV albums" above
-- [ ] **Stage 7: ML (later).** An `embed_photo` job sends a preview to an external server. The NAS stays the source of truth, and a FAISS index can be rebuilt. Search results are filtered by the permission predicate. The protocol (gRPC or HTTP) and the choice of FAISS or `pgvector` are decided at this stage.
+- [ ] **Stage 7: ML (starts as a spike).** Text search and similar photos from one image embedding, as described under [Machine learning](#machine-learning). The service runs on a Mac for the spike.
+  - [ ] Model: SigLIP 2, which was trained on many languages including Russian. Choose its size by comparing the base and so400m variants on 20–30 real queries
+  - [ ] The ML service in `ml/`, with the health check and both embedding endpoints
+  - [ ] `pgvector` image in every compose file, the embedding tables, the availability monitor and the embedding job
+  - [ ] Text search on a page of its own and similar photos in the viewer, in the API and the interface
+  - [ ] Measure embedding speed on the Mac and search time on the NAS
+  - Later candidates, on the same embedding: near-duplicates and bursts, tag suggestions, separating screenshots and documents. Faces need a model of their own and are processed at home only, as face vectors are biometric data
 
 ## Acceptance criteria
 
