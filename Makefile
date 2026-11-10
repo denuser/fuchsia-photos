@@ -1,4 +1,4 @@
-.PHONY: help dev-db dev-clean dev-admin dev-migrate dev-goose dev-psql migration dev-backend dev-frontend test e2e image bench fixtures api-types sqlc
+.PHONY: help dev-db dev-clean dev-admin dev-migrate dev-goose dev-psql migration dev-backend dev-frontend dev-cert test e2e image bench fixtures api-types sqlc
 
 COMPOSE_TEST = docker compose -f deploy/compose.test.yaml
 COMPOSE_E2E = docker compose -f deploy/compose.e2e.yaml
@@ -6,6 +6,8 @@ E2E_PASSWORD = e2e-password
 DEV_DATABASE_URL = postgres://photos:photos@localhost:5432/photos
 BENCH_OUT ?= .bench
 DEV_DATA = $(CURDIR)/deploy/data/dev
+# Outside DEV_DATA, so that dev-clean keeps the certificate phones accepted.
+DEV_TLS = $(CURDIR)/deploy/data/dev-tls
 DEV_ENV = DATABASE_URL=$(DEV_DATABASE_URL) LIBRARY_DIR=$(DEV_DATA)/library CACHE_DIR=$(DEV_DATA)/cache IMPORT_DIR=$(DEV_DATA)/import COOKIE_INSECURE=true
 
 # Keep the version in step with backend/go.mod. Without cgo and the other
@@ -23,7 +25,7 @@ help:
 	@echo "dev-psql      open psql in dev-db"
 	@echo "migration     create a migration file, for example NAME=add_albums"
 	@echo "dev-backend   run the server locally against dev-db"
-	@echo "dev-frontend  run the Vite dev server"
+	@echo "dev-frontend  run the Vite dev server over HTTPS on port 443"
 	@echo "test          run backend tests in a container with PostgreSQL"
 	@echo "e2e           run the main flow in Chrome against the production image"
 	@echo "image         build the production image for the NAS (linux/amd64)"
@@ -59,8 +61,19 @@ dev-backend:
 	mkdir -p "$(DEV_DATA)/import"
 	cd backend && $(DEV_ENV) go run ./cmd/fuchsia-photos serve
 
-dev-frontend:
-	cd frontend && pnpm dev
+# Sync apps such as FolderSync connect only over HTTPS, so the dev server
+# serves it on the standard port with a self-signed certificate, made once.
+dev-frontend: dev-cert
+	cd frontend && DEV_TLS_DIR="$(DEV_TLS)" pnpm dev --port 443 --strictPort
+
+dev-cert: $(DEV_TLS)/cert.pem
+
+$(DEV_TLS)/cert.pem:
+	mkdir -p "$(DEV_TLS)"
+	san="DNS:localhost,IP:127.0.0.1"; \
+	for ip in $$(ifconfig 2>/dev/null | awk '/inet / && $$2 != "127.0.0.1" {print $$2}'); do san="$$san,IP:$$ip"; done; \
+	openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=Fuchsia Photos dev" \
+		-addext "subjectAltName=$$san" -keyout "$(DEV_TLS)/key.pem" -out "$(DEV_TLS)/cert.pem"
 
 test:
 	$(COMPOSE_TEST) up --build --abort-on-container-exit --exit-code-from test test; \

@@ -42,10 +42,12 @@ Run each of these in its own terminal:
 make dev-db         # PostgreSQL on port 5432
 make dev-admin LOGIN=admin   # once: create an administrator, then type a password and press Enter
 make dev-backend    # applies migrations, then serves the API on port 8080
-make dev-frontend   # Vite dev server on port 5173, also reachable from the local network
+make dev-frontend   # Vite dev server over HTTPS on port 443, also reachable from the local network
 ```
 
-Open <http://localhost:5173>. Vite proxies `/api` to the backend.
+Open <https://localhost> and accept the browser's warning about the certificate. Vite proxies `/api` and `/webdav` to the backend.
+
+The dev server uses HTTPS because sync apps such as FolderSync connect only over it. `make dev-frontend` first runs `make dev-cert`, which makes a self-signed certificate with `openssl` once, for `localhost` and the machine's current IP addresses, and keeps it in `deploy/data/dev-tls`. `make dev-clean` leaves it there. After the machine gets a new address, delete that folder to make a new certificate. In FolderSync, turn on "Allow self-signed certificate". macOS lets any user listen on port 443.
 
 The development database lives in a Docker volume and the photos in `deploy/data/dev`, so they survive restarts. To try a folder scan, put photos in `deploy/data/dev/import`. To start over, stop the database and run `make dev-clean`.
 
@@ -106,6 +108,7 @@ A new migration file has an empty `Up` and `Down` section, and both must be fill
 |---|---|
 | Install dependencies | `cd frontend && pnpm install` |
 | Run the dev server | `make dev-frontend` |
+| Make the dev server's certificate | `make dev-cert` |
 | Check types | `cd frontend && pnpm exec vue-tsc --noEmit` |
 | Build for production | `cd frontend && pnpm build` |
 | Regenerate API types | `make api-types` |
