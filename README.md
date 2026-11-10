@@ -17,7 +17,7 @@
 
 A self-hosted application for organizing photos, designed to run on a home NAS (Intel N150, 4 cores, 16 GB DDR5).
 
-**Status:** stage 5. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work, with nightly database dumps, a tested restore, request logs and the job queue on the administration page. The stage 6 WebDAV spike works and waits for tests with real phone clients. The stage 0 benchmark set the preview format and worker count for JPEG photos. This document records the decisions made so far and the roadmap.
+**Status:** stage 6. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work, with nightly database dumps, a tested restore, request logs and the job queue on the administration page. Phones upload over WebDAV, checked with PhotoSync and FolderSync on the NAS. The stage 0 benchmark set the preview format and worker count for JPEG photos. This document records the decisions made so far and the roadmap.
 
 ## Features
 
@@ -29,7 +29,7 @@ A self-hosted application for organizing photos, designed to run on a home NAS (
   - **User** sees their own photos and whatever is shared with them
 - Sharing of photos and albums with all users or with specific logins
 - Admin-only folder scan: photos placed in a folder available to the application are imported on demand
-- WebDAV upload for mobile devices (a hypothesis, to be validated)
+- WebDAV upload for mobile devices
 
 Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may be added later.
 
@@ -37,7 +37,7 @@ Supported formats in the first version: JPEG, PNG, WebP, HEIC. RAW and video may
 
 | Topic | Decision | Rationale |
 |---|---|---|
-| Backend | Go, modular monolith, single binary | Low memory use, simple deployment, `x/net/webdav` for the WebDAV hypothesis |
+| Backend | Go, modular monolith, single binary | Low memory use, simple deployment, `x/net/webdav` for WebDAV uploads |
 | Frontend | Vue 3, Vuetify, Vite, Pinia | Project requirement. The virtual-scrolling timeline grid is custom, as Vuetify has no such component |
 | Look | PatternFly 6, built on Vuetify: its tokens go into the Vuetify themes, component defaults and one stylesheet. Fuchsia replaces the PatternFly blue. Red Hat fonts, with Inter for Cyrillic, which they lack. Font Awesome Free icons, bundled one SVG at a time. A menu in the app bar chooses the color scheme and the contrast mode (default, high contrast, glass), kept in the browser | A clear, consistent design system without rewriting the frontend: PatternFly has no Vue components. A theme belongs to the device, as a phone and a laptop can sit in different light |
 | Database | PostgreSQL | Relations and permissions, JSONB for EXIF, search, `pgvector` as a fallback. Keep it on an SSD if the NAS has one |
@@ -96,7 +96,7 @@ All sources (browser, folder scan, WebDAV) go through a single `Ingest(file, own
 
 A folder scan lists the files in the chosen folder with their sizes and modification times, waits, and passes each file to ingest if neither has changed. It hashes a file before copying it, so a repeat scan reads everything but writes only what is new. Duplicates in the trash stay there, unlike with an upload.
 
-WebDAV serves each user's tree at `/webdav/`. `x/net/webdav` handles listings, folders, moves, deletes and locks over the tree in the database. Uploads and downloads bypass it: a PUT streams the file into ingest, which treats the trash as a folder scan does, and records the file with its size and the modification time the client sends in `X-OC-Mtime`. If the file's folder, or a folder above it, is linked to an album, the photo is added to the album of the nearest one before the file is recorded, so that a failure makes the client send the file again. While WebDAV is a hypothesis, the server logs every WebDAV request with its client.
+WebDAV serves each user's tree at `/webdav/`. `x/net/webdav` handles listings, folders, moves, deletes and locks over the tree in the database. Uploads and downloads bypass it: a PUT streams the file into ingest, which treats the trash as a folder scan does, and records the file with its size and the modification time the client sends in `X-OC-Mtime`. If the file's folder, or a folder above it, is linked to an album, the photo is added to the album of the nearest one before the file is recorded, so that a failure makes the client send the file again. The server logs every WebDAV request with its client, to see how sync apps behave.
 
 Queue behavior:
 
@@ -160,9 +160,10 @@ Revoking access takes effect on the server at once. Previews are cached for a ye
 - [x] **Stage 4: folder scan.** Admin only: fixed root, owner selection, safe re-runs thanks to hashing. Skips files still being copied (size and mtime unchanged for N seconds). Report in `import_runs`. A re-run must not restore photos the owner moved to the trash, unlike a browser upload.
 - [x] **Stage 5: operations.** Nightly `pg_dump`, backup and tested restore instructions, logs and queue metrics.
   - Restore checked on 2026-11-10 with `deploy/compose.yaml`: a nightly dump from one installation restored on a clean one, with the originals copied over and the previews made again by `render-previews`
-- [ ] **Stage 6: WebDAV (hypothesis, starts as a spike).** Per-user upload folder, separate app password, files go through ingest. Tested with real mobile clients such as PhotoSync and FolderSync. If they work poorly, the feature is dropped and the outcome recorded here.
+- [x] **Stage 6: WebDAV (hypothesis, starts as a spike).** Per-user upload folder, separate app password, files go through ingest. Tested with real mobile clients such as PhotoSync and FolderSync. If they work poorly, the feature is dropped and the outcome recorded here.
   - [x] Spike: the WebDAV tree at `/webdav/`, app passwords in the profile, uploads through ingest
-  - [ ] Tests with PhotoSync and FolderSync on the NAS, with the outcome recorded here
+  - [x] Tests with PhotoSync and FolderSync on the NAS, with the outcome recorded here
+    - Checked on the NAS on 2026-11-10: uploads from both apps work, so WebDAV stays
     - FolderSync on Android connects only over HTTPS. With `http://` in the address it still starts a TLS handshake and fails with "unable to parse TLS packet header". A self-signed certificate works once "Allow self-signed certificate" is on. Checked against the development server on 2026-11-09, where uploads over HTTPS work
   - [x] Albums for WebDAV folders, as described under "WebDAV albums" above
 - [ ] **Stage 7: ML (later).** An `embed_photo` job sends a preview to an external server. The NAS stays the source of truth, and a FAISS index can be rebuilt. Search results are filtered by the permission predicate. The protocol (gRPC or HTTP) and the choice of FAISS or `pgvector` are decided at this stage.
