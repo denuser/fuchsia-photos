@@ -32,12 +32,28 @@ Decisions are in the [architecture](architecture.md).
   - [ ] Measure embedding speed on the Mac and search time on the NAS
     - On a Mac with an M5 Pro, the application embedded the 117 photos of the development library in 4 seconds with base and 14 seconds with so400m, reading viewer previews. The NAS is not measured yet
   - Later candidates, on the same embedding: near-duplicates and bursts, tag suggestions, separating screenshots and documents. Faces need a model of their own and are processed at home only, as face vectors are biometric data
+- [ ] **Stage 8: video.** Upload and playback of videos from phones, through the same ingest path as photos. Transcoding is left out of the first step and decided after a benchmark on the NAS.
+  - Open questions, to settle before the work starts:
+    - Live Photos and motion photos: an iPhone keeps a HEIC and a MOV side by side, and many Android phones embed an MP4 in the JPEG. Either one item with motion or two separate files
+    - The size limit for a video, now 512 MB per upload, and whether large uploads need resuming after a failure
+    - ffmpeg inside the application image, which makes it noticeably larger, or in a separate service like the ML one
+    - Transcoding: leave it until the benchmark, or plan for hardware transcoding on the N150's Intel graphics from the start
+  - [ ] Step 1: accept and play
+    - [ ] Detect MP4 and MOV in ingest, next to HEIC, which shares the `ftyp` container, and accept them from the browser, WebDAV and folder scans
+    - [ ] A migration for the duration and whether an item is a video
+    - [ ] Processing: ffprobe for the size, duration and rotation, a frame from ffmpeg as the poster, and the grid and viewer previews made from it with libvips. The ML service embeds the poster, so search by description and similar items cover videos
+    - [ ] Dates: QuickTime `CreateDate` is in UTC by the standard, unlike EXIF dates, so read it with exiftool's `QuickTimeUTC`
+    - [ ] Playback of the original with `<video>`, which the existing range support for originals allows to seek. When the browser cannot play the codec, such as HEVC in some browsers, show the poster and a download button
+    - [ ] Interface: a mark and the duration on grid tiles, the viewer showing the video in place of the zoomable photo, and swipes and keys that do not get in the way of the video controls
+    - [ ] Backend tests with a small sample video, and a video in the browser test
+  - [ ] Step 2, if needed: transcoding
+    - [ ] Benchmark on the NAS: software transcoding of 1080p and 4K HEVC to H.264 against hardware transcoding through VAAPI, which needs `/dev/dri` in the container
+    - [ ] Depending on the result, a playable copy for videos the browser cannot play, made on a queue of its own with one worker and low priority, as folder scans are
 
 ## Later
 
 Features people tend to expect before moving their photos to a new library. None is planned in detail or ordered yet.
 
-- **Video.** Phone galleries are a large share video, so this is likely the main thing missing. It needs posters, transcoding or direct playback, and a decision on how much CPU the NAS can give it.
 - **Import from Google Takeout and iCloud.** Both exports keep dates, descriptions and locations in JSON sidecars or CSV files rather than in the photos, and leaving these services is a common reason to look for a self-hosted library.
 - **Map.** Photos on a map by their GPS locations, next to the place names in the viewer from [improvement 8](improvements.md#8-place-names-in-the-viewer).
 - **Duplicates.** Near-duplicates and bursts, from the stage 7 embedding.
