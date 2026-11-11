@@ -127,7 +127,11 @@ export const vuetify = createVuetify({
     VNavigationDrawer: { color: 'background', border: 0 },
     VBtn: { rounded: 'pill' },
     // Buttons in a toggle group join into one control, so they drop the pill.
-    VBtnToggle: { rounded: 'lg', VBtn: { rounded: false } },
+    // Undefined rather than false: false adds `rounded-0`, which also squares
+    // the outer corners of the end buttons, and the group's rounded clip then
+    // cuts their border off. Without a class Vuetify's group styles square
+    // the inner corners and let the end buttons inherit the outer radius.
+    VBtnToggle: { rounded: 'lg', VBtn: { rounded: undefined } },
     VAlert: { variant: 'outlined' },
     VTextField: field,
     VTextarea: field,
