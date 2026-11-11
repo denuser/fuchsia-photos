@@ -1,6 +1,6 @@
 # Improvements
 
-The current list of improvements, in order of priority. All of them are done. Stages 0 to 6 of the [roadmap](../README.md#roadmap) are done too.
+The current list of improvements, in order of priority. All of them are done except the last one, which is planned. Stages 0 to 6 of the [roadmap](../README.md#roadmap) are done too.
 
 ## 1. Administration page
 
@@ -71,3 +71,18 @@ Done:
 - Font Awesome Free icons in place of Material Design Icons, as in PatternFly. Each SVG is bundled on its own, so only the icons in use reach the browser, and no icon font is loaded. The glyph takes two thirds of Vuetify's icon box, which gives PatternFly's 16px icons in lists and 14px in buttons; empty states keep 56px. Vuetify's own icons, such as the dropdown caret, the checkbox and the calendar, come from the same set.
 
 A second visual style like PatternFly's Project Felt is out of scope for now.
+
+## 6. Finding the same object or place: experiment
+
+**Status:** planned, to be done separately.
+
+The user selects an object in a photo, such as a house, and gets the other photos of the same object or place. The SigLIP 2 vector describes the whole frame by its meaning, so it finds similar houses rather than the same one, and misses photos where the object takes only a corner of the frame. The experiment checks how far the current vectors go before anything is added to the API or the interface.
+
+Plan:
+
+1. A script in `ml/`, with no changes to the API or the interface. Test data: two or three photos of the same house or place from different angles, added to the development library if `samples` has none.
+2. Candidates: crop the selected region from the viewer preview, embed it with the existing image embedding and take the nearest photos. When the photo has a location, also try a filter by distance from it: for the same place it is often the strongest signal and needs no ML.
+3. If the results are similar but not the same object: re-rank the first 100–200 candidates by local features with geometric verification (LightGlue with ALIKED or DISK features, RANSAC). Not SuperPoint, whose weights have a non-commercial license. In the service this would be a new stateless endpoint, such as `POST /match`, taking the crop and the candidates' previews and returning the number of matched points for each.
+4. If objects in a corner of the frame are still missed: try several vectors per photo for parts of the frame, such as a 2×2 grid and the center, or DINOv2 (Apache 2.0) as a second vector type, which tells specific objects apart better than SigLIP.
+
+Record the results here: what each step found on the test photos and how long it took. Unlike similar photos, a search by a selected region needs the ML service to be running. Any new model or dependency is chosen with the user before it is added.
