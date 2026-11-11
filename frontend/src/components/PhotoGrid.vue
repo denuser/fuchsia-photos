@@ -8,6 +8,7 @@ import { layoutTimeline, monthTitle, rowHeight, visibleSections, type SectionLay
 import { useAuthStore } from '../stores/auth'
 import type { Section } from '../stores/photos'
 import TimelineScrubber from './TimelineScrubber.vue'
+import { t } from '../i18n'
 
 // The photos of a list in sections: months with titles, or one whole list.
 // Only what is near the screen is rendered, and sections near the screen are
@@ -228,11 +229,11 @@ onBeforeUnmount(() => {
         </h2>
         <div v-for="item in pending" :key="item.section.key" class="pending" :class="{ estimate: item.estimate }" :style="item.style">
           <div v-if="item.section.failed" class="status">
-            <span>The photos could not be loaded.</span>
-            <v-btn text="Retry" variant="text" color="primary" @click="emit('retry', item.section.key)" />
+            <span>{{ t('grid.loadFailed') }}</span>
+            <v-btn :text="t('common.retry')" variant="text" color="primary" @click="emit('retry', item.section.key)" />
           </div>
           <div v-else-if="!item.estimate" class="status">
-            <v-progress-circular indeterminate size="24" width="2" aria-label="Loading photos" />
+            <v-progress-circular indeterminate size="24" width="2" :aria-label="t('grid.loading')" />
           </div>
         </div>
         <div
@@ -253,7 +254,7 @@ onBeforeUnmount(() => {
           >
             <img v-if="photo.status === 'ready'" :src="previewUrl(photo.id, 'grid', photo.previewVersion)" :alt="photo.name" decoding="async" />
             <v-progress-circular v-else-if="photo.status === 'pending'" indeterminate size="24" width="2" />
-            <v-tooltip v-else :text="`${photo.name} could not be processed`" location="top">
+            <v-tooltip v-else :text="t('grid.failed', { name: photo.name })" location="top">
               <template #activator="{ props: tooltip }">
                 <v-icon v-bind="tooltip" icon="fa-triangle-exclamation" />
               </template>
@@ -266,7 +267,7 @@ onBeforeUnmount(() => {
             data-testid="tile-check"
             role="checkbox"
             :aria-checked="selected.has(photo.id)"
-            :aria-label="`Select ${photo.name}`"
+            :aria-label="t('grid.select', { name: photo.name })"
             @click="emit('toggle', photo, $event.shiftKey)"
           >
             <v-icon :icon="selected.has(photo.id) ? 'fa-circle-check' : 'fa-regular-circle'" size="22" />

@@ -8,6 +8,8 @@ import AppAutocomplete from '../components/AppAutocomplete.vue'
 import EmptyState from '../components/EmptyState.vue'
 import FilterChips, { type FilterGroup } from '../components/FilterChips.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
+import { formatDate, t } from '../i18n'
+import { apiError } from '../i18n/apiErrors'
 import { useAuthStore } from '../stores/auth'
 import { listFilters, usePhotosStore, type PhotoQuery } from '../stores/photos'
 import { useTagsStore } from '../stores/tags'
@@ -40,7 +42,7 @@ async function setWithShared(value: boolean) {
   if (data) {
     auth.user = data
   } else {
-    browser.value?.say(error?.error ?? 'The setting could not be saved', 'error')
+    browser.value?.say(apiError(error, t('profile.saveFailed')), 'error')
   }
 }
 
@@ -63,8 +65,8 @@ const lenses = computed(() => queryList('lens'))
 const fromDate = computed(() => (typeof route.query.from === 'string' ? route.query.from : ''))
 const toDate = computed(() => (typeof route.query.to === 'string' ? route.query.to : ''))
 const dateFields = computed(() => [
-  { key: 'from', label: 'From', value: fromDate.value },
-  { key: 'to', label: 'To', value: toDate.value },
+  { key: 'from', label: t('timeline.from'), value: fromDate.value },
+  { key: 'to', label: t('timeline.to'), value: toDate.value },
 ])
 // The filters a phone keeps behind the button.
 const moreFiltered = computed(() => cameras.value.length > 0 || lenses.value.length > 0 || Boolean(fromDate.value || toDate.value))
@@ -101,8 +103,20 @@ function withChosen(items: NameCount[], chosen: string[]) {
 }
 
 const cameraFields = computed(() => [
-  { key: 'camera', label: 'Any of these cameras', counted: 'Cameras', items: withChosen(cameraList.value, cameras.value), value: cameras.value },
-  { key: 'lens', label: 'Any of these lenses', counted: 'Lenses', items: withChosen(lensList.value, lenses.value), value: lenses.value },
+  {
+    key: 'camera',
+    label: t('timeline.anyCamera'),
+    counted: t('timeline.cameras'),
+    items: withChosen(cameraList.value, cameras.value),
+    value: cameras.value,
+  },
+  {
+    key: 'lens',
+    label: t('timeline.anyLens'),
+    counted: t('timeline.lenses'),
+    items: withChosen(lensList.value, lenses.value),
+    value: lenses.value,
+  },
 ])
 
 // The filters in use, as chip groups under the toolbar.
@@ -123,23 +137,23 @@ function asDay(value: unknown) {
 function dayTitle(date: string) {
   const day = new Date(`${date}T00:00:00`)
   // Written as the date fields write it, with two-digit days and months.
-  return Number.isNaN(day.getTime()) ? date : day.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' })
+  return Number.isNaN(day.getTime()) ? date : formatDate(day)
 }
 
 const filterGroups = computed<FilterGroup[]>(() => [
   {
     key: 'tag',
-    label: 'Tags',
-    chips: tagIds.value.map((id) => ({ value: String(id), title: tags.tags.find((t) => t.id === id)?.name ?? `#${id}` })),
+    label: t('browser.tags'),
+    chips: tagIds.value.map((id) => ({ value: String(id), title: tags.tags.find((tag) => tag.id === id)?.name ?? `#${id}` })),
   },
-  { key: 'camera', label: 'Cameras', chips: cameras.value.map((name) => ({ value: name, title: name })) },
-  { key: 'lens', label: 'Lenses', chips: lenses.value.map((name) => ({ value: name, title: name })) },
+  { key: 'camera', label: t('timeline.cameras'), chips: cameras.value.map((name) => ({ value: name, title: name })) },
+  { key: 'lens', label: t('timeline.lenses'), chips: lenses.value.map((name) => ({ value: name, title: name })) },
   {
     key: 'date',
-    label: 'Date',
+    label: t('timeline.date'),
     chips: [
-      ...(fromDate.value ? [{ value: 'from', title: `From ${dayTitle(fromDate.value)}` }] : []),
-      ...(toDate.value ? [{ value: 'to', title: `To ${dayTitle(toDate.value)}` }] : []),
+      ...(fromDate.value ? [{ value: 'from', title: t('timeline.fromDay', { day: dayTitle(fromDate.value) }) }] : []),
+      ...(toDate.value ? [{ value: 'to', title: t('timeline.toDay', { day: dayTitle(toDate.value) }) }] : []),
     ],
   },
 ])
@@ -161,7 +175,7 @@ function clearGroup(key: string) {
 }
 
 function photoCount(item: NameCount) {
-  return { subtitle: item.count === 1 ? '1 photo' : `${item.count} photos` }
+  return { subtitle: t('common.photos', item.count) }
 }
 
 // Counts the request of the latest filters, so that an earlier answer arriving late is dropped.
@@ -244,19 +258,19 @@ function onDrop(event: DragEvent) {
             class="scope"
             @update:model-value="setWithShared($event === 'all')"
           >
-            <v-btn v-if="xs" value="mine" icon="fa-user" aria-label="Mine" />
-            <v-btn v-else value="mine" text="Mine" />
-            <v-btn v-if="xs" value="all" icon="fa-users" aria-label="All" />
-            <v-btn v-else value="all" text="All" />
+            <v-btn v-if="xs" value="mine" icon="fa-user" :aria-label="t('timeline.mine')" />
+            <v-btn v-else value="mine" :text="t('timeline.mine')" />
+            <v-btn v-if="xs" value="all" icon="fa-users" :aria-label="t('timeline.all')" />
+            <v-btn v-else value="all" :text="t('timeline.all')" />
           </v-btn-toggle>
           <AppAutocomplete
             :model-value="tagIds"
             :items="tags.tags"
             item-title="name"
             item-value="id"
-            placeholder="Any of these tags"
-            aria-label="Any of these tags"
-            counted="Tags"
+            :placeholder="t('timeline.anyTag')"
+            :aria-label="t('timeline.anyTag')"
+            :counted="t('browser.tags')"
             density="compact"
             hide-details
             multiple
@@ -271,7 +285,7 @@ function onDrop(event: DragEvent) {
                 icon="fa-filter"
                 :color="moreFiltered ? 'primary' : undefined"
                 variant="text"
-                aria-label="More filters"
+                :aria-label="t('timeline.moreFilters')"
               />
             </template>
             <v-card class="filter-menu">
@@ -344,20 +358,20 @@ function onDrop(event: DragEvent) {
         <FilterChips :groups="filterGroups" @remove="removeChip" @clear="clearGroup" @clear-all="router.replace({ query: {} })" />
       </template>
       <template #empty>
-        <EmptyState v-if="filtered" icon="fa-magnifying-glass" title="No photos match these filters" text="Change the filters, or clear them to see every photo.">
+        <EmptyState v-if="filtered" icon="fa-magnifying-glass" :title="t('timeline.noMatch')" :text="t('timeline.noMatchText')">
           <template #actions>
-            <v-btn text="Clear all filters" variant="text" color="primary" @click="router.replace({ query: {} })" />
+            <v-btn :text="t('filters.clearAll')" variant="text" color="primary" @click="router.replace({ query: {} })" />
           </template>
         </EmptyState>
-        <EmptyState v-else icon="fa-images" title="No photos yet" text="Upload photos from this device, or drag them here.">
+        <EmptyState v-else icon="fa-images" :title="t('timeline.none')" :text="t('timeline.noneText')">
           <template #actions>
-            <v-btn text="Upload photos" color="primary" prepend-icon="fa-upload" @click="pickUploads" />
+            <v-btn :text="t('timeline.upload')" color="primary" prepend-icon="fa-upload" @click="pickUploads" />
           </template>
         </EmptyState>
       </template>
     </PhotoBrowser>
 
-    <div v-if="dragging" class="drop-hint">Drop photos to upload</div>
+    <div v-if="dragging" class="drop-hint">{{ t('timeline.drop') }}</div>
   </div>
 </template>
 

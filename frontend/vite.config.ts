@@ -11,6 +11,12 @@ const tls = process.env.DEV_TLS_DIR
 
 export default defineConfig({
   plugins: [vue(), vuetify()],
+  // vue-i18n feature flags: the Composition API only, and no devtools in production.
+  define: {
+    __VUE_I18N_FULL_INSTALL__: true,
+    __VUE_I18N_LEGACY_API__: false,
+    __INTLIFY_PROD_DEVTOOLS__: false,
+  },
   server: {
     // Listen on all interfaces so phones on the local network can open the dev server.
     host: true,

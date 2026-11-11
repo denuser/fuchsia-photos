@@ -11,6 +11,7 @@ import { useAppearanceStore } from './stores/appearance'
 import { useAuthStore } from './stores/auth'
 import { usePhotosStore } from './stores/photos'
 import { pickUploadsKey, useUploadsStore } from './stores/uploads'
+import { t } from './i18n'
 
 const auth = useAuthStore()
 const photos = usePhotosStore()
@@ -49,13 +50,13 @@ function toggleNav() {
 const navShownInFull = computed(() => (navOverlay.value ? navOpen.value : navExpanded.value))
 
 const navItems = computed(() => [
-  { to: '/', icon: 'fa-images', title: 'Photos', exact: true },
-  { to: '/search', icon: 'fa-magnifying-glass', title: 'Search' },
-  { to: '/albums', icon: 'fa-book-open', title: 'Albums' },
-  { to: '/shared', icon: 'fa-users', title: 'Shared with me' },
-  { to: '/tags', icon: 'fa-tags', title: 'Tags' },
-  { to: '/trash', icon: 'fa-trash-can', title: 'Trash' },
-  ...(auth.isAdmin ? [{ to: '/all', icon: 'fa-user-shield', title: 'All photos' }] : []),
+  { to: '/', icon: 'fa-images', title: t('nav.photos'), exact: true },
+  { to: '/search', icon: 'fa-magnifying-glass', title: t('nav.search') },
+  { to: '/albums', icon: 'fa-book-open', title: t('nav.albums') },
+  { to: '/shared', icon: 'fa-users', title: t('nav.shared') },
+  { to: '/tags', icon: 'fa-tags', title: t('nav.tags') },
+  { to: '/trash', icon: 'fa-trash-can', title: t('nav.trash') },
+  ...(auth.isAdmin ? [{ to: '/all', icon: 'fa-user-shield', title: t('nav.all') }] : []),
 ])
 const fileInput = ref<HTMLInputElement>()
 provide(pickUploadsKey, () => fileInput.value?.click())
@@ -84,7 +85,7 @@ window.addEventListener('beforeunload', (event) => {
     <v-app-bar v-if="auth.user" density="comfortable">
       <template #prepend>
         <v-app-bar-nav-icon
-          :aria-label="navShownInFull ? 'Collapse menu' : 'Expand menu'"
+          :aria-label="navShownInFull ? t('nav.collapse') : t('nav.expand')"
           :aria-expanded="navShownInFull"
           @click="toggleNav"
         />
@@ -97,18 +98,18 @@ window.addEventListener('beforeunload', (event) => {
       </v-app-bar-title>
 
       <v-chip v-if="photos.pending > 0" class="mr-2" size="small" prepend-icon="fa-gear">
-        Processing {{ photos.pending }}
+        {{ t('nav.processing', { n: photos.pending }) }}
       </v-chip>
 
       <v-btn
         v-if="xs"
         color="primary"
         icon="fa-upload"
-        aria-label="Upload"
+        :aria-label="t('nav.upload')"
         @click="fileInput?.click()"
       />
       <v-btn v-else color="primary" variant="flat" prepend-icon="fa-upload" class="mr-2" @click="fileInput?.click()">
-        Upload
+        {{ t('nav.upload') }}
       </v-btn>
       <input
         ref="fileInput"
@@ -123,16 +124,16 @@ window.addEventListener('beforeunload', (event) => {
 
       <v-menu>
         <template #activator="{ props }">
-          <v-btn v-bind="props" icon="fa-circle-user" aria-label="Account" />
+          <v-btn v-bind="props" icon="fa-circle-user" :aria-label="t('nav.account')" />
         </template>
         <v-list density="compact">
-          <v-list-item :subtitle="auth.isAdmin ? 'Administrator' : 'User'" :title="auth.user.login" />
+          <v-list-item :subtitle="auth.isAdmin ? t('roles.admin') : t('roles.user')" :title="auth.user.login" />
           <v-divider />
-          <v-list-item v-if="auth.isAdmin" to="/users" prepend-icon="fa-users" title="Users" />
-          <v-list-item v-if="auth.isAdmin" to="/import" prepend-icon="fa-file-import" title="Import from folder" />
-          <v-list-item v-if="auth.isAdmin" to="/admin" prepend-icon="fa-gear" title="Administration" />
-          <v-list-item to="/profile" prepend-icon="fa-user-gear" title="Profile" />
-          <v-list-item prepend-icon="fa-right-from-bracket" title="Log out" @click="logout" />
+          <v-list-item v-if="auth.isAdmin" to="/users" prepend-icon="fa-users" :title="t('users.title')" />
+          <v-list-item v-if="auth.isAdmin" to="/import" prepend-icon="fa-file-import" :title="t('import.title')" />
+          <v-list-item v-if="auth.isAdmin" to="/admin" prepend-icon="fa-gear" :title="t('admin.title')" />
+          <v-list-item to="/profile" prepend-icon="fa-user-gear" :title="t('nav.profile')" />
+          <v-list-item prepend-icon="fa-right-from-bracket" :title="t('nav.logout')" @click="logout" />
         </v-list>
       </v-menu>
     </v-app-bar>

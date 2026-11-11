@@ -160,6 +160,7 @@ type User struct {
 	NavigationHiddenOnPhones bool
 	GridSquares              bool
 	TimelineIncludesShared   bool
+	Language                 string
 }
 
 type WebdavAlbum struct {

@@ -3,6 +3,8 @@
 // above, the page title, a short description, and the page actions on the
 // right. The title is the page's only h1.
 
+import { t } from '../i18n'
+
 export interface Crumb {
   title: string
   to: string
@@ -17,7 +19,7 @@ defineProps<{
 
 <template>
   <header class="page-header">
-    <nav v-if="breadcrumbs?.length" aria-label="Breadcrumb">
+    <nav v-if="breadcrumbs?.length" :aria-label="t('pageHeader.breadcrumb')">
       <ol class="page-header__breadcrumbs">
         <li v-for="crumb in breadcrumbs" :key="crumb.to">
           <router-link :to="crumb.to">{{ crumb.title }}</router-link>

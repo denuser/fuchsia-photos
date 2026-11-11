@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { t } from '../i18n'
 
 export interface SelectionEntry {
   value: unknown
@@ -61,7 +62,7 @@ onBeforeUnmount(() => observer?.disconnect())
       <template #activator="{ props }">
         <v-chip
           v-bind="props"
-          :text="`${entries.length} selected`"
+          :text="t('selection.count', { n: entries.length })"
           color="primary"
           variant="flat"
           size="small"

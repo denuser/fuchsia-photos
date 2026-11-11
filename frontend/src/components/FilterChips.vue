@@ -3,6 +3,7 @@
 // category, with the category's name and a button that removes the whole group, and "Clear all
 // filters" at the end. Groups without chips are left out, and nothing shows when no filter is set.
 import { computed } from 'vue'
+import { t } from '../i18n'
 
 export interface FilterGroup {
   key: string
@@ -12,6 +13,7 @@ export interface FilterGroup {
 
 const props = defineProps<{ groups: FilterGroup[] }>()
 const emit = defineEmits<{ remove: [key: string, value: string]; clear: [key: string]; clearAll: [] }>()
+
 
 const shown = computed(() => props.groups.filter((group) => group.chips.length > 0))
 </script>
@@ -25,7 +27,7 @@ const shown = computed(() => props.groups.filter((group) => group.chips.length >
         :key="chip.value"
         size="small"
         closable
-        :close-label="`Remove ${chip.title}`"
+        :close-label="t('filters.remove', { name: chip.title })"
         @click:close="emit('remove', group.key, chip.value)"
       >
         {{ chip.title }}
@@ -35,11 +37,11 @@ const shown = computed(() => props.groups.filter((group) => group.chips.length >
         size="x-small"
         variant="text"
         density="comfortable"
-        :aria-label="`Clear ${group.label}`"
+        :aria-label="t('filters.clear', { name: group.label })"
         @click="emit('clear', group.key)"
       />
     </div>
-    <v-btn text="Clear all filters" variant="text" color="primary" size="small" @click="emit('clearAll')" />
+    <v-btn :text="t('filters.clearAll')" variant="text" color="primary" size="small" @click="emit('clearAll')" />
   </div>
 </template>
 

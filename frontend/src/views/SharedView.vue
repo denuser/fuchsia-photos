@@ -7,10 +7,12 @@ import { api, type Album } from '../api/client'
 import AlbumCard from '../components/AlbumCard.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
+import { apiError } from '../i18n/apiErrors'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
 import { useAuthStore } from '../stores/auth'
 import { usePhotosStore } from '../stores/photos'
 import { useUsersStore } from '../stores/users'
+import { t } from '../i18n'
 
 const route = useRoute()
 const router = useRouter()
@@ -52,7 +54,7 @@ async function setIncludesAlbums(value: boolean | null) {
   const { data, error: failure } = await api.PATCH('/me', { body: { sharedIncludesAlbums: Boolean(value) } })
   saving.value = false
   if (!data) {
-    error.value = failure?.error ?? 'The setting could not be saved'
+    error.value = apiError(failure, t('profile.saveFailed'))
     return
   }
   auth.user = data
@@ -63,7 +65,7 @@ async function setIncludesAlbums(value: boolean | null) {
 const includesAlbums = computed(() => ({
   modelValue: auth.user?.sharedIncludesAlbums,
   disabled: saving.value,
-  label: 'Include photos from shared albums',
+  label: t('shared.includeAlbums'),
   color: 'primary',
   density: 'compact' as const,
   hideDetails: true,
@@ -72,7 +74,8 @@ const includesAlbums = computed(() => ({
 
 function albumSubtitle(album: Album) {
   const owner = users.login(album.ownerId)
-  return owner ? `${album.photoCount} photos · ${owner}` : `${album.photoCount} photos`
+  const count = t('common.photos', album.photoCount)
+  return owner ? `${count} · ${owner}` : count
 }
 </script>
 
@@ -82,21 +85,21 @@ function albumSubtitle(album: Album) {
        tab sits in the header; on a phone it would not fit beside the title,
        so it heads the photos instead. -->
   <div class="shared">
-    <AppPageHeader title="Shared with me">
+    <AppPageHeader :title="t('nav.shared')">
       <template v-if="tab === 'photos' && !xs" #actions>
         <v-switch v-bind="includesAlbums" />
       </template>
     </AppPageHeader>
     <div class="px-4 px-sm-6 pb-2">
       <v-tabs :model-value="tab" @update:model-value="chooseTab">
-        <v-tab value="albums" text="Albums" />
-        <v-tab value="photos" text="Photos" />
+        <v-tab value="albums" :text="t('nav.albums')" />
+        <v-tab value="photos" :text="t('nav.photos')" />
       </v-tabs>
       <v-alert v-if="error" type="error" density="compact" class="mt-2" :title="error" />
     </div>
 
     <div v-if="tab === 'albums'" class="page page-section pt-2">
-      <EmptyState v-if="albumsLoaded && albums.length === 0" icon="fa-book-open" title="No albums are shared with you" />
+      <EmptyState v-if="albumsLoaded && albums.length === 0" icon="fa-book-open" :title="t('shared.noAlbums')" />
       <div class="albums">
         <AlbumCard v-for="album in albums" :key="album.id" :album="album" :subtitle="albumSubtitle(album)" />
       </div>
@@ -109,7 +112,7 @@ function albumSubtitle(album: Album) {
         </div>
       </template>
       <template #empty>
-        <EmptyState icon="fa-users" title="No photos are shared with you" />
+        <EmptyState icon="fa-users" :title="t('shared.noPhotos')" />
       </template>
     </PhotoBrowser>
   </div>

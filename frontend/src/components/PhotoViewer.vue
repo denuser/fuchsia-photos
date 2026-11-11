@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import { originalUrl, previewUrl, type Camera, type Photo, type ViewerField } from '../api/client'
+import { formatDateTime, intlLocale, t } from '../i18n'
 import { useAuthStore } from '../stores/auth'
 import { useUsersStore } from '../stores/users'
 
@@ -35,7 +36,7 @@ const next = computed(() => ready.value[index.value + 1])
 const details = computed(() => {
   const date = new Date(props.photo.takenAt ?? props.photo.createdAt)
   const owner = props.photo.ownerId === auth.user?.id ? null : users.login(props.photo.ownerId)
-  return [owner && `Shared by ${owner}`, date.toLocaleString(), props.photo.width && `${props.photo.width} × ${props.photo.height}`]
+  return [owner && t('viewer.sharedBy', { owner }), formatDateTime(date), props.photo.width && `${props.photo.width} × ${props.photo.height}`]
     .filter(Boolean)
     .join(' · ')
 })
@@ -66,7 +67,7 @@ function describeCamera(c: Camera) {
     ['exposureTime', c.exposureTime && exposureTime(c.exposureTime)],
     ['iso', c.iso && `ISO ${c.iso}`],
     ['exposureCompensation', c.exposureCompensation && `${c.exposureCompensation > 0 ? '+' : '−'}${round(Math.abs(c.exposureCompensation))} EV`],
-    ['flash', c.flash && 'Flash'],
+    ['flash', c.flash && t('viewer.flash')],
   ]
   return parts
     .filter(([field, text]) => text && !hidden.value.has(field))
@@ -84,18 +85,20 @@ function cameraName(c: Camera) {
 }
 
 function focalLength(mm: number, mm35?: number) {
-  const text = `${round(mm)} mm`
-  return mm35 && Math.abs(mm35 - mm) >= 1 ? `${text} (${Math.round(mm35)} mm equiv.)` : text
+  const text = t('viewer.mm', { value: round(mm) })
+  return mm35 && Math.abs(mm35 - mm) >= 1 ? t('viewer.equivalent', { focal: text, value: Math.round(mm35) }) : text
 }
 
 // Short exposures are fractions such as 1/250, longer ones decimals such as 0.8 or 2.
 function exposureTime(seconds: number) {
   const inverse = 1 / seconds
-  return seconds < 1 && Math.abs(inverse - Math.round(inverse)) < 0.05 ? `1/${Math.round(inverse)} s` : `${round(seconds)} s`
+  const value = seconds < 1 && Math.abs(inverse - Math.round(inverse)) < 0.05 ? `1/${Math.round(inverse)}` : round(seconds)
+  return t('viewer.seconds', { value })
 }
 
+// One decimal place, with the decimal separator of the interface language.
 function round(n: number) {
-  return String(Math.round(n * 10) / 10)
+  return (Math.round(n * 10) / 10).toLocaleString(intlLocale.value)
 }
 
 // Chosen in the profile: whether zooming in loads the original. Otherwise the
@@ -524,17 +527,17 @@ onBeforeUnmount(() => {
         v-if="canFindSimilar"
         icon="fa-clone"
         variant="text"
-        aria-label="Similar photos"
-        title="Similar photos"
+        :aria-label="t('viewer.similar')"
+        :title="t('viewer.similar')"
         @click="emit('similar', photo)"
       />
-      <v-btn v-if="canTag" icon="fa-tag" variant="text" aria-label="Tags" @click="emit('tags', photo)" />
+      <v-btn v-if="canTag" icon="fa-tag" variant="text" :aria-label="t('browser.tags')" @click="emit('tags', photo)" />
       <template v-if="canManage">
-        <v-btn icon="fa-share-nodes" variant="text" aria-label="Share" @click="emit('share', photo)" />
-        <v-btn icon="fa-trash-can" variant="text" aria-label="Move to trash" @click="emit('trash', photo)" />
+        <v-btn icon="fa-share-nodes" variant="text" :aria-label="t('browser.share')" @click="emit('share', photo)" />
+        <v-btn icon="fa-trash-can" variant="text" :aria-label="t('browser.moveToTrash')" @click="emit('trash', photo)" />
       </template>
-      <v-btn :href="originalUrl(photo.id)" icon="fa-download" variant="text" aria-label="Download the original" />
-      <v-btn icon="fa-xmark" variant="text" aria-label="Close" @click="emit('close')" />
+      <v-btn :href="originalUrl(photo.id)" icon="fa-download" variant="text" :aria-label="t('viewer.download')" />
+      <v-btn icon="fa-xmark" variant="text" :aria-label="t('common.close')" @click="emit('close')" />
     </div>
 
     <div v-if="camera || location" class="bar bottom">
@@ -552,7 +555,7 @@ onBeforeUnmount(() => {
       icon="fa-angle-left"
       variant="text"
       size="x-large"
-      aria-label="Previous photo"
+      :aria-label="t('viewer.previous')"
       @click="emit('navigate', previous)"
     />
     <v-btn
@@ -561,7 +564,7 @@ onBeforeUnmount(() => {
       icon="fa-angle-right"
       variant="text"
       size="x-large"
-      aria-label="Next photo"
+      :aria-label="t('viewer.next')"
       @click="emit('navigate', next)"
     />
   </div>

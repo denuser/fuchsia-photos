@@ -2,8 +2,10 @@
 import { ref, watch } from 'vue'
 
 import { api } from '../api/client'
+import { apiError } from '../i18n/apiErrors'
 import AppDialog from './AppDialog.vue'
 import AppFormGroup from './AppFormGroup.vue'
+import { t } from '../i18n'
 
 const open = defineModel<boolean>({ required: true })
 
@@ -25,7 +27,7 @@ async function save() {
   })
   saving.value = false
   if (failure) {
-    error.value = failure.error
+    error.value = apiError(failure)
     return
   }
   open.value = false
@@ -33,17 +35,17 @@ async function save() {
 </script>
 
 <template>
-  <AppDialog v-model="open" title="Change password" action="Change password" :error="error" :loading="saving" @submit="save">
-    <AppFormGroup v-slot="field" label="Current password" required>
+  <AppDialog v-model="open" :title="t('changePassword.title')" :action="t('changePassword.title')" :error="error" :loading="saving" @submit="save">
+    <AppFormGroup v-slot="field" :label="t('changePassword.current')" required>
       <v-text-field v-bind="field" v-model="currentPassword" type="password" autocomplete="current-password" />
     </AppFormGroup>
-    <AppFormGroup v-slot="field" label="New password" required>
+    <AppFormGroup v-slot="field" :label="t('changePassword.new')" required>
       <v-text-field
         v-bind="field"
         v-model="newPassword"
         type="password"
         autocomplete="new-password"
-        hint="Your other devices will be logged out."
+        :hint="t('changePassword.hint')"
       />
     </AppFormGroup>
   </AppDialog>

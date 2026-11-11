@@ -7,6 +7,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
 import { usePhotosStore } from '../stores/photos'
+import { t } from '../i18n'
 
 const photos = usePhotosStore()
 const browser = useTemplateRef('browser')
@@ -21,7 +22,7 @@ async function empty() {
   const { response } = await api.POST('/photos/trash/empty')
   emptying.value = false
   browser.value?.clearSelection()
-  browser.value?.say(response.ok ? 'The trash is empty' : 'Some photos could not be deleted', response.ok ? 'success' : 'error')
+  browser.value?.say(response.ok ? t('trash.emptied') : t('trash.emptyFailed'), response.ok ? 'success' : 'error')
   await photos.reload()
 }
 </script>
@@ -29,11 +30,11 @@ async function empty() {
 <template>
   <PhotoBrowser ref="browser" mode="trash">
     <template #header>
-      <AppPageHeader title="Trash" description="Photos stay here until you restore or delete them.">
+      <AppPageHeader :title="t('nav.trash')" :description="t('trash.description')">
         <template #actions>
           <v-btn
             prepend-icon="fa-trash-can"
-            text="Empty trash"
+            :text="t('trash.empty')"
             color="error"
             variant="outlined"
             :disabled="photos.photos.length === 0"
@@ -44,14 +45,14 @@ async function empty() {
       </AppPageHeader>
     </template>
     <template #empty>
-      <EmptyState icon="fa-trash-can" title="The trash is empty" />
+      <EmptyState icon="fa-trash-can" :title="t('trash.emptied')" />
     </template>
   </PhotoBrowser>
   <ConfirmDialog
     v-model="confirmOpen"
-    title="Empty the trash?"
-    text="All photos in the trash and their original files will be deleted. This cannot be undone."
-    action="Empty trash"
+    :title="t('trash.confirmTitle')"
+    :text="t('trash.confirmText')"
+    :action="t('trash.empty')"
     @confirm="empty"
   />
 </template>

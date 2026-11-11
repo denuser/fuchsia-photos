@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/auth'
 import { type NoticeType, useNoticesStore } from '../stores/notices'
 import { usePhotosStore } from '../stores/photos'
 import { useUsersStore } from '../stores/users'
+import { apiError } from '../i18n/apiErrors'
 import AddToAlbumDialog from './AddToAlbumDialog.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import EmptyState from './EmptyState.vue'
@@ -14,6 +15,7 @@ import PhotoGrid from './PhotoGrid.vue'
 import PhotoViewer from './PhotoViewer.vue'
 import ShareDialog from './ShareDialog.vue'
 import TagDialog from './TagDialog.vue'
+import { t } from '../i18n'
 
 // The grid, the viewer and the bulk actions shared by all lists of photos. A
 // library list edits the user's photos, and the trash restores or purges them.
@@ -111,29 +113,25 @@ async function run(action: () => Promise<void>, done: string) {
     clearSelection()
     say(done)
   } catch (failure) {
-    say((failure as Error).message, 'error')
+    say(apiError((failure as Error).message), 'error')
   } finally {
     busy.value = false
   }
 }
 
-function count(n: number) {
-  return n === 1 ? '1 photo' : `${n} photos`
-}
-
 function trashSelected() {
   const ids = selectedIds.value
-  void run(() => photos.trash(ids), `${count(ids.length)} moved to the trash`)
+  void run(() => photos.trash(ids), t('browser.trashed', ids.length))
 }
 
 function restoreSelected() {
   const ids = selectedIds.value
-  void run(() => photos.restore(ids), `${count(ids.length)} restored`)
+  void run(() => photos.restore(ids), t('browser.restored', ids.length))
 }
 
 function purgeSelected() {
   const ids = selectedIds.value
-  void run(() => photos.purge(ids), `${count(ids.length)} deleted`)
+  void run(() => photos.purge(ids), t('browser.deleted', ids.length))
 }
 
 function openSelectionTags() {
@@ -150,7 +148,7 @@ function onTagged() {
   if (viewerTargets.value.length === 0) {
     clearSelection()
   }
-  say('Tags saved')
+  say(t('browser.tagsSaved'))
   emit('tagged')
 }
 
@@ -168,13 +166,13 @@ function onShared() {
   if (viewerTargets.value.length === 0) {
     clearSelection()
   }
-  say('Sharing saved')
+  say(t('browser.sharingSaved'))
 }
 
 function onAddedToAlbum(album: string) {
   const n = selected.value.size
   clearSelection()
-  say(`${count(n)} added to ${album}`)
+  say(t('browser.addedToAlbum', { album }, n))
 }
 
 // Stays in the viewer on a neighbouring photo, if there is one.
@@ -185,9 +183,9 @@ async function trashOpened(photo: Photo) {
   try {
     await photos.trash([photo.id])
     opened.value = neighbour
-    say('1 photo moved to the trash')
+    say(t('browser.trashed', 1))
   } catch (failure) {
-    say((failure as Error).message, 'error')
+    say(apiError((failure as Error).message), 'error')
   }
 }
 
@@ -203,20 +201,20 @@ defineExpose({ clearSelection, say })
   <div class="browser">
     <slot name="header" />
     <v-toolbar v-if="selected.size > 0" density="compact" color="surface-variant" class="flex-grow-0">
-      <v-btn icon="fa-xmark" aria-label="Clear the selection" @click="clearSelection" />
-      <v-toolbar-title>{{ selected.size }} selected</v-toolbar-title>
+      <v-btn icon="fa-xmark" :aria-label="t('browser.clearSelection')" @click="clearSelection" />
+      <v-toolbar-title>{{ t('selection.count', { n: selected.size }) }}</v-toolbar-title>
       <slot name="selection-actions" :ids="selectedIds" :run="run" />
       <template v-if="canManage">
         <template v-if="props.mode === 'library'">
-          <v-btn prepend-icon="fa-book-open" text="Add to album" :disabled="busy" @click="albumDialog = true" />
-          <v-btn prepend-icon="fa-tag" text="Tags" :disabled="busy" @click="openSelectionTags" />
+          <v-btn prepend-icon="fa-book-open" :text="t('browser.addToAlbum')" :disabled="busy" @click="albumDialog = true" />
+          <v-btn prepend-icon="fa-tag" :text="t('browser.tags')" :disabled="busy" @click="openSelectionTags" />
         </template>
-        <v-btn prepend-icon="fa-share-nodes" text="Share" :disabled="busy" @click="openSelectionSharing" />
-        <v-btn prepend-icon="fa-trash-can" text="Move to trash" :loading="busy" @click="trashSelected" />
+        <v-btn prepend-icon="fa-share-nodes" :text="t('browser.share')" :disabled="busy" @click="openSelectionSharing" />
+        <v-btn prepend-icon="fa-trash-can" :text="t('browser.moveToTrash')" :loading="busy" @click="trashSelected" />
       </template>
       <template v-else>
-        <v-btn prepend-icon="fa-trash-can-arrow-up" text="Restore" :loading="busy" @click="restoreSelected" />
-        <v-btn prepend-icon="fa-trash-can" text="Delete" color="error" :disabled="busy" @click="purgeDialog = true" />
+        <v-btn prepend-icon="fa-trash-can-arrow-up" :text="t('browser.restore')" :loading="busy" @click="restoreSelected" />
+        <v-btn prepend-icon="fa-trash-can" :text="t('common.delete')" color="error" :disabled="busy" @click="purgeDialog = true" />
       </template>
     </v-toolbar>
     <slot v-else name="toolbar" />
@@ -225,12 +223,12 @@ defineExpose({ clearSelection, say })
       <EmptyState
         v-if="photos.failedToOpen"
         icon="fa-circle-exclamation"
-        title="The photos could not be loaded"
-        text="Check the connection and try again."
+        :title="t('browser.loadFailed')"
+        :text="t('browser.loadFailedText')"
         danger
       >
         <template #actions>
-          <v-btn text="Retry" color="primary" @click="photos.reload()" />
+          <v-btn :text="t('common.retry')" color="primary" @click="photos.reload()" />
         </template>
       </EmptyState>
       <slot v-else-if="photos.empty" name="empty" />
@@ -268,9 +266,9 @@ defineExpose({ clearSelection, say })
     <AddToAlbumDialog v-model="albumDialog" :photo-ids="selectedIds" @done="onAddedToAlbum" />
     <ConfirmDialog
       v-model="purgeDialog"
-      title="Delete permanently?"
-      :text="`${count(selected.size)} and the original files will be deleted. This cannot be undone.`"
-      action="Delete"
+      :title="t('browser.purgeTitle')"
+      :text="t('browser.purgeText', selected.size)"
+      :action="t('common.delete')"
       @confirm="purgeSelected"
     />
   </div>

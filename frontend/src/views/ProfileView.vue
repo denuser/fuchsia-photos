@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { api, type AppPassword, type ViewerField, type WebDAVAlbum } from '../api/client'
+import { api, type AppPassword, type Language, type ViewerField, type WebDAVAlbum } from '../api/client'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
 import AppPasswordDialog from '../components/AppPasswordDialog.vue'
@@ -9,6 +9,8 @@ import ChangePasswordDialog from '../components/ChangePasswordDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CopyField from '../components/CopyField.vue'
 import FolderAlbumDialog from '../components/FolderAlbumDialog.vue'
+import { formatDate, languages, t } from '../i18n'
+import { apiError } from '../i18n/apiErrors'
 import { viewerFields } from '../lib/viewerFields'
 import { useAuthStore } from '../stores/auth'
 import { useNoticesStore } from '../stores/notices'
@@ -19,9 +21,21 @@ const passwordDialog = ref(false)
 const saving = ref(false)
 const error = ref('')
 
-const shown = computed(() => viewerFields.map((f) => f.value).filter((f) => !auth.user?.viewerHiddenFields.includes(f)))
+const shown = computed(() => viewerFields.filter((f) => !auth.user?.viewerHiddenFields.includes(f)))
 
-type Changes = { viewerShowsOriginals?: boolean; viewerHiddenFields?: ViewerField[]; navigationHiddenOnPhones?: boolean; gridSquares?: boolean }
+// Each language is named in itself, so that a user who cannot read the current one finds theirs.
+const languageChoices = computed(() => [
+  { value: 'auto', title: t('profile.languageAuto') },
+  ...languages.map((value) => ({ value, title: t('profile.languageName', {}, { locale: value }) })),
+])
+
+type Changes = {
+  viewerShowsOriginals?: boolean
+  viewerHiddenFields?: ViewerField[]
+  navigationHiddenOnPhones?: boolean
+  gridSquares?: boolean
+  language?: Language
+}
 
 // Each change is saved at once, like the switch on the "Shared with me" page.
 async function save(body: Changes) {
@@ -30,7 +44,7 @@ async function save(body: Changes) {
   const { data, error: failure } = await api.PATCH('/me', { body })
   saving.value = false
   if (!data) {
-    error.value = failure?.error ?? 'The setting could not be saved'
+    error.value = apiError(failure, t('profile.saveFailed'))
     return
   }
   auth.user = data
@@ -38,7 +52,7 @@ async function save(body: Changes) {
 
 function setShown(value: ViewerField[] | null) {
   const visible = value ?? []
-  void save({ viewerHiddenFields: viewerFields.map((f) => f.value).filter((f) => !visible.includes(f)) })
+  void save({ viewerHiddenFields: viewerFields.filter((f) => !visible.includes(f)) })
 }
 
 const notices = useNoticesStore()
@@ -52,7 +66,7 @@ const revoking = ref<AppPassword>()
 async function loadAppPasswords() {
   const { data } = await api.GET('/me/app-passwords')
   if (!data) {
-    error.value = 'App passwords could not be loaded'
+    error.value = t('profile.appPasswordsFailed')
     return
   }
   appPasswords.value = data
@@ -71,11 +85,11 @@ async function revoke() {
   }
   const { error: failure } = await api.DELETE('/me/app-passwords/{id}', { params: { path: { id: password.id } } })
   if (failure) {
-    error.value = failure.error
+    error.value = apiError(failure)
     return
   }
   appPasswords.value = appPasswords.value.filter((p) => p.id !== password.id)
-  notices.notify(`Revoked the app password for ${password.name}`)
+  notices.notify(t('profile.revoked', { name: password.name }))
 }
 
 const folderAlbums = ref<WebDAVAlbum[]>([])
@@ -85,7 +99,7 @@ const folderAlbumDialog = ref(false)
 async function loadFolderAlbums() {
   const { data } = await api.GET('/me/webdav-albums')
   if (!data) {
-    error.value = 'Folder albums could not be loaded'
+    error.value = t('profile.folderAlbumsFailed')
     return
   }
   folderAlbums.value = data
@@ -94,21 +108,21 @@ async function loadFolderAlbums() {
 
 function linked(link: WebDAVAlbum) {
   folderAlbums.value = [...folderAlbums.value, link].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-  notices.notify(`Photos uploaded to ${link.path} will go to ${link.albumName}`)
+  notices.notify(t('profile.linked', { path: link.path, album: link.albumName }))
 }
 
 async function unlink(link: WebDAVAlbum) {
   const { error: failure } = await api.DELETE('/me/webdav-albums/{id}', { params: { path: { id: link.id } } })
   if (failure) {
-    error.value = failure.error
+    error.value = apiError(failure)
     return
   }
   folderAlbums.value = folderAlbums.value.filter((l) => l.id !== link.id)
-  notices.notify(`Unlinked ${link.path} from ${link.albumName}`)
+  notices.notify(t('profile.unlinked', { path: link.path, album: link.albumName }))
 }
 
-function formatDate(value: string | null) {
-  return value ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' }) : 'Never'
+function formatUsed(value: string | null) {
+  return value ? formatDate(value) : t('profile.never')
 }
 
 onMounted(() => {
@@ -119,17 +133,29 @@ onMounted(() => {
 
 <template>
   <div v-if="auth.user" class="page">
-    <AppPageHeader :title="auth.user.login" :description="auth.isAdmin ? 'Administrator' : 'User'" />
+    <AppPageHeader :title="auth.user.login" :description="auth.isAdmin ? t('roles.admin') : t('roles.user')" />
     <div class="page-section profile">
 
       <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
-      <h2 class="mb-2">Photo grid</h2>
+      <h2 class="mb-2">{{ t('profile.language') }}</h2>
+      <AppFormGroup v-slot="field" :label="t('profile.interfaceLanguage')" class="language mb-6">
+        <v-select
+          v-bind="field"
+          :model-value="auth.user.language"
+          :items="languageChoices"
+          :disabled="saving"
+          :hint="t('profile.languageHint')"
+          @update:model-value="save({ language: $event })"
+        />
+      </AppFormGroup>
+
+      <h2 class="mb-2">{{ t('profile.grid') }}</h2>
       <v-switch
         :model-value="auth.user.gridSquares"
         :disabled="saving"
-        label="Show square previews"
-        hint="All previews are the same size, cropped to a square. The size follows the grid preview size an administrator sets."
+        :label="t('profile.squares')"
+        :hint="t('profile.squaresHint')"
         persistent-hint
         color="primary"
         density="compact"
@@ -137,12 +163,12 @@ onMounted(() => {
         @update:model-value="save({ gridSquares: Boolean($event) })"
       />
 
-      <h2 class="mb-2">Viewer</h2>
+      <h2 class="mb-2">{{ t('profile.viewer') }}</h2>
       <v-switch
         :model-value="auth.user.viewerShowsOriginals"
         :disabled="saving"
-        label="Load originals when zooming in"
-        hint="Zooming in then shows the photo at full resolution, otherwise it enlarges the preview. Originals can be much larger. Photos the browser cannot show, such as HEIC outside Safari, keep their previews."
+        :label="t('profile.originals')"
+        :hint="t('profile.originalsHint')"
         persistent-hint
         color="primary"
         density="compact"
@@ -150,17 +176,17 @@ onMounted(() => {
         @update:model-value="save({ viewerShowsOriginals: Boolean($event) })"
       />
 
-      <h3 class="mb-1">Photo details</h3>
+      <h3 class="mb-1">{{ t('profile.details') }}</h3>
       <div class="text-medium-emphasis mb-2">
-        Shown under the photo name when the photo has them. A location is shown only if an administrator allows it.
+        {{ t('profile.detailsHint') }}
       </div>
       <div class="fields mb-6">
         <v-checkbox
           v-for="field in viewerFields"
-          :key="field.value"
+          :key="field"
           :model-value="shown"
-          :value="field.value"
-          :label="field.title"
+          :value="field"
+          :label="t(`viewerFields.${field}`)"
           :disabled="saving"
           density="compact"
           hide-details
@@ -168,12 +194,12 @@ onMounted(() => {
         />
       </div>
 
-      <h2 class="mb-2">Phone</h2>
+      <h2 class="mb-2">{{ t('profile.phone') }}</h2>
       <v-switch
         :model-value="auth.user.navigationHiddenOnPhones"
         :disabled="saving"
-        label="Hide the menu on a phone"
-        hint="The menu button opens it over the page, so the photos take the whole width of the screen."
+        :label="t('profile.hideMenu')"
+        :hint="t('profile.hideMenuHint')"
         persistent-hint
         color="primary"
         density="compact"
@@ -181,32 +207,30 @@ onMounted(() => {
         @update:model-value="save({ navigationHiddenOnPhones: Boolean($event) })"
       />
 
-      <h2 class="mb-2">Password</h2>
-      <v-btn prepend-icon="fa-key" variant="tonal" text="Change password" class="mb-6" @click="passwordDialog = true" />
+      <h2 class="mb-2">{{ t('profile.password') }}</h2>
+      <v-btn prepend-icon="fa-key" variant="tonal" :text="t('changePassword.title')" class="mb-6" @click="passwordDialog = true" />
       <ChangePasswordDialog v-model="passwordDialog" />
 
-      <h2 class="mb-2">Upload from a phone</h2>
+      <h2 class="mb-2">{{ t('profile.webdav') }}</h2>
       <div class="text-medium-emphasis mb-4">
-        Sync apps such as PhotoSync or FolderSync can upload photos over WebDAV. Set them up with this address, your login and an
-        app password, one for each device. Deleting files in the app leaves the photos here, and photos you moved to the trash stay
-        there when the app sends them again. Only JPEG, PNG, WebP and HEIC photos are accepted.
+        {{ t('profile.webdavHint') }}
       </div>
       <div class="webdav-access mb-6">
-        <AppFormGroup v-slot="field" label="Address" class="mb-0">
-          <CopyField v-bind="field" :value="webdavAddress" label="address" />
+        <AppFormGroup v-slot="field" :label="t('profile.address')" class="mb-0">
+          <CopyField v-bind="field" :value="webdavAddress" :label="t('profile.addressLower')" />
         </AppFormGroup>
-        <AppFormGroup v-slot="field" label="Login" class="mb-0">
-          <CopyField v-bind="field" :value="auth.user.login" label="login" />
+        <AppFormGroup v-slot="field" :label="t('profile.login')" class="mb-0">
+          <CopyField v-bind="field" :value="auth.user.login" :label="t('profile.loginLower')" />
         </AppFormGroup>
       </div>
 
-      <h3 class="mb-2">App passwords</h3>
+      <h3 class="mb-2">{{ t('profile.appPasswords') }}</h3>
       <v-table v-if="appPasswords.length > 0" class="mb-4">
         <thead>
           <tr>
-            <th>Device</th>
-            <th>Created</th>
-            <th>Last used</th>
+            <th>{{ t('profile.device') }}</th>
+            <th>{{ t('profile.created') }}</th>
+            <th>{{ t('profile.lastUsed') }}</th>
             <th />
           </tr>
         </thead>
@@ -214,35 +238,33 @@ onMounted(() => {
           <tr v-for="password in appPasswords" :key="password.id">
             <td>{{ password.name }}</td>
             <td>{{ formatDate(password.createdAt) }}</td>
-            <td>{{ formatDate(password.lastUsedAt) }}</td>
+            <td>{{ formatUsed(password.lastUsedAt) }}</td>
             <td class="text-right">
-              <v-btn icon="fa-trash-can" size="small" variant="text" :aria-label="`Revoke ${password.name}`" @click="startRevoke(password)" />
+              <v-btn icon="fa-trash-can" size="small" variant="text" :aria-label="t('profile.revoke', { name: password.name })" @click="startRevoke(password)" />
             </td>
           </tr>
         </tbody>
       </v-table>
-      <div v-else-if="appPasswordsLoaded" class="text-medium-emphasis mb-4">No app passwords yet.</div>
-      <v-btn prepend-icon="fa-plus" variant="tonal" text="New app password" @click="appPasswordDialog = true" />
+      <div v-else-if="appPasswordsLoaded" class="text-medium-emphasis mb-4">{{ t('profile.noAppPasswords') }}</div>
+      <v-btn prepend-icon="fa-plus" variant="tonal" :text="t('appPassword.new')" @click="appPasswordDialog = true" />
       <AppPasswordDialog v-model="appPasswordDialog" @created="appPasswords.push($event)" />
       <ConfirmDialog
         v-model="revokeOpen"
-        title="Revoke this app password?"
-        :text="`${revoking?.name} will no longer be able to upload. Photos it uploaded stay in your library.`"
-        action="Revoke"
+        :title="t('profile.revokeTitle')"
+        :text="t('profile.revokeText', { name: revoking?.name })"
+        :action="t('profile.revokeAction')"
         @confirm="revoke"
       />
 
-      <h3 class="mt-6 mb-1">Albums for folders</h3>
+      <h3 class="mt-6 mb-1">{{ t('profile.folderAlbums') }}</h3>
       <div class="text-medium-emphasis mb-2">
-        Photos uploaded into a linked folder, or a folder inside it, are added to its album, including photos already in your
-        library. Point each folder pair of the sync app to its own server folder to sort the camera and a messenger into different
-        albums. Deleting or moving files in the app leaves the photos in the album.
+        {{ t('profile.folderAlbumsHint') }}
       </div>
       <v-table v-if="folderAlbums.length > 0" class="mb-4">
         <thead>
           <tr>
-            <th>Folder</th>
-            <th>Album</th>
+            <th>{{ t('folderAlbum.folder') }}</th>
+            <th>{{ t('folderAlbum.album') }}</th>
             <th />
           </tr>
         </thead>
@@ -253,13 +275,13 @@ onMounted(() => {
               <router-link :to="`/albums/${link.albumId}`">{{ link.albumName }}</router-link>
             </td>
             <td class="text-right">
-              <v-btn icon="fa-link-slash" size="small" variant="text" :aria-label="`Unlink ${link.path}`" @click="unlink(link)" />
+              <v-btn icon="fa-link-slash" size="small" variant="text" :aria-label="t('profile.unlink', { path: link.path })" @click="unlink(link)" />
             </td>
           </tr>
         </tbody>
       </v-table>
-      <div v-else-if="folderAlbumsLoaded" class="text-medium-emphasis mb-4">No folders linked yet.</div>
-      <v-btn prepend-icon="fa-link" variant="tonal" text="Link a folder" @click="folderAlbumDialog = true" />
+      <div v-else-if="folderAlbumsLoaded" class="text-medium-emphasis mb-4">{{ t('profile.noFolders') }}</div>
+      <v-btn prepend-icon="fa-link" variant="tonal" :text="t('profile.linkFolder')" @click="folderAlbumDialog = true" />
       <FolderAlbumDialog v-model="folderAlbumDialog" @created="linked" />
     </div>
   </div>
@@ -274,6 +296,10 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 24px 16px;
+}
+
+.language {
+  max-width: 320px;
 }
 
 .fields {

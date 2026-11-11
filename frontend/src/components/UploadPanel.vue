@@ -2,21 +2,24 @@
 import { computed } from 'vue'
 
 import { useUploadsStore } from '../stores/uploads'
+import { t } from '../i18n'
 
 const uploads = useUploadsStore()
 
 const title = computed(() => {
   const finished = uploads.done + uploads.failures.length
-  return uploads.running ? `Uploading ${finished} of ${uploads.total}` : `Uploaded ${uploads.done} of ${uploads.total}`
+  return uploads.running
+    ? t('uploads.running', { done: finished, total: uploads.total })
+    : t('uploads.finished', { done: uploads.done, total: uploads.total })
 })
 
 const subtitle = computed(() => {
   const parts = []
   if (uploads.duplicates) {
-    parts.push(`${uploads.duplicates} already in your library`)
+    parts.push(t('uploads.duplicates', { n: uploads.duplicates }))
   }
   if (uploads.restored) {
-    parts.push(`${uploads.restored} restored from the trash`)
+    parts.push(t('uploads.restored', { n: uploads.restored }))
   }
   return parts.join(', ') || undefined
 })
@@ -26,7 +29,7 @@ const subtitle = computed(() => {
   <v-card v-if="uploads.visible" class="upload-panel" elevation="8" width="360">
     <v-card-item :title="title" :subtitle="subtitle">
       <template #append>
-        <v-btn v-if="!uploads.running" icon="fa-xmark" size="small" variant="text" aria-label="Close" @click="uploads.dismiss()" />
+        <v-btn v-if="!uploads.running" icon="fa-xmark" size="small" variant="text" :aria-label="t('common.close')" @click="uploads.dismiss()" />
       </template>
     </v-card-item>
     <v-progress-linear :model-value="uploads.progress" color="primary" />
@@ -43,7 +46,7 @@ const subtitle = computed(() => {
       </v-list>
       <v-card-actions v-if="!uploads.running">
         <v-spacer />
-        <v-btn text="Retry failed" color="primary" @click="uploads.retryFailed()" />
+        <v-btn :text="t('uploads.retry')" color="primary" @click="uploads.retryFailed()" />
       </v-card-actions>
     </template>
   </v-card>

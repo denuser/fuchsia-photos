@@ -4,9 +4,11 @@
 import { ref, shallowRef, watch } from 'vue'
 
 import { api, type Album, type WebDAVAlbum } from '../api/client'
+import { apiError } from '../i18n/apiErrors'
 import AppAutocomplete from './AppAutocomplete.vue'
 import AppDialog from './AppDialog.vue'
 import AppFormGroup from './AppFormGroup.vue'
+import { t } from '../i18n'
 
 const open = defineModel<boolean>({ required: true })
 const emit = defineEmits<{ created: [WebDAVAlbum] }>()
@@ -39,7 +41,7 @@ async function create() {
   const { data, error: failure } = await api.POST('/me/webdav-albums', { body: { path: folder.value, albumId: albumId.value } })
   saving.value = false
   if (!data) {
-    error.value = failure?.error ?? 'The folder could not be linked'
+    error.value = apiError(failure, t('folderAlbum.failed'))
     return
   }
   open.value = false
@@ -50,33 +52,33 @@ async function create() {
 <template>
   <AppDialog
     v-model="open"
-    title="Link a folder to an album"
-    action="Link"
+    :title="t('folderAlbum.title')"
+    :action="t('folderAlbum.link')"
     :error="error"
     :loading="saving"
     :disabled="!folder?.trim() || albumId === null"
     max-width="480"
     @submit="create"
   >
-    <AppFormGroup v-slot="field" label="Folder" required>
+    <AppFormGroup v-slot="field" :label="t('folderAlbum.folder')" required>
       <v-combobox
         v-bind="field"
         v-model="folder"
         :items="folders"
         variant="outlined"
         autofocus
-        hint="The server folder set in the sync app, such as /Camera. Folders inside it go to the same album unless linked themselves. / is the whole tree."
+        :hint="t('folderAlbum.folderHint')"
         persistent-hint
       />
     </AppFormGroup>
-    <AppFormGroup v-slot="field" label="Album" required>
+    <AppFormGroup v-slot="field" :label="t('folderAlbum.album')" required>
       <AppAutocomplete
         v-bind="field"
         v-model="albumId"
         :items="albums"
         item-title="name"
         item-value="id"
-        no-data-text="No albums yet. Create one on the Albums page."
+        :no-data-text="t('folderAlbum.noAlbums')"
       />
     </AppFormGroup>
   </AppDialog>

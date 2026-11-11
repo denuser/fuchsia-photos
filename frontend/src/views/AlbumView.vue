@@ -6,11 +6,13 @@ import { api, type Album } from '../api/client'
 import AppPageHeader from '../components/AppPageHeader.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
+import { apiError } from '../i18n/apiErrors'
 import NameDialog from '../components/NameDialog.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
 import ShareDialog from '../components/ShareDialog.vue'
 import { useAuthStore } from '../stores/auth'
 import { inBatches, usePhotosStore } from '../stores/photos'
+import { t } from '../i18n'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,11 +27,8 @@ const deleteOpen = ref(false)
 const shareOpen = ref(false)
 // Another user's album is read-only here, even for an administrator.
 const owned = computed(() => album.value?.ownerId === auth.user?.id)
-const breadcrumbs = computed(() => [owned.value ? { title: 'Albums', to: '/albums' } : { title: 'Shared with me', to: '/shared' }])
-const photoCount = computed(() => {
-  const n = album.value?.photoCount ?? 0
-  return n === 1 ? '1 photo' : `${n} photos`
-})
+const breadcrumbs = computed(() => [owned.value ? { title: t('nav.albums'), to: '/albums' } : { title: t('nav.shared'), to: '/shared' }])
+const photoCount = computed(() => t('common.photos', album.value?.photoCount ?? 0))
 
 onMounted(async () => {
   await loadAlbum()
@@ -50,7 +49,7 @@ async function loadAlbum() {
 async function rename(name: string) {
   const { data, error } = await api.PATCH('/albums/{id}', { params: { path: { id: id.value } }, body: { name } })
   if (error) {
-    return error.error
+    return apiError(error)
   }
   album.value = data
   return null
@@ -59,7 +58,7 @@ async function rename(name: string) {
 async function remove() {
   const { error } = await api.DELETE('/albums/{id}', { params: { path: { id: id.value } } })
   if (error) {
-    browser.value?.say(error.error, 'error')
+    browser.value?.say(apiError(error), 'error')
     return
   }
   await router.push('/albums')
@@ -74,7 +73,7 @@ async function removeFromAlbum(ids: number[]) {
 async function setCover(photoId: number | null) {
   const { data, error } = await api.PUT('/albums/{id}/cover', { params: { path: { id: id.value } }, body: { photoId } })
   if (error) {
-    throw new Error(error.error)
+    throw new Error(apiError(error))
   }
   album.value = data
 }
@@ -82,9 +81,9 @@ async function setCover(photoId: number | null) {
 async function resetCover() {
   try {
     await setCover(null)
-    browser.value?.say('The newest photo is the cover again')
+    browser.value?.say(t('album.coverReset'))
   } catch (failure) {
-    browser.value?.say((failure as Error).message, 'error')
+    browser.value?.say(apiError((failure as Error).message), 'error')
   }
 }
 </script>
@@ -96,43 +95,58 @@ async function resetCover() {
         <template v-if="owned" #actions>
           <v-menu>
             <template #activator="{ props }">
-              <v-btn v-bind="props" icon="fa-ellipsis-vertical" variant="text" aria-label="Album actions" />
+              <v-btn v-bind="props" icon="fa-ellipsis-vertical" variant="text" :aria-label="t('albums.actions')" />
             </template>
             <v-list density="compact">
-              <v-list-item title="Rename" prepend-icon="fa-pen" @click="renameOpen = true" />
-              <v-list-item title="Share" prepend-icon="fa-share-nodes" @click="shareOpen = true" />
-              <v-list-item v-if="album.coverChosen" title="Use the newest photo as the cover" prepend-icon="fa-arrow-rotate-left" @click="resetCover" />
-              <v-list-item title="Delete album" prepend-icon="fa-trash-can" @click="deleteOpen = true" />
+              <v-list-item :title="t('common.rename')" prepend-icon="fa-pen" @click="renameOpen = true" />
+              <v-list-item :title="t('browser.share')" prepend-icon="fa-share-nodes" @click="shareOpen = true" />
+              <v-list-item
+                v-if="album.coverChosen"
+                :title="t('album.resetCover')"
+                prepend-icon="fa-arrow-rotate-left"
+                @click="resetCover"
+              />
+              <v-list-item :title="t('album.delete')" prepend-icon="fa-trash-can" @click="deleteOpen = true" />
             </v-list>
           </v-menu>
         </template>
       </AppPageHeader>
     </template>
     <template #selection-actions="{ ids, run }">
-      <v-btn v-if="ids.length === 1" prepend-icon="fa-image" text="Set as cover" @click="run(() => setCover(ids[0]!), 'Cover changed')" />
+      <v-btn
+        v-if="ids.length === 1"
+        prepend-icon="fa-image"
+        :text="t('album.setCover')"
+        @click="run(() => setCover(ids[0]!), t('album.coverChanged'))"
+      />
       <v-btn
         prepend-icon="fa-circle-minus"
-        text="Remove from album"
-        @click="run(() => removeFromAlbum(ids), ids.length === 1 ? '1 photo removed from the album' : `${ids.length} photos removed from the album`)"
+        :text="t('album.remove')"
+        @click="run(() => removeFromAlbum(ids), t('album.removed', ids.length))"
       />
     </template>
     <template #empty>
-      <EmptyState v-if="owned" icon="fa-book-open" title="This album is empty" text="Select photos in the timeline and add them here.">
+      <EmptyState v-if="owned" icon="fa-book-open" :title="t('album.empty')" :text="t('album.emptyText')">
         <template #actions>
-          <v-btn text="Open the timeline" color="primary" to="/" />
+          <v-btn :text="t('common.openTimeline')" color="primary" to="/" />
         </template>
       </EmptyState>
-      <EmptyState v-else icon="fa-book-open" title="This album is empty" />
+      <EmptyState v-else icon="fa-book-open" :title="t('album.empty')" />
     </template>
   </PhotoBrowser>
 
   <ShareDialog v-model="shareOpen" :album-id="id" @done="loadAlbum" />
-  <NameDialog v-model="renameOpen" title="Rename album" label="Name" action="Rename" :initial="album?.name" :save="rename" />
+  <NameDialog
+    v-model="renameOpen"
+    :title="t('albums.rename')"
+    :label="t('common.name')"
+    :action="t('common.rename')"
+    :initial="album?.name" :save="rename" />
   <ConfirmDialog
     v-model="deleteOpen"
-    title="Delete this album?"
-    :text="`${album?.name} will be deleted. Its photos stay in your library.`"
-    action="Delete"
+    :title="t('albums.deleteTitle')"
+    :text="t('albums.deleteText', { name: album?.name })"
+    :action="t('common.delete')"
     @confirm="remove"
   />
 </template>

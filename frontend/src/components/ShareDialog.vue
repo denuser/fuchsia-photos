@@ -4,9 +4,11 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import { api, type UserRef, type Visibility } from '../api/client'
 import { inBatches } from '../stores/photos'
 import { useUsersStore } from '../stores/users'
+import { apiError } from '../i18n/apiErrors'
 import AppAutocomplete from './AppAutocomplete.vue'
 import AppDialog from './AppDialog.vue'
 import AppFormGroup from './AppFormGroup.vue'
+import { t } from '../i18n'
 
 const open = defineModel<boolean>({ required: true })
 
@@ -23,9 +25,9 @@ const KEEP = 'keep'
 const single = computed(() => props.albumId !== undefined || props.photoIds?.length === 1)
 const title = computed(() => {
   if (props.albumId !== undefined) {
-    return 'Share this album'
+    return t('share.album')
   }
-  return single.value ? 'Share this photo' : `Share ${props.photoIds?.length} photos`
+  return single.value ? t('share.photo') : t('share.photos', { n: props.photoIds?.length ?? 0 })
 })
 
 const loaded = ref(false)
@@ -40,11 +42,11 @@ const chosen = ref<number[]>([])
 const visibilityChoice = ref<Visibility | typeof KEEP>(KEEP)
 const toRemove = ref<number[]>([])
 
-const visibilityChoices = [
-  { title: 'Leave as it is', value: KEEP },
-  { title: 'Only the people chosen', value: 'private' },
-  { title: 'All users', value: 'all' },
-]
+const visibilityChoices = computed(() => [
+  { title: t('share.keep'), value: KEEP },
+  { title: t('share.private'), value: 'private' },
+  { title: t('share.all'), value: 'all' },
+])
 
 // Someone disabled after being given access is not among the recipients, but stays on the list.
 const candidates = computed(() => {
@@ -71,7 +73,7 @@ watch(open, async (isOpen) => {
         ? await api.GET('/albums/{id}/sharing', { params: { path: { id: props.albumId } } })
         : await api.GET('/photos/{id}/sharing', { params: { path: { id: props.photoIds![0]! } } })
     if (!data) {
-      error.value = failure?.error ?? 'The current sharing could not be loaded'
+      error.value = apiError(failure, t('share.loadFailed'))
       return
     }
     initialVisibility.value = data.visibility
@@ -108,7 +110,7 @@ async function save() {
     if (props.albumId !== undefined) {
       const { error: failure } = await api.POST('/albums/{id}/sharing', { params: { path: { id: props.albumId } }, body })
       if (failure) {
-        throw new Error(failure.error)
+        throw new Error(apiError(failure))
       }
     } else {
       await inBatches(props.photoIds ?? [], (batch) => api.POST('/photos/sharing', { body: { ...body, ids: batch } }))
@@ -116,7 +118,7 @@ async function save() {
     open.value = false
     emit('done')
   } catch (failure) {
-    error.value = (failure as Error).message
+    error.value = apiError((failure as Error).message)
   } finally {
     saving.value = false
   }
@@ -127,7 +129,7 @@ async function save() {
   <AppDialog
     v-model="open"
     :title="title"
-    action="Save"
+    :action="t('common.save')"
     :error="error"
     :loading="saving"
     :disabled="single && !loaded"
@@ -136,19 +138,19 @@ async function save() {
     @submit="save"
   >
     <template v-if="single">
-      <v-switch v-model="everyone" label="Visible to all users" color="primary" density="compact" hide-details class="mb-4" />
+      <v-switch v-model="everyone" :label="t('share.everyone')" color="primary" density="compact" hide-details class="mb-4" />
     </template>
-    <AppFormGroup v-else v-slot="field" label="Visibility">
+    <AppFormGroup v-else v-slot="field" :label="t('share.visibility')">
       <v-select v-bind="field" v-model="visibilityChoice" variant="outlined" :items="visibilityChoices" />
     </AppFormGroup>
-    <AppFormGroup v-slot="field" label="Share with">
+    <AppFormGroup v-slot="field" :label="t('share.with')">
       <AppAutocomplete v-bind="field" v-model="chosen" :items="candidates" item-title="login" item-value="id" multiple />
     </AppFormGroup>
-    <AppFormGroup v-if="!single" v-slot="field" label="Stop sharing with">
+    <AppFormGroup v-if="!single" v-slot="field" :label="t('share.stop')">
       <AppAutocomplete v-bind="field" v-model="toRemove" :items="users.everyone" item-title="login" item-value="id" multiple />
     </AppFormGroup>
     <div class="text-medium-emphasis">
-      Recipients can download the original files, which keep their metadata, including location.
+      {{ t('share.note') }}
     </div>
   </AppDialog>
 </template>

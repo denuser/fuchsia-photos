@@ -521,6 +521,23 @@ const steps = {
       return boxes.length > 0 && boxes.every((b) => Math.abs(b.width - b.height) < 1 && b.width <= side && b.width > side / 2)
     })
   },
+  'the profile switches the interface to Russian, kept after a reload, and back': async () => {
+    await page.goto(`${BASE}/profile`)
+    // A select's input sits under the field's own box, which takes the click.
+    await page.getByLabel('Interface language').locator('..').click()
+    await expectRequest('/me', () => page.getByRole('option', { name: 'Русский' }).click())
+    await page.getByText('Язык интерфейса').waitFor()
+    await page.goto(`${BASE}/albums`)
+    await page.getByRole('heading', { name: 'Альбомы', level: 1 }).waitFor()
+    await waitFor('the page language is Russian', () => document.documentElement.lang === 'ru')
+
+    await page.goto(`${BASE}/profile`)
+    // A select's input sits under the field's own box, which takes the click.
+    await page.getByLabel('Язык интерфейса').locator('..').click()
+    await expectRequest('/me', () => page.getByRole('option', { name: 'Автоматически' }).click())
+    // The browser is set to en-US, so Automatic means English.
+    await page.getByText('Interface language').waitFor()
+  },
   'the server agrees with the screen': async () => {
     const [library, trash] = [await apiTotal('photos'), await apiTotal('photos/trash')]
     if (library !== 3 || trash !== 0) {

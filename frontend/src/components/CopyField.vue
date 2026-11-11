@@ -5,6 +5,7 @@
 import { ref } from 'vue'
 
 import { useNoticesStore } from '../stores/notices'
+import { t } from '../i18n'
 
 const props = defineProps<{ value: string; id?: string; label?: string }>()
 
@@ -22,10 +23,10 @@ async function copy() {
         throw new Error('copy refused')
       }
     }
-    notices.notify('Copied')
+    notices.notify(t('copy.copied'))
   } catch {
     input?.select()
-    notices.notify('Could not copy. The text is selected, so copy it by hand.', 'warning')
+    notices.notify(t('copy.failed'), 'warning')
   }
 }
 </script>
@@ -40,7 +41,7 @@ async function copy() {
     @focus="($event.target as HTMLInputElement).select()"
   >
     <template #append-inner>
-      <v-btn icon="fa-copy" variant="text" size="small" density="comfortable" :aria-label="label ? `Copy ${label}` : 'Copy'" @click="copy" />
+      <v-btn icon="fa-copy" variant="text" size="small" density="comfortable" :aria-label="label ? t('copy.named', { label }) : t('copy.copy')" @click="copy" />
     </template>
   </v-text-field>
 </template>

@@ -1,12 +1,17 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { api, type User } from '../api/client'
+import { setLanguage } from '../i18n'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const loaded = ref(false)
   const isAdmin = computed(() => user.value?.role === 'admin')
+
+  // The user's language applies as soon as the user is known, and the
+  // browser's language before login and after logout.
+  watch(() => user.value?.language, setLanguage, { immediate: true })
 
   async function load() {
     if (loaded.value) {

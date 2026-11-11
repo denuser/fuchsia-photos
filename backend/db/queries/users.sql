@@ -40,3 +40,6 @@ UPDATE users SET grid_squares = @grid_squares WHERE id = @id RETURNING *;
 
 -- name: SetUserTimelineIncludesShared :one
 UPDATE users SET timeline_includes_shared = @timeline_includes_shared WHERE id = @id RETURNING *;
+
+-- name: SetUserLanguage :one
+UPDATE users SET language = @language WHERE id = @id RETURNING *;

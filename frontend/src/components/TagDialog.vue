@@ -4,9 +4,11 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import { api, type TagRef } from '../api/client'
 import { inBatches } from '../stores/photos'
 import { useTagsStore } from '../stores/tags'
+import { apiError } from '../i18n/apiErrors'
 import AppAutocomplete from './AppAutocomplete.vue'
 import AppDialog from './AppDialog.vue'
 import AppFormGroup from './AppFormGroup.vue'
+import { t } from '../i18n'
 
 const open = defineModel<boolean>({ required: true })
 
@@ -22,7 +24,7 @@ const error = ref('')
 const saving = ref(false)
 
 const single = computed(() => props.photoIds.length === 1)
-const title = computed(() => (single.value ? 'Tags of this photo' : `Tags of ${props.photoIds.length} photos`))
+const title = computed(() => (single.value ? t('tagDialog.single') : t('tagDialog.several', { n: props.photoIds.length })))
 // One photo offers its own tags for removal. For several, any tag may be on some of them.
 const removable = computed<TagRef[]>(() => (single.value ? current.value : tags.tags))
 
@@ -46,7 +48,7 @@ async function tagIds(names: string[]) {
   for (const name of names) {
     const { data, error: failure } = await api.POST('/tags', { body: { name } })
     if (failure) {
-      throw new Error(failure.error)
+      throw new Error(apiError(failure))
     }
     ids.push(data.id)
   }
@@ -66,7 +68,7 @@ async function save() {
     }
     open.value = false
   } catch (failure) {
-    error.value = (failure as Error).message
+    error.value = apiError((failure as Error).message)
   } finally {
     saving.value = false
   }
@@ -75,23 +77,23 @@ async function save() {
 
 <template>
   <!-- Not a form: Enter belongs to the fields, where it confirms a tag. -->
-  <AppDialog v-model="open" :title="title" action="Save" :error="error" :loading="saving" :form="false" max-width="480" @submit="save">
+  <AppDialog v-model="open" :title="title" :action="t('common.save')" :error="error" :loading="saving" :form="false" max-width="480" @submit="save">
     <div v-if="single && current.length > 0" class="d-flex flex-wrap ga-1 mb-4">
       <v-chip v-for="tag in current" :key="tag.id" size="small">{{ tag.name }}</v-chip>
     </div>
-    <AppFormGroup v-slot="field" label="Add tags">
+    <AppFormGroup v-slot="field" :label="t('tagDialog.add')">
       <v-combobox
         v-bind="field"
         v-model="toAdd"
-        :items="tags.tags.map((t) => t.name)"
-        hint="Choose a tag or type a new one, then press Enter."
+        :items="tags.tags.map((tag) => tag.name)"
+        :hint="t('tagDialog.addHint')"
         multiple
         chips
         closable-chips
         variant="outlined"
       />
     </AppFormGroup>
-    <AppFormGroup v-slot="field" label="Remove tags">
+    <AppFormGroup v-slot="field" :label="t('tagDialog.remove')">
       <AppAutocomplete
         v-bind="field"
         v-model="toRemove"

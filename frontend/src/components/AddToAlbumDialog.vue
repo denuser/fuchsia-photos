@@ -3,8 +3,10 @@ import { ref, shallowRef, watch } from 'vue'
 
 import { api, type Album } from '../api/client'
 import { inBatches } from '../stores/photos'
+import { apiError } from '../i18n/apiErrors'
 import AppDialog from './AppDialog.vue'
 import AppFormGroup from './AppFormGroup.vue'
+import { t } from '../i18n'
 
 const open = defineModel<boolean>({ required: true })
 
@@ -36,7 +38,7 @@ async function addTo(album: Album) {
     open.value = false
     emit('done', album.name)
   } catch (failure) {
-    error.value = (failure as Error).message
+    error.value = apiError((failure as Error).message)
   } finally {
     saving.value = false
   }
@@ -47,7 +49,7 @@ async function createAndAdd() {
   const { data, error: failure } = await api.POST('/albums', { body: { name: newName.value } })
   saving.value = false
   if (failure) {
-    error.value = failure.error
+    error.value = apiError(failure)
     return
   }
   await addTo(data)
@@ -55,19 +57,19 @@ async function createAndAdd() {
 </script>
 
 <template>
-  <AppDialog v-model="open" title="Add to album" :error="error">
+  <AppDialog v-model="open" :title="t('addToAlbum.title')" :error="error">
     <v-form class="d-flex align-end ga-2 mb-2" @submit.prevent="createAndAdd">
-      <AppFormGroup v-slot="field" label="New album" class="flex-grow-1 mb-0">
+      <AppFormGroup v-slot="field" :label="t('addToAlbum.newAlbum')" class="flex-grow-1 mb-0">
         <v-text-field v-bind="field" v-model="newName" />
       </AppFormGroup>
-      <v-btn type="submit" color="primary" text="Create" :disabled="!newName.trim()" :loading="saving" />
+      <v-btn type="submit" color="primary" :text="t('common.create')" :disabled="!newName.trim()" :loading="saving" />
     </v-form>
     <v-list v-if="albums.length > 0" density="compact" max-height="300" class="overflow-y-auto">
       <v-list-item
         v-for="album in albums"
         :key="album.id"
         :title="album.name"
-        :subtitle="`${album.photoCount} photos`"
+        :subtitle="t('common.photos', album.photoCount)"
         :disabled="saving"
         prepend-icon="fa-book-open"
         @click="addTo(album)"

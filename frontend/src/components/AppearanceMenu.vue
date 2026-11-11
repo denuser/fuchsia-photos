@@ -3,23 +3,14 @@ import { computed } from 'vue'
 import { useDisplay } from 'vuetify'
 
 import { useAppearanceStore, type Contrast, type Scheme } from '../stores/appearance'
+import { t } from '../i18n'
 
 const appearance = useAppearanceStore()
 // On a phone the button is an icon alone, to leave room in the app bar.
 const { xs } = useDisplay()
 
-const schemes: { value: Scheme; title: string }[] = [
-  { value: 'system', title: 'System' },
-  { value: 'light', title: 'Light' },
-  { value: 'dark', title: 'Dark' },
-]
-
-const contrasts: { value: Contrast; title: string }[] = [
-  { value: 'system', title: 'System' },
-  { value: 'default', title: 'Default' },
-  { value: 'high', title: 'High contrast' },
-  { value: 'glass', title: 'Glass' },
-]
+const schemes: Scheme[] = ['system', 'light', 'dark']
+const contrasts: Contrast[] = ['system', 'default', 'high', 'glass']
 
 const icon = computed(() => {
   if (appearance.scheme === 'system') {
@@ -32,24 +23,24 @@ const icon = computed(() => {
 <template>
   <v-menu :close-on-content-click="false" location="bottom end">
     <template #activator="{ props }">
-      <v-btn v-if="xs" v-bind="props" :icon="icon" aria-label="Appearance" />
-      <v-btn v-else v-bind="props" variant="outlined" class="mr-2 appearance-button" aria-label="Appearance">
+      <v-btn v-if="xs" v-bind="props" :icon="icon" :aria-label="t('appearance.title')" />
+      <v-btn v-else v-bind="props" variant="outlined" class="mr-2 appearance-button" :aria-label="t('appearance.title')">
         <v-icon :icon="icon" />
         <v-icon icon="fa-caret-down" end />
       </v-btn>
     </template>
     <v-card class="appearance-menu">
       <section>
-        <h2 id="scheme-title">Color scheme</h2>
+        <h2 id="scheme-title">{{ t('appearance.scheme') }}</h2>
         <v-btn-toggle v-model="appearance.scheme" mandatory divided variant="outlined" aria-labelledby="scheme-title">
-          <v-btn v-for="item in schemes" :key="item.value" :value="item.value">{{ item.title }}</v-btn>
+          <v-btn v-for="item in schemes" :key="item" :value="item">{{ t(`appearance.schemes.${item}`) }}</v-btn>
         </v-btn-toggle>
       </section>
       <v-divider />
       <section>
-        <h2 id="contrast-title">Contrast mode</h2>
+        <h2 id="contrast-title">{{ t('appearance.contrast') }}</h2>
         <v-btn-toggle v-model="appearance.contrast" mandatory divided variant="outlined" aria-labelledby="contrast-title">
-          <v-btn v-for="item in contrasts" :key="item.value" :value="item.value">{{ item.title }}</v-btn>
+          <v-btn v-for="item in contrasts" :key="item" :value="item">{{ t(`appearance.contrasts.${item}`) }}</v-btn>
         </v-btn-toggle>
       </section>
     </v-card>

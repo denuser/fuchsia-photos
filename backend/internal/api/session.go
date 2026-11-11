@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -138,6 +139,8 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 		NavigationHiddenOnPhones *bool `json:"navigationHiddenOnPhones"`
 		GridSquares              *bool `json:"gridSquares"`
 		TimelineIncludesShared   *bool `json:"timelineIncludesShared"`
+
+		Language *string `json:"language"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -149,6 +152,10 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+	}
+	if req.Language != nil && !slices.Contains(languages, *req.Language) {
+		writeError(w, http.StatusBadRequest, "unknown language")
+		return
 	}
 	user := currentUser(r)
 	if req.SharedIncludesAlbums != nil {
@@ -211,6 +218,17 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 		user, err = s.Queries.SetUserTimelineIncludesShared(r.Context(), store.SetUserTimelineIncludesSharedParams{
 			ID:                     user.ID,
 			TimelineIncludesShared: *req.TimelineIncludesShared,
+		})
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+	}
+	if req.Language != nil {
+		var err error
+		user, err = s.Queries.SetUserLanguage(r.Context(), store.SetUserLanguageParams{
+			ID:       user.ID,
+			Language: *req.Language,
 		})
 		if err != nil {
 			internalError(w, r, err)

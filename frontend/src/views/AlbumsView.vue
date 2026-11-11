@@ -6,8 +6,10 @@ import AlbumCard from '../components/AlbumCard.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
+import { apiError } from '../i18n/apiErrors'
 import NameDialog from '../components/NameDialog.vue'
 import ShareDialog from '../components/ShareDialog.vue'
+import { t } from '../i18n'
 
 const albums = shallowRef<Album[]>([])
 const loaded = ref(false)
@@ -32,7 +34,7 @@ async function load() {
 async function create(name: string) {
   const { error: failure } = await api.POST('/albums', { body: { name } })
   if (failure) {
-    return failure.error
+    return apiError(failure)
   }
   await load()
   return null
@@ -41,7 +43,7 @@ async function create(name: string) {
 async function rename(name: string) {
   const { error: failure } = await api.PATCH('/albums/{id}', { params: { path: { id: renaming.value!.id } }, body: { name } })
   if (failure) {
-    return failure.error
+    return apiError(failure)
   }
   await load()
   return null
@@ -49,7 +51,7 @@ async function rename(name: string) {
 
 async function remove() {
   const { error: failure } = await api.DELETE('/albums/{id}', { params: { path: { id: deleting.value!.id } } })
-  error.value = failure?.error ?? ''
+  error.value = failure ? apiError(failure) : ''
   await load()
 }
 
@@ -71,9 +73,9 @@ function startDelete(album: Album) {
 
 <template>
   <div class="page">
-    <AppPageHeader title="Albums">
+    <AppPageHeader :title="t('nav.albums')">
       <template #actions>
-        <v-btn color="primary" prepend-icon="fa-plus" text="New album" @click="createOpen = true" />
+        <v-btn color="primary" prepend-icon="fa-plus" :text="t('albums.new')" @click="createOpen = true" />
       </template>
     </AppPageHeader>
     <div class="page-section">
@@ -82,40 +84,45 @@ function startDelete(album: Album) {
       <EmptyState
         v-if="loaded && albums.length === 0"
         icon="fa-book-open"
-        title="No albums yet"
-        text="Create an album here, or select photos in the timeline and add them to a new one."
+        :title="t('albums.none')"
+        :text="t('albums.noneText')"
       >
         <template #actions>
-          <v-btn text="Create an album" color="primary" prepend-icon="fa-plus" @click="createOpen = true" />
+          <v-btn :text="t('albums.create')" color="primary" prepend-icon="fa-plus" @click="createOpen = true" />
         </template>
       </EmptyState>
 
       <div class="albums">
-        <AlbumCard v-for="album in albums" :key="album.id" :album="album" :subtitle="`${album.photoCount} photos`">
+        <AlbumCard v-for="album in albums" :key="album.id" :album="album" :subtitle="t('common.photos', album.photoCount)">
           <template #actions>
-            <v-icon v-if="album.shared" icon="fa-users" size="small" class="mr-1" aria-label="Shared" />
+            <v-icon v-if="album.shared" icon="fa-users" size="small" class="mr-1" :aria-label="t('albums.shared')" />
             <v-menu>
               <template #activator="{ props }">
-                <v-btn v-bind="props" icon="fa-ellipsis-vertical" size="small" variant="text" aria-label="Album actions" @click.prevent />
+                <v-btn v-bind="props" icon="fa-ellipsis-vertical" size="small" variant="text" :aria-label="t('albums.actions')" @click.prevent />
               </template>
               <v-list density="compact">
-                <v-list-item title="Rename" prepend-icon="fa-pen" @click="startRename(album)" />
-                <v-list-item title="Share" prepend-icon="fa-share-nodes" @click="startShare(album)" />
-                <v-list-item title="Delete" prepend-icon="fa-trash-can" @click="startDelete(album)" />
+                <v-list-item :title="t('common.rename')" prepend-icon="fa-pen" @click="startRename(album)" />
+                <v-list-item :title="t('browser.share')" prepend-icon="fa-share-nodes" @click="startShare(album)" />
+                <v-list-item :title="t('common.delete')" prepend-icon="fa-trash-can" @click="startDelete(album)" />
               </v-list>
             </v-menu>
           </template>
         </AlbumCard>
       </div>
 
-      <NameDialog v-model="createOpen" title="New album" label="Name" action="Create" :save="create" />
-      <NameDialog v-model="renameOpen" title="Rename album" label="Name" action="Rename" :initial="renaming?.name" :save="rename" />
+      <NameDialog v-model="createOpen" :title="t('albums.new')" :label="t('common.name')" :action="t('common.create')" :save="create" />
+      <NameDialog
+        v-model="renameOpen"
+        :title="t('albums.rename')"
+        :label="t('common.name')"
+        :action="t('common.rename')"
+        :initial="renaming?.name" :save="rename" />
       <ShareDialog v-model="shareOpen" :album-id="sharing?.id" @done="load" />
       <ConfirmDialog
         v-model="deleteOpen"
-        title="Delete this album?"
-        :text="`${deleting?.name} will be deleted. Its photos stay in your library.`"
-        action="Delete"
+        :title="t('albums.deleteTitle')"
+        :text="t('albums.deleteText', { name: deleting?.name })"
+        :action="t('common.delete')"
         @confirm="remove"
       />
     </div>

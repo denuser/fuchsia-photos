@@ -8,12 +8,13 @@ import { createApp } from 'vue'
 
 import { setUnauthorizedHandler } from './api/client'
 import App from './App.vue'
+import { i18n } from './i18n'
 import { vuetify } from './plugins/vuetify'
 import { router } from './router'
 import { useAuthStore } from './stores/auth'
 import { usePhotosStore } from './stores/photos'
 
-const app = createApp(App).use(createPinia()).use(router).use(vuetify)
+const app = createApp(App).use(createPinia()).use(i18n).use(router).use(vuetify)
 
 setUnauthorizedHandler(() => {
   useAuthStore().clear()

@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, type InjectionKey } from 'vue'
 
 import { API_BASE, notifyUnauthorized, type UploadResult } from '../api/client'
+import { t } from '../i18n'
+import { apiError } from '../i18n/apiErrors'
 import { usePhotosStore } from './photos'
 
 // Opens the file picker of the Upload button in the app bar. App provides it,
@@ -77,7 +79,7 @@ export const useUploadsStore = defineStore('uploads', () => {
           return
         }
         if (!(error instanceof RetryableError) || attempt >= MAX_ATTEMPTS) {
-          const message = error instanceof Error ? error.message : 'Upload failed'
+          const message = error instanceof Error ? error.message : t('uploads.failed')
           failures.value = [...failures.value, { file, error: message }]
           return
         }
@@ -94,7 +96,7 @@ export const useUploadsStore = defineStore('uploads', () => {
     try {
       response = await fetch(`${API_BASE}/photos`, { method: 'POST', body })
     } catch {
-      throw new RetryableError('Network error')
+      throw new RetryableError(t('uploads.network'))
     }
     if (response.ok) {
       return (await response.json()) as UploadResult
@@ -108,9 +110,9 @@ export const useUploadsStore = defineStore('uploads', () => {
 
   async function errorMessage(response: Response) {
     try {
-      return ((await response.json()) as { error: string }).error
+      return apiError(((await response.json()) as { error: string }).error)
     } catch {
-      return `Upload failed with status ${response.status}`
+      return t('uploads.status', { status: response.status })
     }
   }
 

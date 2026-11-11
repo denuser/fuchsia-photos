@@ -8,6 +8,7 @@ import EmptyState from '../components/EmptyState.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
 import { usePhotosStore } from '../stores/photos'
 import { useUsersStore } from '../stores/users'
+import { t } from '../i18n'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,7 +39,7 @@ function chooseOwner(id: number | null) {
 <template>
   <PhotoBrowser mode="admin">
     <template #header>
-      <AppPageHeader title="All photos" description="The photos of every user, for administrators." />
+      <AppPageHeader :title="t('nav.all')" :description="t('allPhotos.description')" />
     </template>
     <template #toolbar>
       <div class="d-flex align-center px-4 px-sm-6 pb-2 ga-2">
@@ -47,8 +48,8 @@ function chooseOwner(id: number | null) {
           :items="users.everyone"
           item-title="login"
           item-value="id"
-          placeholder="Any owner"
-          aria-label="Owner"
+          :placeholder="t('allPhotos.anyOwner')"
+          :aria-label="t('allPhotos.owner')"
           density="compact"
           hide-details
           clearable
@@ -58,7 +59,7 @@ function chooseOwner(id: number | null) {
       </div>
     </template>
     <template #empty>
-      <EmptyState icon="fa-images" title="No photos" />
+      <EmptyState icon="fa-images" :title="t('allPhotos.none')" />
     </template>
   </PhotoBrowser>
 </template>

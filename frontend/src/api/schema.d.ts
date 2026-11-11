@@ -1189,7 +1189,13 @@ export interface components {
             gridSquares: boolean;
             /** @description Whether the timeline shows other users' photos that the user can see next to the user's own. The interface passes it to listPhotos as `withShared`. On by default */
             timelineIncludesShared: boolean;
+            language: components["schemas"]["Language"];
         };
+        /**
+         * @description The interface language. `auto`, the default, follows the browser's language and falls back to English when the interface does not support it
+         * @enum {string}
+         */
+        Language: "auto" | "en" | "ru";
         /**
          * @description A photo detail the viewer can show. `camera` is the make and model, `location` is shown only if an administrator allows it
          * @enum {string}
@@ -1565,6 +1571,7 @@ export interface operations {
                     navigationHiddenOnPhones?: boolean;
                     gridSquares?: boolean;
                     timelineIncludesShared?: boolean;
+                    language?: components["schemas"]["Language"];
                 };
             };
         };

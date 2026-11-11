@@ -1,6 +1,6 @@
 # Improvements
 
-The current list of improvements, in order of priority. All of them are done except the last three, which are planned. Stages 0 to 6 of the [roadmap](../README.md#roadmap) are done too.
+The current list of improvements, in order of priority. All of them are done except 6 and 8, which are planned. Stages 0 to 6 of the [roadmap](../README.md#roadmap) are done too.
 
 ## 1. Administration page
 
@@ -89,18 +89,17 @@ Record the results here: what each step found on the test photos and how long it
 
 ## 7. Interface language
 
-**Status:** planned, not started.
+**Status:** done.
 
-The interface in English and Russian, with the language chosen in the profile. Decisions are in the [README](../README.md#decisions).
+The interface in English and Russian, with the language chosen in the profile. Decisions are in the [README](../README.md#decisions), and how to add a string is in the [development guide](development.md#interface-text).
 
-Plan:
+Done:
 
-1. Choose the translation library with the user before adding it.
-2. Move every string of the interface into English and Russian message files, including page titles, empty states, toast alerts, form hints and the errors the interface shows.
-3. A "Language" field in the profile: Automatic, English, Russian. Automatic is the default and takes the browser's language, falling back to English. The choice is stored with the user, so it applies on every device, and the page applies it right after login.
-4. Vuetify's own texts, dates and numbers follow the chosen language rather than the browser's, including the date filters.
-5. Error messages from the API stay in English: the interface shows its own text for the errors it knows.
-6. Extend `make e2e` to switch the language in the profile and check a translated page.
+- vue-i18n, with the messages in `frontend/src/i18n/en.ts` and `ru.ts`. Every string of the interface moved there, including page titles, empty states, toast alerts, form hints, accessible names and the errors the interface shows. Counts use plural forms, three in Russian.
+- A "Language" field in the profile: Automatic, English, Русский, each language named in itself. Automatic, the default, takes the first of the browser's languages that the interface has, or English. The choice is stored with the user (`language` on `/me`), so it applies on every device, right after login. Before login the browser's language applies.
+- Vuetify's own texts follow the chosen language through its vue-i18n adapter. Dates and numbers do too: the date filters, month titles, the viewer, tables and the shooting details. English keeps the browser's English region, such as en-GB, and is en-US otherwise.
+- API errors stay in English. The interface matches the messages it knows, such as a wrong password or a taken login, and shows its own text; others are shown as the server wrote them. Processing and import errors on the administration and import pages stay as the server wrote them.
+- `make e2e` switches the profile to Russian, checks a translated page after a reload, and switches back.
 
 ## 8. Place names in the viewer
 
@@ -115,4 +114,4 @@ Plan:
 3. The API returns the place with the location, in the language of the request, under the same administrator setting. The interface shows "Town, region, country" with the map link on it, and hides it with the location.
 4. Backend tests: the nearest place, the language fallback, and no place name when locations are hidden.
 
-Until the interface language is done, the names follow the browser's language.
+The user's interface language is stored with the user (improvement 7), so the API can pick the language of a name from it, and from the browser's `Accept-Language` when it is automatic.

@@ -7,6 +7,7 @@ import AppPageHeader from '../components/AppPageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
 import { usePhotosStore } from '../stores/photos'
+import { t } from '../i18n'
 
 const route = useRoute()
 const router = useRouter()
@@ -64,18 +65,18 @@ function clear() {
       <template #header>
         <AppPageHeader
           v-if="similarTo !== undefined"
-          title="Similar photos"
-          description="Photos you can see that look like the chosen one, nearest first."
-          :breadcrumbs="[{ title: 'Search', to: '/search' }]"
+          :title="t('viewer.similar')"
+          :description="t('search.similarDescription')"
+          :breadcrumbs="[{ title: t('nav.search'), to: '/search' }]"
         />
-        <AppPageHeader v-else title="Search" description="Photos you can see that match a description, best first." />
+        <AppPageHeader v-else :title="t('nav.search')" :description="t('search.description')" />
       </template>
       <template #toolbar>
         <form class="search-bar px-4 px-sm-6 pb-2" role="search" @submit.prevent="submit">
           <v-text-field
             v-model="text"
-            placeholder="Describe a photo, such as a dog on the beach"
-            aria-label="Search by description"
+            :placeholder="t('search.placeholder')"
+            :aria-label="t('search.byDescription')"
             prepend-inner-icon="fa-magnifying-glass"
             density="compact"
             hide-details
@@ -90,27 +91,27 @@ function clear() {
           variant="tonal"
           density="compact"
           class="mx-4 mx-sm-6 mb-2"
-          title="Search by description is unavailable while the ML service is off"
+          :title="t('search.unavailableAlert')"
         />
       </template>
       <template #empty>
         <EmptyState
           v-if="similarTo !== undefined"
           icon="fa-clone"
-          title="No similar photos yet"
-          text="Photos are compared once the ML service has processed them."
+          :title="t('search.noSimilar')"
+          :text="t('search.noSimilarText')"
         />
-        <EmptyState v-else icon="fa-magnifying-glass" title="Nothing found" text="Try other words." />
+        <EmptyState v-else icon="fa-magnifying-glass" :title="t('search.nothing')" :text="t('search.nothingText')" />
       </template>
     </PhotoBrowser>
 
     <div v-else class="page">
-      <AppPageHeader title="Search" description="Photos you can see that match a description, best first." />
+      <AppPageHeader :title="t('nav.search')" :description="t('search.description')" />
       <form class="search-bar px-4 px-sm-6 pb-2" role="search" @submit.prevent="submit">
         <v-text-field
           v-model="text"
-          placeholder="Describe a photo, such as a dog on the beach"
-          aria-label="Search by description"
+          :placeholder="t('search.placeholder')"
+          :aria-label="t('search.byDescription')"
           prepend-inner-icon="fa-magnifying-glass"
           density="compact"
           hide-details
@@ -122,14 +123,14 @@ function clear() {
       <EmptyState
         v-if="available"
         icon="fa-magnifying-glass"
-        title="Search by description"
-        text="Describe what the photos show, in any language, and press Enter."
+        :title="t('search.byDescription')"
+        :text="t('search.hint')"
       />
       <EmptyState
         v-else
         icon="fa-magnifying-glass"
-        title="Search by description is unavailable"
-        text="It works while the ML service is running. Similar photos in the viewer still work."
+        :title="t('search.unavailable')"
+        :text="t('search.unavailableText')"
       />
     </div>
   </div>

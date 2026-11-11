@@ -322,6 +322,33 @@ func TestViewerHiddenFields(t *testing.T) {
 	}
 }
 
+func TestLanguage(t *testing.T) {
+	e := setup(t)
+	e.addUser("anna", auth.RoleUser)
+	e.addUser("boris", auth.RoleUser)
+	anna, boris := e.loggedIn("anna"), e.loggedIn("boris")
+
+	if got := decode[userJSON](t, anna.get("/api/v1/me")).Language; got != "auto" {
+		t.Fatalf("language = %q, want auto by default", got)
+	}
+	res := anna.json(http.MethodPatch, "/api/v1/me", map[string]string{"language": "ru"})
+	wantStatus(t, res, http.StatusOK)
+	if got := decode[userJSON](t, res).Language; got != "ru" {
+		t.Errorf("the response shows language %q, want ru", got)
+	}
+	if got := decode[userJSON](t, boris.get("/api/v1/me")).Language; got != "auto" {
+		t.Errorf("the setting changed another user's language to %q", got)
+	}
+
+	// An unknown language is refused, and nothing else in the request is applied.
+	res = anna.json(http.MethodPatch, "/api/v1/me", map[string]any{"language": "de", "gridSquares": true})
+	wantStatus(t, res, http.StatusBadRequest)
+	me := decode[userJSON](t, anna.get("/api/v1/me"))
+	if me.Language != "ru" || me.GridSquares {
+		t.Errorf("an invalid request changed the settings: language %q, grid squares %v", me.Language, me.GridSquares)
+	}
+}
+
 func TestChangePassword(t *testing.T) {
 	e := setup(t)
 	e.addUser("anna", auth.RoleUser)

@@ -5,8 +5,10 @@ import { api, type Tag } from '../api/client'
 import AppPageHeader from '../components/AppPageHeader.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
+import { apiError } from '../i18n/apiErrors'
 import NameDialog from '../components/NameDialog.vue'
 import { useTagsStore } from '../stores/tags'
+import { t } from '../i18n'
 
 const tags = useTagsStore()
 
@@ -25,7 +27,7 @@ onMounted(async () => {
 async function rename(name: string) {
   const { error: failure } = await api.PATCH('/tags/{id}', { params: { path: { id: renaming.value!.id } }, body: { name } })
   if (failure) {
-    return failure.error
+    return apiError(failure)
   }
   await tags.load()
   return null
@@ -33,7 +35,7 @@ async function rename(name: string) {
 
 async function remove() {
   const { error: failure } = await api.DELETE('/tags/{id}', { params: { path: { id: deleting.value!.id } } })
-  error.value = failure?.error ?? ''
+  error.value = failure ? apiError(failure) : ''
   await tags.load()
 }
 
@@ -50,21 +52,21 @@ function startDelete(tag: Tag) {
 
 <template>
   <div class="page">
-    <AppPageHeader title="Tags" description="Open a tag to see its photos in the timeline." />
+    <AppPageHeader :title="t('nav.tags')" :description="t('tags.description')" />
     <div class="page-section">
       <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
-      <EmptyState v-if="loaded && tags.tags.length === 0" icon="fa-tags" title="No tags yet" text="Select photos in the timeline to tag them.">
+      <EmptyState v-if="loaded && tags.tags.length === 0" icon="fa-tags" :title="t('tags.none')" :text="t('tags.noneText')">
         <template #actions>
-          <v-btn text="Open the timeline" color="primary" to="/" />
+          <v-btn :text="t('common.openTimeline')" color="primary" to="/" />
         </template>
       </EmptyState>
 
       <v-table v-else-if="loaded">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Photos</th>
+            <th>{{ t('common.name') }}</th>
+            <th>{{ t('nav.photos') }}</th>
             <th />
           </tr>
         </thead>
@@ -75,19 +77,24 @@ function startDelete(tag: Tag) {
             </td>
             <td>{{ tag.photoCount }}</td>
             <td class="text-right">
-              <v-btn icon="fa-pen" size="small" variant="text" :aria-label="`Rename ${tag.name}`" @click="startRename(tag)" />
-              <v-btn icon="fa-trash-can" size="small" variant="text" :aria-label="`Delete ${tag.name}`" @click="startDelete(tag)" />
+              <v-btn icon="fa-pen" size="small" variant="text" :aria-label="t('common.renameNamed', { name: tag.name })" @click="startRename(tag)" />
+              <v-btn icon="fa-trash-can" size="small" variant="text" :aria-label="t('common.deleteNamed', { name: tag.name })" @click="startDelete(tag)" />
             </td>
           </tr>
         </tbody>
       </v-table>
 
-      <NameDialog v-model="renameOpen" title="Rename tag" label="Name" action="Rename" :initial="renaming?.name" :save="rename" />
+      <NameDialog
+        v-model="renameOpen"
+        :title="t('tags.rename')"
+        :label="t('common.name')"
+        :action="t('common.rename')"
+        :initial="renaming?.name" :save="rename" />
       <ConfirmDialog
         v-model="deleteOpen"
-        title="Delete this tag?"
-        :text="`${deleting?.name} will be removed from all photos. The photos stay in your library.`"
-        action="Delete"
+        :title="t('tags.deleteTitle')"
+        :text="t('tags.deleteText', { name: deleting?.name })"
+        :action="t('common.delete')"
         @confirm="remove"
       />
     </div>

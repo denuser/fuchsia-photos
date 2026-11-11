@@ -1,4 +1,5 @@
 import type { Photo } from '../api/client'
+import { intlLocale } from '../i18n'
 import type { Section } from '../stores/photos'
 import { justify, squareColumns, squares, type Row } from './justify'
 
@@ -121,6 +122,8 @@ export function visibleSections(layout: TimelineLayout, top: number, bottom: num
   return [low, end]
 }
 
+// Such as "November 2026" or "Ноябрь 2026 г.": Russian writes the month in lower case, which a title capitalizes.
 export function monthTitle(section: Section) {
-  return section.month?.start.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) ?? ''
+  const title = section.month?.start.toLocaleDateString(intlLocale.value, { month: 'long', year: 'numeric' }) ?? ''
+  return title.charAt(0).toUpperCase() + title.slice(1)
 }

@@ -1,21 +1,23 @@
 <script setup lang="ts">
-import { onMounted, ref, shallowRef } from 'vue'
+import { computed, onMounted, ref, shallowRef } from 'vue'
 
 import { api, type Role, type User } from '../api/client'
+import { apiError } from '../i18n/apiErrors'
 import { useAuthStore } from '../stores/auth'
 import AppDialog from '../components/AppDialog.vue'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
+import { t } from '../i18n'
 
 const auth = useAuthStore()
 
 const users = shallowRef<User[]>([])
 const error = ref('')
 
-const roles: { title: string; value: Role }[] = [
-  { title: 'User', value: 'user' },
-  { title: 'Administrator', value: 'admin' },
-]
+const roles = computed<{ title: string; value: Role }[]>(() => [
+  { title: t('roles.user'), value: 'user' },
+  { title: t('roles.admin'), value: 'admin' },
+])
 
 const createOpen = ref(false)
 const form = ref<{ login: string; password: string; role: Role }>({ login: '', password: '', role: 'user' })
@@ -41,7 +43,7 @@ function openCreate() {
 async function create() {
   const { error: failure } = await api.POST('/users', { body: form.value })
   if (failure) {
-    formError.value = failure.error
+    formError.value = apiError(failure)
     return
   }
   createOpen.value = false
@@ -50,7 +52,7 @@ async function create() {
 
 async function update(user: User, body: { role?: Role; disabled?: boolean }) {
   const { error: failure } = await api.PATCH('/users/{id}', { params: { path: { id: user.id } }, body })
-  error.value = failure?.error ?? ''
+  error.value = failure ? apiError(failure) : ''
   await load()
 }
 
@@ -66,7 +68,7 @@ async function savePassword() {
     body: { password: newPassword.value },
   })
   if (failure) {
-    passwordError.value = failure.error
+    passwordError.value = apiError(failure)
     return
   }
   passwordFor.value = null
@@ -75,9 +77,9 @@ async function savePassword() {
 
 <template>
   <div class="page">
-    <AppPageHeader title="Users">
+    <AppPageHeader :title="t('users.title')">
       <template #actions>
-        <v-btn color="primary" prepend-icon="fa-user-plus" text="Add user" @click="openCreate" />
+        <v-btn color="primary" prepend-icon="fa-user-plus" :text="t('users.add')" @click="openCreate" />
       </template>
     </AppPageHeader>
     <div class="page-section users">
@@ -87,10 +89,10 @@ async function savePassword() {
       <v-table>
         <thead>
           <tr>
-            <th>Login</th>
-            <th>Role</th>
-            <th>Active</th>
-            <th aria-label="Actions" />
+            <th>{{ t('users.login') }}</th>
+            <th>{{ t('users.role') }}</th>
+            <th>{{ t('users.active') }}</th>
+            <th :aria-label="t('users.actions')" />
           </tr>
         </thead>
         <tbody>
@@ -104,7 +106,7 @@ async function savePassword() {
                 density="compact"
                 variant="plain"
                 hide-details
-                :aria-label="`Role of ${user.login}`"
+                :aria-label="t('users.roleOf', { login: user.login })"
                 @update:model-value="update(user, { role: $event })"
               />
             </td>
@@ -115,44 +117,44 @@ async function savePassword() {
                 color="primary"
                 density="compact"
                 hide-details
-                :aria-label="`${user.login} is active`"
+                :aria-label="t('users.isActive', { login: user.login })"
                 @update:model-value="update(user, { disabled: !$event })"
               />
             </td>
             <td class="text-right">
-              <v-btn variant="text" size="small" text="Reset password" @click="openPassword(user)" />
+              <v-btn variant="text" size="small" :text="t('users.resetPassword')" @click="openPassword(user)" />
             </td>
           </tr>
         </tbody>
       </v-table>
 
-      <AppDialog v-model="createOpen" title="Add user" action="Add user" :error="formError" @submit="create">
-        <AppFormGroup v-slot="field" label="Login" required>
+      <AppDialog v-model="createOpen" :title="t('users.add')" :action="t('users.add')" :error="formError" @submit="create">
+        <AppFormGroup v-slot="field" :label="t('users.login')" required>
           <v-text-field v-bind="field" v-model="form.login" autocomplete="off" />
         </AppFormGroup>
-        <AppFormGroup v-slot="field" label="Password" required>
+        <AppFormGroup v-slot="field" :label="t('login.password')" required>
           <v-text-field v-bind="field" v-model="form.password" type="password" autocomplete="new-password" />
         </AppFormGroup>
-        <AppFormGroup v-slot="field" label="Role" required>
+        <AppFormGroup v-slot="field" :label="t('users.role')" required>
           <v-select v-bind="field" v-model="form.role" variant="outlined" :items="roles" />
         </AppFormGroup>
       </AppDialog>
 
       <AppDialog
         :model-value="passwordFor !== null"
-        :title="`Reset password of ${passwordFor?.login}`"
-        action="Reset password"
+        :title="t('users.resetPasswordOf', { login: passwordFor?.login })"
+        :action="t('users.resetPassword')"
         :error="passwordError"
         @update:model-value="passwordFor = null"
         @submit="savePassword"
       >
-        <AppFormGroup v-slot="field" label="New password" required>
+        <AppFormGroup v-slot="field" :label="t('changePassword.new')" required>
           <v-text-field
             v-bind="field"
             v-model="newPassword"
             type="password"
             autocomplete="new-password"
-            hint="This user will be logged out everywhere."
+            :hint="t('users.resetHint')"
           />
         </AppFormGroup>
       </AppDialog>

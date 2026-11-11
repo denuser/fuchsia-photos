@@ -6,6 +6,7 @@
 // Without an action the footer has only the cancel button.
 import { computed } from 'vue'
 import { VForm } from 'vuetify/components'
+import { t } from '../i18n'
 
 const open = defineModel<boolean>({ required: true })
 
@@ -21,7 +22,7 @@ const props = withDefaults(
     form?: boolean
     maxWidth?: number | string
   }>(),
-  { action: undefined, cancel: 'Cancel', error: '', form: true, maxWidth: 420 },
+  { action: undefined, cancel: undefined, error: '', form: true, maxWidth: 420 },
 )
 const emit = defineEmits<{ submit: [] }>()
 
@@ -53,7 +54,7 @@ function onClick() {
             :disabled="disabled"
             @click="onClick"
           />
-          <v-btn variant="text" color="primary" :text="cancel" @click="open = false" />
+          <v-btn variant="text" color="primary" :text="cancel ?? t('common.cancel')" @click="open = false" />
         </v-card-actions>
       </component>
     </v-card>

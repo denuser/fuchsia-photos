@@ -1,5 +1,8 @@
 import { createVuetify, type ThemeDefinition } from 'vuetify'
+import { createVueI18nAdapter } from 'vuetify/locale/adapters/vue-i18n'
+import { useI18n } from 'vue-i18n'
 
+import { i18n, intlLocales } from '../i18n'
 import { initialThemeName } from '../stores/appearance'
 import { aliases, fontAwesome } from './icons'
 
@@ -118,9 +121,12 @@ export const vuetify = createVuetify({
     defaultTheme: initialThemeName(),
     themes: { light, dark, 'light-hc': lightHighContrast, 'dark-hc': darkHighContrast },
   },
-  // Dates are typed, shown and laid out in calendars the way the browser's
-  // language writes them, while Vuetify's own words stay English.
-  date: { locale: { en: navigator.language } },
+  // Vuetify's own texts and its dates follow the interface language. Date
+  // fields and calendars take the input mask, month names and first weekday
+  // from the locale: English keeps the browser's region when it has one.
+  // The adapter's type takes any locale name, while ours knows only en and ru.
+  locale: { adapter: createVueI18nAdapter({ i18n: i18n as unknown as Parameters<typeof createVueI18nAdapter>[0]['i18n'], useI18n }) },
+  date: { locale: intlLocales },
   icons: { defaultSet: 'fa', aliases, sets: { fa: fontAwesome } },
   defaults: {
     VAppBar: { color: 'background', flat: true },

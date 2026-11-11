@@ -34,6 +34,8 @@ type userJSON struct {
 	GridSquares bool `json:"gridSquares"`
 	// TimelineIncludesShared adds other users' photos the user can see to the timeline.
 	TimelineIncludesShared bool `json:"timelineIncludesShared"`
+	// Language is the interface language: auto, en or ru.
+	Language string `json:"language"`
 }
 
 type userRefJSON struct {
@@ -59,8 +61,12 @@ func toUserJSON(u store.User) userJSON {
 		NavigationHiddenOnPhones: u.NavigationHiddenOnPhones,
 		GridSquares:              u.GridSquares,
 		TimelineIncludesShared:   u.TimelineIncludesShared,
+		Language:                 u.Language,
 	}
 }
+
+// languages are the interface languages a user can choose; auto follows the browser.
+var languages = []string{"auto", "en", "ru"}
 
 // viewerFields are the photo details the viewer can show, in the order it shows them.
 var viewerFields = []string{"camera", "lens", "focalLength", "aperture", "exposureTime", "iso", "exposureCompensation", "flash", "location"}

@@ -2,15 +2,9 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 
 import { API_BASE, type QueueStats } from '../api/client'
+import { formatDateTime, t } from '../i18n'
 
-const kindNames: Record<string, string> = {
-  process_photo: 'Photo processing',
-  render_grid: 'Grid previews',
-  render_previews: 'Previews from originals',
-  folder_scan: 'Folder scans',
-  embed_photos: 'Machine learning',
-  cleanup: 'Cleanup',
-}
+const kinds = ['process_photo', 'render_grid', 'render_previews', 'folder_scan', 'embed_photos', 'cleanup'] as const
 
 const stats = ref<QueueStats | null>(null)
 // Set while the connection is down: "retrying" while the browser reconnects,
@@ -19,11 +13,7 @@ const lost = ref<'retrying' | 'closed' | null>(null)
 let events: EventSource | null = null
 
 function kindName(kind: string) {
-  return kindNames[kind] ?? kind
-}
-
-function when(at: string) {
-  return new Date(at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+  return (kinds as readonly string[]).includes(kind) ? t(`queue.kinds.${kind as (typeof kinds)[number]}`) : kind
 }
 
 // The server sends the queue at once and then whenever it changes. The browser
@@ -47,29 +37,29 @@ onUnmounted(() => {
 
 <template>
   <section class="queue" data-testid="queue">
-    <h2 class="mb-2">Queue</h2>
-    <p class="text-medium-emphasis mb-4">Background jobs, updated as they change. Finished jobs are kept for a day.</p>
+    <h2 class="mb-2">{{ t('queue.title') }}</h2>
+    <p class="text-medium-emphasis mb-4">{{ t('queue.description') }}</p>
 
     <v-alert
       v-if="lost"
       type="warning"
       density="compact"
       class="mb-4"
-      :title="lost === 'closed' ? 'Lost connection to the server. Reload the page.' : 'Lost connection to the server, reconnecting'"
+      :title="lost === 'closed' ? t('queue.closed') : t('queue.retrying')"
     />
 
     <template v-if="stats">
-      <p v-if="stats.kinds.length === 0" class="mb-6">No jobs in the last day.</p>
+      <p v-if="stats.kinds.length === 0" class="mb-6">{{ t('queue.empty') }}</p>
       <v-table v-else class="mb-6">
         <thead>
           <tr>
-            <th>Job</th>
-            <th class="text-end">Waiting</th>
-            <th class="text-end">Running</th>
-            <th class="text-end">Retrying</th>
-            <th class="text-end">Done, 1 h</th>
-            <th class="text-end">Done, 24 h</th>
-            <th class="text-end">Failed, 24 h</th>
+            <th>{{ t('queue.job') }}</th>
+            <th class="text-end">{{ t('queue.waiting') }}</th>
+            <th class="text-end">{{ t('queue.running') }}</th>
+            <th class="text-end">{{ t('queue.retryingJobs') }}</th>
+            <th class="text-end">{{ t('queue.doneHour') }}</th>
+            <th class="text-end">{{ t('queue.doneDay') }}</th>
+            <th class="text-end">{{ t('queue.failedDay') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -86,26 +76,26 @@ onUnmounted(() => {
       </v-table>
 
       <template v-if="stats.errors.length">
-        <h3 class="mb-2">Latest errors</h3>
+        <h3 class="mb-2">{{ t('queue.errors') }}</h3>
         <v-table class="mb-6">
           <thead>
             <tr>
-              <th>Time</th>
-              <th>Job</th>
-              <th>Attempt</th>
-              <th>Error</th>
+              <th>{{ t('queue.time') }}</th>
+              <th>{{ t('queue.job') }}</th>
+              <th>{{ t('queue.attempt') }}</th>
+              <th>{{ t('queue.error') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in stats.errors" :key="item.jobId">
-              <td class="text-no-wrap">{{ when(item.at) }}</td>
+              <td class="text-no-wrap">{{ formatDateTime(item.at) }}</td>
               <td>
                 {{ kindName(item.kind) }}
-                <div v-if="item.photoId" class="text-medium-emphasis">Photo {{ item.photoId }}</div>
+                <div v-if="item.photoId" class="text-medium-emphasis">{{ t('queue.photo', { id: item.photoId }) }}</div>
               </td>
               <td class="text-no-wrap">
-                {{ item.attempt }} of {{ item.maxAttempts }}
-                <div class="text-medium-emphasis">{{ item.state === 'retryable' ? 'will retry' : 'gave up' }}</div>
+                {{ t('queue.attemptOf', { attempt: item.attempt, max: item.maxAttempts }) }}
+                <div class="text-medium-emphasis">{{ item.state === 'retryable' ? t('queue.willRetry') : t('queue.gaveUp') }}</div>
               </td>
               <td class="error-text">{{ item.error }}</td>
             </tr>

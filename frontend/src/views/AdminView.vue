@@ -2,11 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { api, type MetadataSettings, type PreviewSettings } from '../api/client'
+import { apiError } from '../i18n/apiErrors'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
 import MLStatus from '../components/MLStatus.vue'
 import QueueStatus from '../components/QueueStatus.vue'
 import { useNoticesStore } from '../stores/notices'
+import { t } from '../i18n'
 
 const formats = [
   { title: 'WebP', value: 'webp' },
@@ -23,7 +25,7 @@ const saving = ref(false)
 function range(min: number, max: number) {
   return (value: unknown) => {
     const n = Number(value)
-    return (value !== '' && Number.isInteger(n) && n >= min && n <= max) || `Enter a whole number from ${min} to ${max}`
+    return (value !== '' && Number.isInteger(n) && n >= min && n <= max) || t('admin.range', { min, max })
   }
 }
 
@@ -53,7 +55,7 @@ onMounted(async () => {
   const [previews, meta] = await Promise.all([api.GET('/settings/previews'), api.GET('/settings/metadata')])
   const failure = previews.error ?? meta.error
   if (failure) {
-    error.value = failure.error
+    error.value = apiError(failure)
     return
   }
   settings.value = previews.data!
@@ -67,7 +69,8 @@ async function save() {
     api.PUT('/settings/metadata', { body: metadata.value! }),
   ])
   saving.value = false
-  error.value = (previews.error ?? meta.error)?.error ?? ''
+  const failure = previews.error ?? meta.error
+  error.value = failure ? apiError(failure) : ''
   if (previews.data) {
     settings.value = previews.data
   }
@@ -75,66 +78,66 @@ async function save() {
     metadata.value = meta.data
   }
   if (previews.data && meta.data) {
-    notices.notify('Settings saved')
+    notices.notify(t('admin.saved'))
   }
 }
 </script>
 
 <template>
   <div class="page">
-    <AppPageHeader title="Administration" description="How photos are processed, which of their details users see, and the background jobs." />
+    <AppPageHeader :title="t('admin.title')" :description="t('admin.description')" />
     <div class="page-section">
 
       <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
       <v-form v-if="settings && metadata" class="settings" @submit.prevent="save">
-        <h2 class="mb-2">Previews</h2>
+        <h2 class="mb-2">{{ t('admin.previews') }}</h2>
         <v-alert
           type="info"
           density="compact"
           class="mb-6"
-          title="These settings apply to new photos"
-          text="Photos that are already processed keep their previews."
+          :title="t('admin.newPhotos')"
+          :text="t('admin.newPhotosText')"
         />
 
-        <AppFormGroup v-slot="field" label="Preview format" required>
+        <AppFormGroup v-slot="field" :label="t('admin.format')" required>
           <v-select v-bind="field" v-model="settings.format" variant="outlined" :items="formats" density="compact" />
         </AppFormGroup>
 
         <template v-if="settings.format === 'webp'">
-          <AppFormGroup v-slot="field" label="WebP quality" required>
+          <AppFormGroup v-slot="field" :label="t('admin.webpQuality')" required>
             <v-text-field
               v-bind="field"
               v-model.number="settings.webpQuality"
               :rules="rules.quality"
               type="number"
-              hint="From 1 to 100. Higher looks better and takes more space."
+              :hint="t('admin.qualityHint')"
               density="compact"
             />
           </AppFormGroup>
-          <AppFormGroup v-slot="field" label="WebP compression effort" required>
+          <AppFormGroup v-slot="field" :label="t('admin.webpEffort')" required>
             <v-text-field
               v-bind="field"
               v-model.number="settings.webpEffort"
               :rules="rules.effort"
               type="number"
-              hint="From 0 to 6. Higher makes smaller files, but takes longer."
+              :hint="t('admin.effortHint')"
               density="compact"
             />
           </AppFormGroup>
         </template>
-        <AppFormGroup v-else v-slot="field" label="JPEG quality" required>
+        <AppFormGroup v-else v-slot="field" :label="t('admin.jpegQuality')" required>
           <v-text-field
             v-bind="field"
             v-model.number="settings.jpegQuality"
             :rules="rules.quality"
             type="number"
-            hint="From 1 to 100. Higher looks better and takes more space."
+            :hint="t('admin.qualityHint')"
             density="compact"
           />
         </AppFormGroup>
 
-        <AppFormGroup v-slot="field" label="Grid preview size" required>
+        <AppFormGroup v-slot="field" :label="t('admin.gridEdge')" required>
           <v-text-field
             v-bind="field"
             v-model.number="settings.gridEdge"
@@ -142,35 +145,35 @@ async function save() {
             data-testid="grid-edge"
             type="number"
             suffix="px"
-            hint="Shortest side, from 200 to 800 pixels."
+            :hint="t('admin.gridEdgeHint')"
             density="compact"
           />
         </AppFormGroup>
-        <AppFormGroup v-slot="field" label="Viewer preview size" required>
+        <AppFormGroup v-slot="field" :label="t('admin.viewerEdge')" required>
           <v-text-field
             v-bind="field"
             v-model.number="settings.viewerEdge"
             :rules="rules.viewerEdge"
             type="number"
             suffix="px"
-            hint="Longest side, from 1024 to 4096 pixels."
+            :hint="t('admin.viewerEdgeHint')"
             density="compact"
           />
         </AppFormGroup>
 
-        <h2 class="mb-2">Photo details</h2>
+        <h2 class="mb-2">{{ t('profile.details') }}</h2>
         <v-switch
           v-model="metadata.showLocation"
           data-testid="show-location"
-          label="Show where photos were taken"
-          hint="Shows the GPS location in the viewer to everyone who can see the photo, including users it is shared with. Downloaded originals always keep it."
+          :label="t('admin.showLocation')"
+          :hint="t('admin.showLocationHint')"
           persistent-hint
           color="primary"
           density="compact"
           class="mb-4"
         />
 
-        <v-btn type="submit" color="primary" text="Save" :disabled="!valid" :loading="saving" />
+        <v-btn type="submit" color="primary" :text="t('common.save')" :disabled="!valid" :loading="saving" />
       </v-form>
 
       <MLStatus class="mt-10" />
