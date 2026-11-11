@@ -1,7 +1,11 @@
 package metadata
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +44,7 @@ func TestFromFields(t *testing.T) {
 		"Model":            "Camera\x00",
 		"DateTimeOriginal": "2024:06:01 12:30:45",
 		"List":             []any{"a\x00"},
-	})
+	}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,6 +63,78 @@ func TestFromFields(t *testing.T) {
 	}
 	if got.TakenAt == nil {
 		t.Error("TakenAt is not set")
+	}
+}
+
+func TestVideoDates(t *testing.T) {
+	tests := []struct {
+		fields map[string]any
+		want   string
+	}{
+		// An iPhone: CreationDate has the offset, CreateDate is UTC.
+		{map[string]any{"CreationDate": "2024:05:01 12:00:00+02:00", "CreateDate": "2024:05:01 10:00:00"}, "2024-05-01T10:00:00Z"},
+		// Most Android phones write only CreateDate, in UTC.
+		{map[string]any{"CreateDate": "2024:06:01 08:00:00"}, "2024-06-01T08:00:00Z"},
+		{map[string]any{"CreateDate": "0000:00:00 00:00:00"}, ""},
+	}
+	for _, tt := range tests {
+		got, err := fromFields(tt.fields, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch {
+		case tt.want == "" && got.TakenAt != nil:
+			t.Errorf("%v: TakenAt = %v, want none", tt.fields, got.TakenAt)
+		case tt.want != "" && (got.TakenAt == nil || got.TakenAt.UTC().Format(time.RFC3339) != tt.want):
+			t.Errorf("%v: TakenAt = %v, want %s", tt.fields, got.TakenAt, tt.want)
+		}
+	}
+}
+
+func TestMotionTag(t *testing.T) {
+	for _, tag := range motionTags {
+		got, err := fromFields(map[string]any{tag: "(Binary data 2860 bytes, use -b option to extract)"}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.MotionTag != tag {
+			t.Errorf("MotionTag = %q, want %q", got.MotionTag, tag)
+		}
+	}
+	if got, _ := fromFields(map[string]any{"Model": "x"}, false); got.MotionTag != "" {
+		t.Errorf("a plain photo has motion tag %q", got.MotionTag)
+	}
+}
+
+// The fixture follows Google's format, made by media/testdata/generate.sh.
+func TestExtractMotion(t *testing.T) {
+	reader, err := NewReader()
+	if err != nil {
+		t.Skip("exiftool is not installed:", err)
+	}
+	defer reader.Close()
+	path := filepath.Join("..", "media", "testdata", "motion.jpg")
+	meta, err := reader.Read(path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.MotionTag != "MotionPhotoVideo" {
+		t.Fatalf("MotionTag = %q", meta.MotionTag)
+	}
+	video, err := ExtractMotion(context.Background(), path, meta.MotionTag)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasSuffix(data, video) || string(video[4:8]) != "ftyp" {
+		t.Error("the extracted video is not the end of the file")
+	}
+
+	if _, err := ExtractMotion(context.Background(), filepath.Join("..", "media", "testdata", "landscape.jpg"), meta.MotionTag); err == nil {
+		t.Error("a photo without motion gave a video")
 	}
 }
 

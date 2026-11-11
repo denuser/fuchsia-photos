@@ -231,8 +231,12 @@ func TestUpload(t *testing.T) {
 
 	wantStatus(t, anna.put("/webdav/missing/a.jpg", "landscape.jpg"), http.StatusConflict)
 	wantStatus(t, anna.put("/webdav/DCIM", "landscape.jpg"), http.StatusMethodNotAllowed)
-	wantStatus(t, anna.do(http.MethodPut, "/webdav/DCIM/clip.mov", []byte("not a photo at all"), nil), http.StatusUnsupportedMediaType)
-	wantStatus(t, anna.propfind("/webdav/DCIM/clip.mov", "0"), http.StatusNotFound)
+	wantStatus(t, anna.do(http.MethodPut, "/webdav/DCIM/notes.txt", []byte("not a photo at all"), nil), http.StatusUnsupportedMediaType)
+	wantStatus(t, anna.propfind("/webdav/DCIM/notes.txt", "0"), http.StatusNotFound)
+	wantStatus(t, anna.put("/webdav/DCIM/clip.mov", "video.mov"), http.StatusCreated)
+	if got := e.photoCount(anna.user.ID); got != 2 {
+		t.Errorf("photos = %d, want 2 with the video", got)
+	}
 	wantStatus(t, anna.do("COPY", "/webdav/DCIM/copy.jpg", nil, map[string]string{"Destination": "/webdav/DCIM/b.jpg"}), http.StatusMethodNotAllowed)
 }
 

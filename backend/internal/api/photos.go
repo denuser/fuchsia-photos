@@ -24,7 +24,9 @@ import (
 )
 
 const (
-	maxUploadBytes   = 512 << 20
+	// The largest video, with room for the multipart framing around it.
+	// Ingest holds each kind of file to its own limit.
+	maxUploadBytes   = ingest.MaxVideoBytes + 1<<20
 	defaultPageSize  = 200
 	maxPageSize      = 500
 	maxBulkPhotos    = 500
@@ -49,6 +51,10 @@ type photoJSON struct {
 	DeletedAt *time.Time `json:"deletedAt"`
 	// Previews are cached for a long time, so their address carries it.
 	PreviewVersion int32 `json:"previewVersion"`
+	// The length of a video in seconds, null for photos.
+	Duration *float64 `json:"duration"`
+	// Whether a motion photo has a video to play.
+	HasMotion bool `json:"hasMotion"`
 
 	Camera   *metadata.Camera   `json:"camera"`
 	Location *metadata.Location `json:"location"`
@@ -83,6 +89,8 @@ func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 		Camera:         camera,
 		PreviewVersion: p.PreviewVersion,
 		Location:       location,
+		Duration:       p.Duration,
+		HasMotion:      p.HasMotion,
 	}
 }
 
@@ -526,8 +534,8 @@ func uploadError(w http.ResponseWriter, r *http.Request, err error) {
 	var tooBig *http.MaxBytesError
 	switch {
 	case errors.Is(err, ingest.ErrUnsupported):
-		writeError(w, http.StatusUnsupportedMediaType, "only JPEG, PNG, WebP and HEIC photos are supported")
-	case errors.As(err, &tooBig):
+		writeError(w, http.StatusUnsupportedMediaType, ingest.ErrUnsupportedMessage)
+	case errors.Is(err, ingest.ErrTooLarge), errors.As(err, &tooBig):
 		writeError(w, http.StatusRequestEntityTooLarge, "the file is too large")
 	default:
 		internalError(w, r, err)
@@ -601,6 +609,39 @@ func (s *server) getOriginal(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": photo.OriginalName}))
 	s.serveFile(w, r, s.Layout.Original(photo.OwnerID, photo.Sha256, photo.Mime))
+}
+
+// getVideo serves the original of a video for playback, as an MP4. QuickTime
+// is close enough to MP4 for browsers, and some refuse to play a file sent as
+// video/quicktime.
+func (s *server) getVideo(w http.ResponseWriter, r *http.Request) {
+	photo, ok := s.visiblePhoto(w, r)
+	if !ok {
+		return
+	}
+	if !storage.IsVideo(photo.Mime) {
+		writeError(w, http.StatusNotFound, "not a video")
+		return
+	}
+	w.Header().Set("Content-Type", "video/mp4")
+	w.Header().Set("Cache-Control", "private, no-cache")
+	s.serveFile(w, r, s.Layout.Original(photo.OwnerID, photo.Sha256, photo.Mime))
+}
+
+// getMotion serves the video of a motion photo. Like a preview, it is made
+// again only with the previews, so its address carries their version.
+func (s *server) getMotion(w http.ResponseWriter, r *http.Request) {
+	photo, ok := s.visiblePhoto(w, r)
+	if !ok {
+		return
+	}
+	if photo.Status != "ready" || !photo.HasMotion {
+		writeError(w, http.StatusNotFound, "the photo has no motion")
+		return
+	}
+	w.Header().Set("Cache-Control", previewCacheRule)
+	w.Header().Set("Content-Type", "video/mp4")
+	s.serveFile(w, r, s.Layout.Motion(photo.ID))
 }
 
 func (s *server) serveFile(w http.ResponseWriter, r *http.Request, path string) {

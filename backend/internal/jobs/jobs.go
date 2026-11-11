@@ -32,7 +32,7 @@ const (
 	tempFileMaxAge = 24 * time.Hour
 )
 
-// ProcessPhotoArgs queues the processing of an ingested photo.
+// ProcessPhotoArgs queues the processing of an ingested photo or video.
 type ProcessPhotoArgs struct {
 	PhotoID int64 `json:"photo_id"`
 }
@@ -82,35 +82,52 @@ func (w *processPhotoWorker) Work(ctx context.Context, job *river.Job[ProcessPho
 
 func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) error {
 	path := w.layout.Original(photo.OwnerID, photo.Sha256, photo.Mime)
+	video := storage.IsVideo(photo.Mime)
 
-	meta, err := w.metadata.Read(path)
+	meta, err := w.metadata.Read(path, video)
 	if err != nil {
 		// The photo is still usable without its tags.
 		slog.Warn("read metadata", "photo", photo.ID, "error", err)
 		meta = metadata.Metadata{}
 	}
 
-	width, height, err := media.Dimensions(path)
-	if err != nil {
-		return &unreadableError{err}
-	}
-	settings, err := w.queries.GetPreviewSettings(ctx)
+	stored, err := w.queries.GetPreviewSettings(ctx)
 	if err != nil {
 		return fmt.Errorf("load preview settings: %w", err)
 	}
-	previews, err := media.Render(path, media.Settings{
-		Format:      media.Format(settings.Format),
-		WebPQuality: int(settings.WebpQuality),
-		WebPEffort:  int(settings.WebpEffort),
-		JPEGQuality: int(settings.JpegQuality),
-		GridEdge:    int(settings.GridEdge),
-		ViewerEdge:  int(settings.ViewerEdge),
-	})
-	if err != nil {
-		return &unreadableError{err}
+	settings := media.Settings{
+		Format:      media.Format(stored.Format),
+		WebPQuality: int(stored.WebpQuality),
+		WebPEffort:  int(stored.WebpEffort),
+		JPEGQuality: int(stored.JpegQuality),
+		GridEdge:    int(stored.GridEdge),
+		ViewerEdge:  int(stored.ViewerEdge),
 	}
 
-	format := settings.Format
+	var (
+		previews      media.Previews
+		width, height int
+		duration      *float64
+		hasMotion     bool
+	)
+	if video {
+		previews, width, height, duration, err = renderVideo(ctx, path, settings)
+		if err != nil {
+			return err
+		}
+	} else {
+		width, height, err = media.Dimensions(path)
+		if err != nil {
+			return &unreadableError{err}
+		}
+		previews, err = media.Render(path, settings)
+		if err != nil {
+			return &unreadableError{err}
+		}
+		hasMotion = w.extractMotion(ctx, photo.ID, path, meta.MotionTag)
+	}
+
+	format := stored.Format
 	for _, p := range []struct {
 		kind    string
 		preview media.Preview
@@ -131,11 +148,56 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) err
 		TakenAt:       meta.TakenAt,
 		Exif:          meta.Tags,
 		PreviewFormat: &format,
+		Duration:      duration,
+		HasMotion:     hasMotion,
 	})
 	if err != nil {
 		return fmt.Errorf("update photo: %w", err)
 	}
 	return nil
+}
+
+// renderVideo makes the previews of a video from its poster frame. A missing
+// ffmpeg or a cancelled job is worth a retry; anything else means the file
+// cannot be read.
+func renderVideo(ctx context.Context, path string, settings media.Settings) (media.Previews, int, int, *float64, error) {
+	unreadable := func(err error) error {
+		if media.ToolMissing(err) || ctx.Err() != nil {
+			return err
+		}
+		return &unreadableError{err}
+	}
+	video, err := media.ProbeVideo(ctx, path)
+	if err != nil {
+		return media.Previews{}, 0, 0, nil, unreadable(err)
+	}
+	previews, width, height, err := media.RenderVideo(ctx, path, video, settings)
+	if err != nil {
+		return media.Previews{}, 0, 0, nil, unreadable(err)
+	}
+	var duration *float64
+	if video.Duration > 0 {
+		duration = &video.Duration
+	}
+	return previews, width, height, duration, nil
+}
+
+// extractMotion keeps the video of a motion photo next to its previews and
+// tells whether there is one. The photo is still usable without it, so a
+// failure only leaves the motion out.
+func (w *processPhotoWorker) extractMotion(ctx context.Context, photoID int64, path, tag string) bool {
+	if tag == "" {
+		return false
+	}
+	data, err := metadata.ExtractMotion(ctx, path, tag)
+	if err == nil {
+		err = storage.WriteFileAtomic(w.layout.Motion(photoID), data)
+	}
+	if err != nil {
+		slog.Warn("extract motion photo video", "photo", photoID, "error", err)
+		return false
+	}
+	return true
 }
 
 func (w *processPhotoWorker) fail(ctx context.Context, photoID int64, cause error) error {
@@ -323,6 +385,55 @@ func (w *renderPreviewsWorker) Work(ctx context.Context, job *river.Job[RenderPr
 	return nil
 }
 
+// BackfillMotionArgs queues the extraction of the videos of motion photos
+// processed before the application kept them. It runs at every start and
+// once a day, and finds only photos still without their motion, so a photo
+// whose video cannot be extracted is tried again then.
+type BackfillMotionArgs struct{}
+
+// Kind implements river.JobArgs.
+func (BackfillMotionArgs) Kind() string { return "backfill_motion" }
+
+// InsertOpts implements river.JobArgsWithInsertOpts. New photos go first.
+func (BackfillMotionArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{Priority: 4}
+}
+
+type backfillMotionWorker struct {
+	river.WorkerDefaults[BackfillMotionArgs]
+	process *processPhotoWorker
+}
+
+// Timeout leaves room for a library with many motion photos. A job stopped
+// by a restart starts over with the photos still left.
+func (w *backfillMotionWorker) Timeout(*river.Job[BackfillMotionArgs]) time.Duration {
+	return time.Hour
+}
+
+func (w *backfillMotionWorker) Work(ctx context.Context, _ *river.Job[BackfillMotionArgs]) error {
+	queries, layout := w.process.queries, w.process.layout
+	var after int64
+	for {
+		photos, err := queries.ListPhotosMissingMotion(ctx, store.ListPhotosMissingMotionParams{AfterID: after, MaxRows: 100})
+		if err != nil {
+			return fmt.Errorf("list photos: %w", err)
+		}
+		if len(photos) == 0 {
+			return nil
+		}
+		for _, photo := range photos {
+			after = photo.ID
+			path := layout.Original(photo.OwnerID, photo.Sha256, photo.Mime)
+			if !w.process.extractMotion(ctx, photo.ID, path, metadata.MotionTag(photo.Exif)) {
+				continue
+			}
+			if err := queries.SetPhotoMotion(ctx, photo.ID); err != nil {
+				return fmt.Errorf("update photo: %w", err)
+			}
+		}
+	}
+}
+
 // CleanupArgs queues routine housekeeping.
 type CleanupArgs struct{}
 
@@ -389,6 +500,7 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 	river.AddWorker(workers, &renderPreviewsWorker{process: process})
 	river.AddWorker(workers, &renderGridWorker{queries: queries, layout: cfg.Layout})
 	river.AddWorker(workers, &cleanupWorker{queries: queries, layout: cfg.Layout})
+	river.AddWorker(workers, &backfillMotionWorker{process: process})
 	if cfg.Register != nil {
 		cfg.Register(workers)
 	}
@@ -402,6 +514,11 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 		river.NewPeriodicJob(
 			river.PeriodicInterval(24*time.Hour),
 			func() (river.JobArgs, *river.InsertOpts) { return CleanupArgs{}, nil },
+			&river.PeriodicJobOpts{RunOnStart: true},
+		),
+		river.NewPeriodicJob(
+			river.PeriodicInterval(24*time.Hour),
+			func() (river.JobArgs, *river.InsertOpts) { return BackfillMotionArgs{}, nil },
 			&river.PeriodicJobOpts{RunOnStart: true},
 		),
 	}, cfg.PeriodicJobs...)

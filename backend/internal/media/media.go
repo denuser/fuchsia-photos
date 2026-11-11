@@ -1,4 +1,5 @@
-// Package media generates photo previews with libvips.
+// Package media generates previews with libvips, from photos and from the
+// poster frames of videos, which ffmpeg extracts.
 package media
 
 import (
@@ -120,16 +121,35 @@ func Render(path string, settings Settings) (Previews, error) {
 	if err != nil {
 		return Previews{}, fmt.Errorf("load %s: %w", path, err)
 	}
+	previews, err := renderFrom(viewerImage, settings)
+	if err != nil {
+		return Previews{}, fmt.Errorf("%s: %w", path, err)
+	}
+	return previews, nil
+}
+
+// render makes the previews of an image held in memory, such as a video's
+// poster frame.
+func render(data []byte, settings Settings) (Previews, error) {
+	viewerImage, err := vips.NewThumbnailWithSizeFromBuffer(data, settings.ViewerEdge, settings.ViewerEdge, vips.InterestingNone, vips.SizeDown)
+	if err != nil {
+		return Previews{}, fmt.Errorf("load: %w", err)
+	}
+	return renderFrom(viewerImage, settings)
+}
+
+// renderFrom encodes the viewer preview, already resized, and makes the grid
+// preview from it. It closes the image.
+func renderFrom(viewerImage *vips.ImageRef, settings Settings) (Previews, error) {
 	defer viewerImage.Close()
 
 	viewer, err := encode(viewerImage, settings)
 	if err != nil {
-		return Previews{}, fmt.Errorf("encode viewer preview of %s: %w", path, err)
+		return Previews{}, fmt.Errorf("encode viewer preview: %w", err)
 	}
-
 	grid, err := RenderGrid(viewer.Data, settings)
 	if err != nil {
-		return Previews{}, fmt.Errorf("grid preview of %s: %w", path, err)
+		return Previews{}, fmt.Errorf("grid preview: %w", err)
 	}
 	return Previews{Viewer: viewer, Grid: grid}, nil
 }

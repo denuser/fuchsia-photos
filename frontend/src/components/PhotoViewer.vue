@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
-import { originalUrl, previewUrl, type Camera, type Photo, type ViewerField } from '../api/client'
+import { isVideo, motionUrl, originalUrl, previewUrl, videoUrl, type Camera, type Photo, type ViewerField } from '../api/client'
 import { formatDateTime, intlLocale, t } from '../i18n'
+import { formatDuration } from '../lib/duration'
 import { useAuthStore } from '../stores/auth'
 import { useUsersStore } from '../stores/users'
 
@@ -36,7 +37,8 @@ const next = computed(() => ready.value[index.value + 1])
 const details = computed(() => {
   const date = new Date(props.photo.takenAt ?? props.photo.createdAt)
   const owner = props.photo.ownerId === auth.user?.id ? null : users.login(props.photo.ownerId)
-  return [owner && t('viewer.sharedBy', { owner }), formatDateTime(date), props.photo.width && `${props.photo.width} × ${props.photo.height}`]
+  const duration = props.photo.duration !== null && formatDuration(props.photo.duration)
+  return [owner && t('viewer.sharedBy', { owner }), formatDateTime(date), props.photo.width && `${props.photo.width} × ${props.photo.height}`, duration]
     .filter(Boolean)
     .join(' · ')
 })
@@ -109,9 +111,79 @@ const showOriginals = computed(() => auth.user?.viewerShowsOriginals ?? false)
 // originals are not downloaded again, and the viewer keeps the preview.
 const undecodable = reactive(new Set<string>())
 
+// The original of a video is no image, and can be gigabytes.
 function canShowOriginal(photo: Photo) {
-  return !undecodable.has(photo.mime)
+  return !isVideo(photo) && !undecodable.has(photo.mime)
 }
+
+// A video plays in place of the photo, from its original, once the user starts
+// it: stepping through a library must not download every video on the way.
+// When the browser cannot play it, such as HEVC in some browsers, the viewer
+// shows the poster and offers the download.
+const video = computed(() => isVideo(props.photo))
+const videoElement = ref<HTMLVideoElement | null>(null)
+const unplayable = ref(false)
+
+// Some browsers play the sound of a video they cannot decode over a black
+// picture, without an error; the picture's size then stays zero.
+function onVideoMetadata(event: Event) {
+  if ((event.target as HTMLVideoElement).videoWidth === 0) {
+    unplayable.value = true
+  }
+}
+
+// The motion of a motion photo plays once over the photo, by the button, and
+// the photo comes back at its end.
+const motionPlaying = ref(false)
+const motionFailed = ref(false)
+let motionFailedTimer = 0
+
+function toggleMotion() {
+  if (motionPlaying.value) {
+    motionPlaying.value = false
+    return
+  }
+  resetView()
+  motionPlaying.value = true
+}
+
+const motionElement = ref<HTMLVideoElement | null>(null)
+
+// Started from code rather than by autoplay: a browser may refuse to play it
+// with sound, without an error, and it then plays muted.
+watch(motionElement, (element) => {
+  element?.play().catch(() => {
+    if (motionElement.value !== element) {
+      return
+    }
+    element.muted = true
+    element.play().catch(onMotionFailed)
+  })
+})
+
+function onMotionFailed() {
+  motionPlaying.value = false
+  motionFailed.value = true
+  clearTimeout(motionFailedTimer)
+  motionFailedTimer = window.setTimeout(() => (motionFailed.value = false), 4000)
+}
+
+function onMotionMetadata(event: Event) {
+  if ((event.target as HTMLVideoElement).videoWidth === 0) {
+    onMotionFailed()
+  }
+}
+
+watch(
+  () => props.photo.id,
+  () => {
+    unplayable.value = false
+    motionPlaying.value = false
+    motionFailed.value = false
+  },
+)
+
+onBeforeUnmount(() => clearTimeout(motionFailedTimer))
 
 // The original replaces the preview only once it has been decoded, so the
 // preview stays on the screen while a large file loads.
@@ -174,12 +246,19 @@ const zoomSize = computed(() =>
   showOriginals.value && canShowOriginal(props.photo) ? photoSize.value : naturalSize.value,
 )
 
+// A video keeps clear of the bar with the camera details at the bottom, which
+// would otherwise cover its controls and take their clicks.
+const bottomBar = ref<HTMLElement | null>(null)
+const bottomBarHeight = ref(0)
+const videoReserve = computed(() => (video.value ? bottomBarHeight.value : 0))
+
 const fit = computed(() => {
   const size = photoSize.value
   if (!size || stageSize.value.width === 0) {
     return null
   }
-  const ratio = Math.min(1, stageSize.value.width / size.width, stageSize.value.height / size.height)
+  const height = stageSize.value.height - videoReserve.value
+  const ratio = Math.min(1, stageSize.value.width / size.width, height / size.height)
   const width = size.width * ratio
   const maxScale = Math.max(1, (zoomSize.value?.width ?? 0) / width)
   return { width, height: size.height * ratio, maxScale }
@@ -195,7 +274,7 @@ const view = ref<View>({ scale: 1, x: 0, y: 0 })
 // fingers directly.
 const animated = ref(false)
 
-const zoomable = computed(() => (fit.value?.maxScale ?? 1) > 1.01)
+const zoomable = computed(() => !video.value && !motionPlaying.value && (fit.value?.maxScale ?? 1) > 1.01)
 const zoomed = computed(() => view.value.scale > 1.001)
 
 const transform = computed(() => {
@@ -270,7 +349,11 @@ function measure() {
   if (stage.value) {
     stageSize.value = { width: stage.value.clientWidth, height: stage.value.clientHeight }
   }
+  bottomBarHeight.value = bottomBar.value?.offsetHeight ?? 0
 }
+
+// The bar comes and goes with the details of each photo.
+watch([camera, location], () => nextTick(measure))
 
 function onImageLoad() {
   if (image.value && !naturalSize.value) {
@@ -341,7 +424,18 @@ function startGesture(swipe: boolean) {
   }
 }
 
+// The height of the controls a browser draws at the bottom of a video.
+const VIDEO_CONTROLS = 56
+
 function onPointerDown(event: PointerEvent) {
+  // The video's own controls take the mouse, and a finger on its bottom
+  // edge, where dragging along the time bar must not step to another photo.
+  if (videoElement.value && event.target === videoElement.value) {
+    const rect = videoElement.value.getBoundingClientRect()
+    if (event.pointerType === 'mouse' || event.clientY > rect.bottom - VIDEO_CONTROLS) {
+      return
+    }
+  }
   const point = { x: event.clientX, y: event.clientY }
   pointers.set(event.pointerId, point)
   if (pointers.size === 1) {
@@ -454,6 +548,8 @@ function onKey(event: KeyboardEvent) {
     resetView(true)
   } else if (event.key === 'Escape') {
     emit('close')
+  } else if (videoElement.value && document.activeElement === videoElement.value) {
+    // The arrows of a focused video seek it.
   } else if (event.key === 'ArrowLeft' && previous.value) {
     emit('navigate', previous.value)
   } else if (event.key === 'ArrowRight' && next.value) {
@@ -497,7 +593,51 @@ onBeforeUnmount(() => {
         <div v-if="previous" :key="previous.id" class="slide neighbour" :style="{ left: `calc(-100% - ${SLIDE_GAP}px)` }">
           <img :src="previewUrl(previous.id, 'viewer')" alt="" class="image" draggable="false" />
         </div>
-        <div class="slide">
+        <div v-if="video" class="slide" :style="{ paddingBottom: `${videoReserve}px` }">
+          <video
+            v-if="!unplayable"
+            ref="videoElement"
+            :key="photo.id"
+            :src="videoUrl(photo.id)"
+            :poster="previewUrl(photo.id, 'viewer')"
+            :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
+            class="image"
+            data-testid="viewer-video"
+            controls
+            playsinline
+            preload="none"
+            @error="unplayable = true"
+            @loadedmetadata="onVideoMetadata"
+          />
+          <template v-else>
+            <img
+              :src="previewUrl(photo.id, 'viewer')"
+              :alt="photo.name"
+              :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
+              class="image"
+              draggable="false"
+            />
+            <div class="unplayable" data-testid="video-unplayable">
+              <div>{{ t('viewer.videoUnsupported') }}</div>
+              <div class="details">{{ t('viewer.videoUnsupportedText') }}</div>
+              <v-btn :href="originalUrl(photo.id)" prepend-icon="fa-download" variant="flat" class="mt-3" :text="t('viewer.download')" />
+            </div>
+          </template>
+        </div>
+        <div v-else class="slide">
+          <video
+            v-if="motionPlaying"
+            :key="`motion-${photo.id}`"
+            :src="motionUrl(photo.id, photo.previewVersion)"
+            :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
+            class="image motion"
+            ref="motionElement"
+            data-testid="viewer-motion"
+            playsinline
+            @ended="motionPlaying = false"
+            @error="onMotionFailed"
+            @loadedmetadata="onMotionMetadata"
+          />
           <img
             ref="image"
             :key="photo.id"
@@ -531,6 +671,15 @@ onBeforeUnmount(() => {
         :title="t('viewer.similar')"
         @click="emit('similar', photo)"
       />
+      <v-btn
+        v-if="photo.hasMotion && !video"
+        :icon="motionPlaying ? 'fa-stop' : 'fa-regular-circle-dot'"
+        variant="text"
+        data-testid="viewer-motion-button"
+        :aria-label="motionPlaying ? t('viewer.stopMotion') : t('viewer.playMotion')"
+        :title="motionPlaying ? t('viewer.stopMotion') : t('viewer.playMotion')"
+        @click="toggleMotion"
+      />
       <v-btn v-if="canTag" icon="fa-tag" variant="text" :aria-label="t('browser.tags')" @click="emit('tags', photo)" />
       <template v-if="canManage">
         <v-btn icon="fa-share-nodes" variant="text" :aria-label="t('browser.share')" @click="emit('share', photo)" />
@@ -540,7 +689,7 @@ onBeforeUnmount(() => {
       <v-btn icon="fa-xmark" variant="text" :aria-label="t('common.close')" @click="emit('close')" />
     </div>
 
-    <div v-if="camera || location" class="bar bottom">
+    <div v-if="camera || location" ref="bottomBar" class="bar bottom">
       <div class="details" data-testid="camera">
         {{ camera }}<template v-if="camera && location"> · </template>
         <a v-if="location" :href="location.url" target="_blank" rel="noopener noreferrer" class="location">{{
@@ -548,6 +697,8 @@ onBeforeUnmount(() => {
         }}</a>
       </div>
     </div>
+
+    <div v-if="motionFailed" class="notice" role="status">{{ t('viewer.motionUnsupported') }}</div>
 
     <v-btn
       v-if="previous"
@@ -608,6 +759,7 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 0;
   left: 0;
+  box-sizing: border-box;
   width: 100%;
   height: 100%;
   display: flex;
@@ -622,6 +774,31 @@ onBeforeUnmount(() => {
 .neighbour .image {
   width: 100%;
   height: 100%;
+}
+
+/* The motion lies over the photo, at its size, and leaves gestures to it. */
+.image.motion {
+  position: absolute;
+  pointer-events: none;
+}
+
+.unplayable {
+  position: absolute;
+  padding: 16px 24px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  text-align: center;
+}
+
+.notice {
+  position: absolute;
+  bottom: 72px;
+  left: 50%;
+  max-width: calc(100% - 32px);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.75);
+  transform: translateX(-50%);
 }
 
 .image.animated {

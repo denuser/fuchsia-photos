@@ -143,6 +143,9 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		return fmt.Errorf("start libvips: %w", err)
 	}
 	defer media.Shutdown()
+	if err := media.CheckVideoTools(); err != nil {
+		slog.Warn("videos cannot be processed until ffmpeg is installed", "error", err)
+	}
 
 	reader, err := metadata.NewReader()
 	if err != nil {

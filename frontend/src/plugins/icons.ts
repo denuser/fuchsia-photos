@@ -7,7 +7,7 @@ import type { IconAliases, IconProps, IconSet } from 'vuetify'
 // "fa-regular-<name>" for the regular one, as in icon="fa-trash-can".
 const files = import.meta.glob<string>(
   [
-    '/node_modules/@fortawesome/fontawesome-free/svgs/solid/{angle-down,angle-left,angle-right,angle-up,arrow-down,arrow-rotate-left,arrow-up,arrows-up-down,backward-step,bars,book-open,caret-down,caret-right,check,circle-check,circle-exclamation,circle-half-stroke,circle-info,circle-minus,circle-user,circle-xmark,clone,cloud-arrow-up,copy,download,ellipsis-vertical,file-import,filter,forward-step,gear,image,images,key,link,link-slash,magnifying-glass,minus,moon,paperclip,pen,plus,right-from-bracket,rotate,share-nodes,square-check,square-minus,star,star-half,sun,tag,tags,trash-can,trash-can-arrow-up,triangle-exclamation,upload,user,user-gear,user-plus,user-shield,users,xmark}.svg',
+    '/node_modules/@fortawesome/fontawesome-free/svgs/solid/{angle-down,angle-left,angle-right,angle-up,arrow-down,arrow-rotate-left,arrow-up,arrows-up-down,backward-step,bars,book-open,caret-down,caret-right,check,circle-check,circle-exclamation,circle-half-stroke,circle-info,circle-minus,circle-user,circle-xmark,clone,cloud-arrow-up,copy,download,ellipsis-vertical,file-import,filter,forward-step,gear,image,images,key,link,link-slash,magnifying-glass,minus,moon,paperclip,pen,play,plus,right-from-bracket,rotate,share-nodes,square-check,square-minus,star,star-half,stop,sun,tag,tags,trash-can,trash-can-arrow-up,triangle-exclamation,upload,user,user-gear,user-plus,user-shield,users,xmark}.svg',
     '/node_modules/@fortawesome/fontawesome-free/svgs/regular/{calendar-days,circle,circle-dot,clock,square,star}.svg',
   ],
   { query: '?raw', import: 'default', eager: true },

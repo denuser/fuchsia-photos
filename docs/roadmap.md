@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** stage 6, with the stage 7 spike in progress: search by description and similar photos, with the ML service on a Mac. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work, with nightly database dumps, a tested restore, request logs and the job queue on the administration page. Phones upload over WebDAV, checked with PhotoSync and FolderSync on the NAS. The stage 0 benchmark set the preview format and worker count for JPEG photos.
+**Status:** stage 6, with the stage 7 spike in progress: search by description and similar photos, with the ML service on a Mac. Stage 8 has started: videos and motion photos upload and play. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work, with nightly database dumps, a tested restore, request logs and the job queue on the administration page. Phones upload over WebDAV, checked with PhotoSync and FolderSync on the NAS. The stage 0 benchmark set the preview format and worker count for JPEG photos.
 
 Decisions are in the [architecture](architecture.md).
 
@@ -33,19 +33,23 @@ Decisions are in the [architecture](architecture.md).
     - On a Mac with an M5 Pro, the application embedded the 117 photos of the development library in 4 seconds with base and 14 seconds with so400m, reading viewer previews. The NAS is not measured yet
   - Later candidates, on the same embedding: near-duplicates and bursts, tag suggestions, separating screenshots and documents. Faces need a model of their own and are processed at home only, as face vectors are biometric data
 - [ ] **Stage 8: video.** Upload and playback of videos from phones, through the same ingest path as photos. Transcoding is left out of the first step and decided after a benchmark on the NAS.
-  - Open questions, to settle before the work starts:
-    - Live Photos and motion photos: an iPhone keeps a HEIC and a MOV side by side, and many Android phones embed an MP4 in the JPEG. Either one item with motion or two separate files
-    - The size limit for a video, now 512 MB per upload, and whether large uploads need resuming after a failure
-    - ffmpeg inside the application image, which makes it noticeably larger, or in a separate service like the ML one
-    - Transcoding: leave it until the benchmark, or plan for hardware transcoding on the N150's Intel graphics from the start
+  - Decisions, settled on 2026-11-11:
+    - Live Photos and motion photos: step 1 plays the video embedded in Android motion photos as the motion of the photo. The video file of an iPhone Live Photo comes in as a video of its own until a later step pairs it with its photo, the way Immich and Nextcloud Memories hide it behind the photo. Pairing needs both files in any order, from three sources, with the trash, sharing and every photo list taking the pair into account, which is most of the cost
+    - A video may be up to 4 GB per upload, a photo stays at 512 MB. A failed upload starts again from the beginning, with no resuming
+    - ffmpeg and ffprobe from Debian inside the application image, run as separate processes. A separate service would need the files sent over the network or a shared volume, for an image smaller by a few hundred MB
+    - Transcoding waits for the benchmark: no VAAPI driver and no `/dev/dri` in step 1
   - [ ] Step 1: accept and play
-    - [ ] Detect MP4 and MOV in ingest, next to HEIC, which shares the `ftyp` container, and accept them from the browser, WebDAV and folder scans
-    - [ ] A migration for the duration and whether an item is a video
-    - [ ] Processing: ffprobe for the size, duration and rotation, a frame from ffmpeg as the poster, and the grid and viewer previews made from it with libvips. The ML service embeds the poster, so search by description and similar items cover videos
-    - [ ] Dates: QuickTime `CreateDate` is in UTC by the standard, unlike EXIF dates, so read it with exiftool's `QuickTimeUTC`
-    - [ ] Playback of the original with `<video>`, which the existing range support for originals allows to seek. When the browser cannot play the codec, such as HEVC in some browsers, show the poster and a download button
-    - [ ] Interface: a mark and the duration on grid tiles, the viewer showing the video in place of the zoomable photo, and swipes and keys that do not get in the way of the video controls
-    - [ ] Backend tests with a small sample video, and a video in the browser test
+    - [x] Detect MP4 and MOV in ingest, next to HEIC, which shares the `ftyp` container, and accept them from the browser, WebDAV and folder scans
+    - [x] A migration for the duration and whether an item is a video
+    - [x] Processing: ffprobe for the size, duration and rotation, a frame from ffmpeg as the poster, and the grid and viewer previews made from it with libvips. The ML service embeds the poster, so search by description and similar items cover videos
+    - [x] Dates: QuickTime `CreateDate` is in UTC by the standard, unlike EXIF dates. The application already reads a date without an offset as UTC, so it reads `CreationDate`, which an iPhone writes with the offset, then `CreateDate`, without exiftool's `QuickTimeUTC`
+    - [x] Playback of the original with `<video>`, which the existing range support for originals allows to seek. When the browser cannot play the codec, such as HEVC in some browsers, show the poster and a download button
+    - [x] Interface: a mark and the duration on grid tiles, the viewer showing the video in place of the zoomable photo, and swipes and keys that do not get in the way of the video controls
+    - [x] Motion photos: the video embedded in a Google or Samsung motion photo is extracted during processing, kept next to the previews and played in the viewer. Photos uploaded earlier get it from a job of their own, without reprocessing the library
+    - [x] Backend tests with a small sample video, and a video in the browser test
+    - [x] Motion photo extraction checked on 2026-11-11 with the real files of [MotionPhotoSamples](https://github.com/NightMean/MotionPhotoSamples): a Pixel 9 Pro XL and Samsung phones and a tablet, in JPEG and HEIC, each giving a whole MP4. Most of them are HEVC
+    - [ ] Check on real devices: the poster of an HDR video from an iPhone, and playback in Safari on an iPhone and in Firefox
+  - [ ] Live Photos: the iPhone photo and its video as one item, pairing files that come in either order, including those imported before
   - [ ] Step 2, if needed: transcoding
     - [ ] Benchmark on the NAS: software transcoding of 1080p and 4K HEVC to H.264 against hardware transcoding through VAAPI, which needs `/dev/dri` in the container
     - [ ] Depending on the result, a playable copy for videos the browser cannot play, made on a queue of its own with one worker and low priority, as folder scans are

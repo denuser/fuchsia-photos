@@ -1,8 +1,10 @@
-// Package ingest is the single way a photo enters the library, whatever its source.
+// Package ingest is the single way a photo or a video enters the library,
+// whatever its source.
 package ingest
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -31,14 +33,39 @@ const (
 	PriorityBulk        = 4
 )
 
-// ErrUnsupported means the file is not a supported image format.
-var ErrUnsupported = errors.New("unsupported file format")
+// The largest files an upload may carry. A folder scan has no limit, as its
+// files are already on the server.
+const (
+	MaxPhotoBytes = 512 << 20
+	MaxVideoBytes = 4 << 30
+)
 
-// Service adds photos to the library.
+var (
+	// ErrUnsupported means the file is not a supported photo or video format.
+	ErrUnsupported = errors.New("unsupported file format")
+	// ErrTooLarge means an upload is larger than its kind of file may be.
+	ErrTooLarge = errors.New("the file is too large")
+)
+
+// ErrUnsupportedMessage tells a client which files are supported.
+const ErrUnsupportedMessage = "only JPEG, PNG, WebP and HEIC photos and MP4 and MOV videos are supported"
+
+// Service adds photos and videos to the library.
 type Service struct {
 	Pool   *pgxpool.Pool
 	Jobs   *river.Client[pgx.Tx]
 	Layout storage.Layout
+	// Limits of uploads in bytes. Zero means MaxPhotoBytes and MaxVideoBytes;
+	// tests set smaller ones.
+	PhotoLimit, VideoLimit int64
+}
+
+// limit returns the largest upload allowed for a MIME type.
+func (s *Service) limit(mime string) int64 {
+	if storage.IsVideo(mime) {
+		return cmp.Or(s.VideoLimit, MaxVideoBytes)
+	}
+	return cmp.Or(s.PhotoLimit, MaxPhotoBytes)
 }
 
 // Result describes an ingested photo.
@@ -78,11 +105,16 @@ func (s *Service) ingest(ctx context.Context, ownerID int64, r io.Reader, name s
 		return Result{}, ErrUnsupported
 	}
 
-	tmp, sum, size, err := s.writeTemp(buffered)
+	// One byte past the limit tells a file of exactly the limit from a larger one.
+	limit := s.limit(mime)
+	tmp, sum, size, err := s.writeTemp(io.LimitReader(buffered, limit+1))
 	if err != nil {
 		return Result{}, err
 	}
 	defer os.Remove(tmp) // Fails harmlessly once the file has been moved.
+	if size > limit {
+		return Result{}, ErrTooLarge
+	}
 
 	return s.store(ctx, tmp, store.InsertPhotoParams{
 		OwnerID:      ownerID,
@@ -199,13 +231,16 @@ func (s *Service) Purge(ctx context.Context, ownerID, photoID int64) error {
 		return fmt.Errorf("commit: %w", err)
 	}
 
+	// A stray preview is harmless: photo ids are never reused.
+	files := []string{s.Layout.Motion(photo.ID)}
 	if photo.PreviewFormat != nil {
 		for _, kind := range []string{storage.PreviewGrid, storage.PreviewViewer} {
-			err := os.Remove(s.Layout.Preview(photo.ID, kind, *photo.PreviewFormat))
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				// A stray preview is harmless: photo ids are never reused.
-				slog.Warn("remove preview", "photo", photo.ID, "error", err)
-			}
+			files = append(files, s.Layout.Preview(photo.ID, kind, *photo.PreviewFormat))
+		}
+	}
+	for _, file := range files {
+		if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
+			slog.Warn("remove preview", "photo", photo.ID, "error", err)
 		}
 	}
 	return nil
@@ -307,14 +342,32 @@ func (s *Service) duplicate(ctx context.Context, tx pgx.Tx, queries *store.Queri
 	return Result{Photo: restored, Duplicate: true, Restored: true}, nil
 }
 
-// detectMIME identifies a file by its content, not by its name.
+// detectMIME identifies a file by its content, not by its name. HEIC, MP4 and
+// QuickTime all start with an ftyp box, so its brands tell them apart.
+// http.DetectContentType is not used for it, as it calls any file with an mp4
+// brand among its compatible ones a video, which a HEIC photo can be.
 func detectMIME(head []byte) (string, bool) {
+	if len(head) >= 12 && string(head[4:8]) == "ftyp" {
+		return detectFtyp(head)
+	}
 	switch mime := http.DetectContentType(head); mime {
 	case "image/jpeg", "image/png", "image/webp":
 		return mime, true
 	}
+	return "", false
+}
+
+// detectFtyp names an ISO base media file by its major brand. Brands not
+// listed, such as AVIF photos, are not supported.
+func detectFtyp(head []byte) (string, bool) {
 	if isHEIC(head) {
 		return "image/heic", true
+	}
+	switch string(head[8:12]) {
+	case "qt  ":
+		return "video/quicktime", true
+	case "isom", "iso2", "iso3", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "M4V ":
+		return "video/mp4", true
 	}
 	return "", false
 }

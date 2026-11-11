@@ -264,7 +264,10 @@ export interface paths {
          */
         get: operations["listPhotos"];
         put?: never;
-        /** Upload a photo */
+        /**
+         * Upload a photo or a video
+         * @description JPEG, PNG, WebP and HEIC photos up to 512 MiB, MP4 and MOV videos up to 4 GiB
+         */
         post: operations["uploadPhoto"];
         delete?: never;
         options?: never;
@@ -604,6 +607,46 @@ export interface paths {
         };
         /** Download the original file */
         get: operations["getOriginal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/{id}/video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Play the original of a video
+         * @description Serves the original inline as video/mp4, for a video element, with range requests. QuickTime files are sent as MP4 too, as some browsers refuse video/quicktime
+         */
+        get: operations["getVideo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/{id}/motion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The video of a motion photo
+         * @description Extracted from the photo during processing. Cached like a preview, so add the preview version to the address
+         */
+        get: operations["getMotion"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1041,7 +1084,7 @@ export interface components {
         };
         /** @description Jobs of one kind. Finished jobs are kept for a day, so the finished counts cover a day at most */
         JobKindStats: {
-            /** @description process_photo, render_grid, render_previews, folder_scan, embed_photos or cleanup */
+            /** @description process_photo, render_grid, render_previews, folder_scan, embed_photos, backfill_motion or cleanup */
             kind: string;
             /** Format: int64 */
             waiting: number;
@@ -1221,6 +1264,7 @@ export interface components {
             /** @description Users to stop sharing with */
             remove?: number[];
         };
+        /** @description A photo or a video, which the MIME type tells apart */
         Photo: {
             /** Format: int64 */
             id: number;
@@ -1247,6 +1291,10 @@ export interface components {
             deletedAt: string | null;
             /** @description Changes when the previews are made again. Previews are cached for a long time, so their address carries it */
             previewVersion: number;
+            /** @description The length of a video in seconds. Null for photos, and for videos not processed yet or that do not say */
+            duration: number | null;
+            /** @description Whether a motion photo has a video to play from /photos/{id}/motion */
+            hasMotion: boolean;
             /** @description Shooting details from EXIF. Null when the photo has none */
             camera: components["schemas"]["Camera"] | null;
             /** @description Where the photo was taken. Null when it has no location or an administrator hides locations */
@@ -2423,6 +2471,60 @@ export interface operations {
                 };
                 content: {
                     "image/*": string;
+                    "video/*": string;
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    getVideo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The video */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp4": string;
+                };
+            };
+            /** @description The requested range of the video */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    getMotion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The video */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp4": string;
                 };
             };
             404: components["responses"]["Error"];

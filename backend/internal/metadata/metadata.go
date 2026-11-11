@@ -1,10 +1,13 @@
-// Package metadata reads photo metadata with exiftool.
+// Package metadata reads the metadata of photos and videos with exiftool.
 package metadata
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -22,7 +25,14 @@ var fileTags = []string{
 type Metadata struct {
 	Tags    []byte // JSON
 	TakenAt *time.Time
+	// MotionTag names the tag that holds the video of a motion photo, empty
+	// when the photo has none.
+	MotionTag string
 }
+
+// Tags that hold the video embedded in a motion photo: Google's format, which
+// other makers use too, and Samsung's own.
+var motionTags = []string{"MotionPhotoVideo", "EmbeddedVideoFile"}
 
 // Reader keeps one exiftool process running, because starting Perl for every
 // photo would be slow. It handles one photo at a time.
@@ -48,24 +58,69 @@ func (r *Reader) Close() error {
 	return r.tool.Close()
 }
 
-// Read returns the metadata of the photo at path.
-func (r *Reader) Read(path string) (Metadata, error) {
+// Read returns the metadata of the photo or the video at path.
+func (r *Reader) Read(path string, video bool) (Metadata, error) {
 	file := r.tool.ExtractMetadata(path)[0]
 	if file.Err != nil {
 		return Metadata{}, fmt.Errorf("read metadata of %s: %w", path, file.Err)
 	}
-	return fromFields(file.Fields)
+	return fromFields(file.Fields, video)
 }
 
-func fromFields(fields map[string]any) (Metadata, error) {
+// MotionTag names the tag of stored tags that holds the video of a motion
+// photo, as Read does, or is empty.
+func MotionTag(tags []byte) string {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(tags, &fields) != nil {
+		return ""
+	}
+	for _, tag := range motionTags {
+		if _, ok := fields[tag]; ok {
+			return tag
+		}
+	}
+	return ""
+}
+
+func fromFields(fields map[string]any, video bool) (Metadata, error) {
 	for _, tag := range fileTags {
 		delete(fields, tag)
+	}
+	meta := Metadata{TakenAt: takenAt(fields, video)}
+	if !video {
+		for _, tag := range motionTags {
+			// Without -b, exiftool describes binary data instead of returning it.
+			if _, ok := fields[tag]; ok {
+				meta.MotionTag = tag
+				break
+			}
+		}
 	}
 	tags, err := json.Marshal(stripNUL(fields))
 	if err != nil {
 		return Metadata{}, fmt.Errorf("encode metadata: %w", err)
 	}
-	return Metadata{Tags: tags, TakenAt: takenAt(fields)}, nil
+	meta.Tags = tags
+	return meta, nil
+}
+
+// ExtractMotion returns the video embedded in a motion photo, from the tag
+// Read named. It runs exiftool of its own, as the long-running one returns
+// tags as JSON through a buffer too small for a video.
+func ExtractMotion(ctx context.Context, path, tag string) ([]byte, error) {
+	var stdout, stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "exiftool", "-b", "-"+tag, path)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("extract motion video of %s: %w: %s", path, err, strings.TrimSpace(stderr.String()))
+	}
+	data := stdout.Bytes()
+	// Every MP4 starts with an ftyp box.
+	if len(data) < 12 || string(data[4:8]) != "ftyp" {
+		return nil, fmt.Errorf("extract motion video of %s: %s holds no MP4", path, tag)
+	}
+	return data, nil
 }
 
 // stripNUL removes NUL characters, which some cameras write and jsonb rejects.
@@ -85,10 +140,26 @@ func stripNUL(v any) any {
 	return v
 }
 
-func takenAt(fields map[string]any) *time.Time {
-	dates := []struct{ date, offset string }{
+var (
+	photoDates = []struct{ date, offset string }{
 		{"DateTimeOriginal", "OffsetTimeOriginal"},
 		{"CreateDate", "OffsetTimeDigitized"},
+	}
+	// An iPhone writes CreationDate with the local offset. QuickTime's own
+	// CreateDate has none and is in UTC by the standard, which is how
+	// parseDate reads a date without an offset, so exiftool's QuickTimeUTC
+	// option is not needed.
+	videoDates = []struct{ date, offset string }{
+		{"DateTimeOriginal", ""},
+		{"CreationDate", ""},
+		{"CreateDate", ""},
+	}
+)
+
+func takenAt(fields map[string]any, video bool) *time.Time {
+	dates := photoDates
+	if video {
+		dates = videoDates
 	}
 	for _, d := range dates {
 		value, _ := fields[d.date].(string)

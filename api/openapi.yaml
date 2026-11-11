@@ -415,7 +415,8 @@ paths:
           $ref: "#/components/responses/Error"
     post:
       operationId: uploadPhoto
-      summary: Upload a photo
+      summary: Upload a photo or a video
+      description: JPEG, PNG, WebP and HEIC photos up to 512 MiB, MP4 and MOV videos up to 4 GiB
       requestBody:
         required: true
         content:
@@ -925,6 +926,46 @@ paths:
           description: The original file
           content:
             image/*:
+              schema:
+                type: string
+                format: binary
+            video/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Error"
+  /photos/{id}/video:
+    get:
+      operationId: getVideo
+      summary: Play the original of a video
+      description: Serves the original inline as video/mp4, for a video element, with range requests. QuickTime files are sent as MP4 too, as some browsers refuse video/quicktime
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The video
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        "206":
+          description: The requested range of the video
+        "404":
+          $ref: "#/components/responses/Error"
+  /photos/{id}/motion:
+    get:
+      operationId: getMotion
+      summary: The video of a motion photo
+      description: Extracted from the photo during processing. Cached like a preview, so add the preview version to the address
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The video
+          content:
+            video/mp4:
               schema:
                 type: string
                 format: binary
@@ -1514,7 +1555,7 @@ components:
       required: [kind, waiting, running, retrying, doneHour, doneDay, failedDay]
       properties:
         kind:
-          description: process_photo, render_grid, render_previews, folder_scan, embed_photos or cleanup
+          description: process_photo, render_grid, render_previews, folder_scan, embed_photos, backfill_motion or cleanup
           type: string
         waiting:
           type: integer
@@ -1770,7 +1811,8 @@ components:
             format: int64
     Photo:
       type: object
-      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, camera, location]
+      description: A photo or a video, which the MIME type tells apart
+      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, duration, hasMotion, camera, location]
       properties:
         id:
           type: integer
@@ -1808,6 +1850,12 @@ components:
         previewVersion:
           description: Changes when the previews are made again. Previews are cached for a long time, so their address carries it
           type: integer
+        duration:
+          description: The length of a video in seconds. Null for photos, and for videos not processed yet or that do not say
+          type: [number, "null"]
+        hasMotion:
+          description: Whether a motion photo has a video to play from /photos/{id}/motion
+          type: boolean
         camera:
           description: Shooting details from EXIF. Null when the photo has none
           oneOf:

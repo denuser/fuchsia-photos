@@ -17,5 +17,6 @@ The first release.
 - Search by description and similar photos, with an optional ML service on SigLIP 2
 - Nightly database dumps with a tested restore, request logs in text or JSON
 - English and Russian interface, light, dark and high contrast themes and a glass mode
-- JPEG, PNG, WebP and HEIC
+- JPEG, PNG, WebP and HEIC photos, and MP4 and MOV videos up to 4 GiB, which play in the viewer, with a download when the browser cannot play the codec
+- The motion of Google and Samsung motion photos, played in the viewer by a button, including for photos uploaded before
 - Images for `linux/amd64` and `linux/arm64`

@@ -143,6 +143,8 @@ SET status = 'ready',
     sort_at = COALESCE(sqlc.narg(taken_at), sort_at),
     exif = @exif,
     preview_format = @preview_format,
+    duration = sqlc.narg(duration),
+    has_motion = @has_motion,
     updated_at = now()
 WHERE id = @id AND purged_at IS NULL;
 
@@ -188,7 +190,9 @@ SET purged_at = now(),
     taken_at = NULL,
     exif = NULL,
     error = NULL,
-    preview_format = NULL
+    preview_format = NULL,
+    duration = NULL,
+    has_motion = false
 WHERE id = @id AND owner_id = @owner_id AND deleted_at IS NOT NULL AND purged_at IS NULL
 RETURNING *;
 
@@ -219,5 +223,26 @@ SELECT id FROM photos WHERE status = 'ready' AND purged_at IS NULL ORDER BY id;
 -- name: BumpPreviewVersion :exec
 UPDATE photos
 SET preview_version = preview_version + 1,
+    updated_at = now()
+WHERE id = @id AND status = 'ready' AND purged_at IS NULL;
+
+-- Photos processed before motion photos were supported, whose stored tags
+-- name an embedded video that was never extracted.
+-- name: ListPhotosMissingMotion :many
+SELECT id, owner_id, sha256, mime, exif
+FROM photos
+WHERE status = 'ready'
+  AND purged_at IS NULL
+  AND NOT has_motion
+  AND mime NOT LIKE 'video/%'
+  AND (exif -> 'MotionPhotoVideo' IS NOT NULL OR exif -> 'EmbeddedVideoFile' IS NOT NULL)
+  AND id > @after_id
+ORDER BY id
+LIMIT @max_rows;
+
+-- Moves updated_at too, so that open pages learn of the motion.
+-- name: SetPhotoMotion :exec
+UPDATE photos
+SET has_motion = true,
     updated_at = now()
 WHERE id = @id AND status = 'ready' AND purged_at IS NULL;

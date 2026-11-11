@@ -11,7 +11,7 @@ RUN pnpm build
 FROM golang:1.27-trixie AS backend
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
-        libvips-dev libheif-plugin-libde265 libimage-exiftool-perl \
+        libvips-dev libheif-plugin-libde265 libimage-exiftool-perl ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum ./
@@ -37,7 +37,7 @@ RUN mkdir /out && go build -trimpath -ldflags='-s -w' -o /out/ ./cmd/...
 FROM debian:trixie-slim
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
-        libvips42t64 libheif-plugin-libde265 libimage-exiftool-perl \
+        libvips42t64 libheif-plugin-libde265 libimage-exiftool-perl ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/ /usr/local/bin/
 USER 1000:1000

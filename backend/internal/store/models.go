@@ -95,6 +95,8 @@ type Photo struct {
 	Camera         *string
 	Lens           *string
 	PreviewVersion int32
+	Duration       *float64
+	HasMotion      bool
 }
 
 type PhotoEmbedding struct {
