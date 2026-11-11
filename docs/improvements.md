@@ -1,6 +1,6 @@
 # Improvements
 
-The current list of improvements, in order of priority. All of them are done except the last one, which is planned. Stages 0 to 6 of the [roadmap](../README.md#roadmap) are done too.
+The current list of improvements, in order of priority. All of them are done except the last three, which are planned. Stages 0 to 6 of the [roadmap](../README.md#roadmap) are done too.
 
 ## 1. Administration page
 
@@ -86,3 +86,33 @@ Plan:
 4. If objects in a corner of the frame are still missed: try several vectors per photo for parts of the frame, such as a 2×2 grid and the center, or DINOv2 (Apache 2.0) as a second vector type, which tells specific objects apart better than SigLIP.
 
 Record the results here: what each step found on the test photos and how long it took. Unlike similar photos, a search by a selected region needs the ML service to be running. Any new model or dependency is chosen with the user before it is added.
+
+## 7. Interface language
+
+**Status:** planned, not started.
+
+The interface in English and Russian, with the language chosen in the profile. Decisions are in the [README](../README.md#decisions).
+
+Plan:
+
+1. Choose the translation library with the user before adding it.
+2. Move every string of the interface into English and Russian message files, including page titles, empty states, toast alerts, form hints and the errors the interface shows.
+3. A "Language" field in the profile: Automatic, English, Russian. Automatic is the default and takes the browser's language, falling back to English. The choice is stored with the user, so it applies on every device, and the page applies it right after login.
+4. Vuetify's own texts, dates and numbers follow the chosen language rather than the browser's, including the date filters.
+5. Error messages from the API stay in English: the interface shows its own text for the errors it knows.
+6. Extend `make e2e` to switch the language in the profile and check a translated page.
+
+## 8. Place names in the viewer
+
+**Status:** planned, not started.
+
+The viewer shows the name of the place where a photo was taken in place of its coordinates. Decisions are in the [README](../README.md#decisions).
+
+Plan:
+
+1. A table of populated places from the GeoNames `cities1000` dump, with their names in English and Russian from the alternate names, loaded by a command or a migration. GeoNames asks for attribution under CC BY 4.0, so the documentation and the interface credit it.
+2. Processing finds the nearest place to the photo's location and keeps its identifier with the photo. A periodic job does the same for photos processed before, as the embedding job does.
+3. The API returns the place with the location, in the language of the request, under the same administrator setting. The interface shows "Town, region, country" with the map link on it, and hides it with the location.
+4. Backend tests: the nearest place, the language fallback, and no place name when locations are hidden.
+
+Until the interface language is done, the names follow the browser's language.
