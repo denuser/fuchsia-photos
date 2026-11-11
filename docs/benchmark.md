@@ -1,6 +1,6 @@
 # Benchmark
 
-`imgbench` measures how fast a machine processes a folder of photos. Its results decide the preview format and the worker count, and replace the estimates in the README.
+`imgbench` measures how fast a machine processes a folder of photos. Its results decide the preview format and the worker count, and give the performance figures in the README.
 
 It reads the originals without changing them. For each photo it computes the SHA-256 hash, generates the previews and writes them to `/out`. It deletes the previews at the end of each run.
 

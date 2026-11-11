@@ -1,6 +1,6 @@
 # Improvements
 
-The current list of improvements, in order of priority. All of them are done except 6 and 8, which are planned. Stages 0 to 6 of the [roadmap](../README.md#roadmap) are done too.
+The current list of improvements, in order of priority. All of them are done except 6 and 8, which are planned. Stages 0 to 6 of the [roadmap](roadmap.md) are done too.
 
 ## 1. Administration page
 
@@ -25,7 +25,7 @@ Settings apply to new photos only. The `render-grid` command makes the grid prev
 
 **Status:** done.
 
-The timeline loads month by month from counts the server gives first, with month titles and a scrubber with the years. A month near the screen loads all of its pages; months far from it are only counted. The trash keeps loading page by page, with a spinner at the end of the list and a retry button when a page fails. Decisions are in the [README](../README.md#decisions).
+The timeline loads month by month from counts the server gives first, with month titles and a scrubber with the years. A month near the screen loads all of its pages; months far from it are only counted. The trash keeps loading page by page, with a spinner at the end of the list and a retry button when a page fails. Decisions are in the [architecture](architecture.md#decisions).
 
 Loaded months stay in memory. Unloading the months far from the screen is left for when a library makes it necessary.
 
@@ -33,7 +33,7 @@ Loaded months stay in memory. Unloading the months far from the screen is left f
 
 **Status:** done.
 
-The timeline filters by camera and by lens, next to the tags and dates. On a phone they sit behind one button with the dates. The counts in each list take the other filters into account. Decisions are in the [README](../README.md#decisions).
+The timeline filters by camera and by lens, next to the tags and dates. On a phone they sit behind one button with the dates. The counts in each list take the other filters into account. Decisions are in the [architecture](architecture.md#decisions).
 
 The lists offer the photos the timeline shows, including other users' photos when it shows them. Other pages, such as albums and "Shared with me", have no such filters yet.
 
@@ -41,13 +41,13 @@ The lists offer the photos the timeline shows, including other users' photos whe
 
 **Status:** done.
 
-A user who had uploaded nothing saw an empty timeline, even with photos and albums shared with them. The timeline now also shows the other users' photos that the user can see, with a "Mine / All" switch that is saved for the user and on by default. Decisions are in the [README](../README.md#decisions).
+A user who had uploaded nothing saw an empty timeline, even with photos and albums shared with them. The timeline now also shows the other users' photos that the user can see, with a "Mine / All" switch that is saved for the user and on by default. Decisions are in the [architecture](architecture.md#decisions).
 
 ## 5. PatternFly look
 
 **Status:** done.
 
-The interface follows [PatternFly 6](https://www.patternfly.org/) on top of Vuetify, with fuchsia in place of the PatternFly blue. Decisions are in the [README](../README.md#decisions).
+The interface follows [PatternFly 6](https://www.patternfly.org/) on top of Vuetify, with fuchsia in place of the PatternFly blue. Decisions are in the [architecture](architecture.md#decisions).
 
 Done:
 
@@ -91,7 +91,7 @@ Record the results here: what each step found on the test photos and how long it
 
 **Status:** done.
 
-The interface in English and Russian, with the language chosen in the profile. Decisions are in the [README](../README.md#decisions), and how to add a string is in the [development guide](development.md#interface-text).
+The interface in English and Russian, with the language chosen in the profile. Decisions are in the [architecture](architecture.md#decisions), and how to add a string is in the [development guide](development.md#interface-text).
 
 Done:
 
@@ -105,7 +105,7 @@ Done:
 
 **Status:** planned, not started.
 
-The viewer shows the name of the place where a photo was taken in place of its coordinates. Decisions are in the [README](../README.md#decisions).
+The viewer shows the name of the place where a photo was taken in place of its coordinates. Decisions are in the [architecture](architecture.md#decisions).
 
 Plan:
 

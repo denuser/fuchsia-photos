@@ -1,7 +1,7 @@
 // Package ml connects the application to the ML service, which turns photos
 // and search texts into vectors. The service keeps nothing: the application
 // stores the vectors and checks permissions. See the "Machine learning"
-// section of the README.
+// section of docs/architecture.md.
 package ml
 
 import (

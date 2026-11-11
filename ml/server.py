@@ -2,7 +2,7 @@
 
 It turns photos and search texts into vectors and keeps nothing: the
 application stores the vectors and checks permissions. See the "Machine
-learning" section of the README.
+learning" section of docs/architecture.md.
 """
 
 import io
