@@ -1,4 +1,4 @@
-.PHONY: help dev-db dev-clean dev-admin dev-migrate dev-goose dev-psql migration dev-backend dev-frontend dev-cert ml test e2e image bench fixtures api-types sqlc
+.PHONY: help dev-db dev-clean dev-admin dev-migrate dev-goose dev-psql migration dev-backend dev-frontend dev-cert ml test e2e image release bench fixtures api-types sqlc
 
 COMPOSE_TEST = docker compose -f deploy/compose.test.yaml
 COMPOSE_E2E = docker compose -f deploy/compose.e2e.yaml
@@ -30,7 +30,8 @@ help:
 	@echo "ml            run the ML service on this machine, on port 8090 of all interfaces"
 	@echo "test          run backend tests in a container with PostgreSQL"
 	@echo "e2e           run the main flow in Chrome against the production image"
-	@echo "image         build the production image for the NAS (linux/amd64)"
+	@echo "image         build the production image for the NAS (PLATFORM=linux/amd64 by default)"
+	@echo "release       commit CHANGELOG.md for a version and tag it, for example VERSION=0.1.0"
 	@echo "bench         run the benchmark on samples/, BENCH_OUT sets the disk under test"
 	@echo "fixtures      regenerate the image fixtures of internal/media"
 	@echo "api-types     regenerate frontend types from api/openapi.yaml"
@@ -98,8 +99,13 @@ e2e:
 	if [ $$status -ne 0 ]; then $(COMPOSE_E2E) logs --tail 30 app; fi; \
 	$(COMPOSE_E2E) down --volumes; exit $$status
 
+PLATFORM ?= linux/amd64
+
 image:
-	docker buildx build --platform linux/amd64 --load -f deploy/Dockerfile -t fuchsia-photos:latest .
+	docker buildx build --platform $(PLATFORM) --load -f deploy/Dockerfile -t fuchsia-photos:latest .
+
+release:
+	scripts/release.sh "$(VERSION)"
 
 bench:
 	docker build -f deploy/Dockerfile -t fuchsia-photos:latest .

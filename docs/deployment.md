@@ -184,7 +184,7 @@ On TrueNAS, run the commands in the shell with `sudo docker exec` and the contai
 
 ## Building on another machine
 
-Instead of building on the NAS, you can build the `linux/amd64` image elsewhere and copy it over:
+Instead of building on the NAS, you can build the image elsewhere and copy it over. `make image` builds for `linux/amd64`; for an ARM NAS, run `make image PLATFORM=linux/arm64`:
 
 ```sh
 make image
@@ -197,7 +197,7 @@ On the NAS, start it without `--build`:
 docker compose -f deploy/compose.yaml up -d
 ```
 
-On an ARM machine such as an Apple Silicon Mac, `make image` runs under emulation and is noticeably slower.
+A build for an architecture other than the machine's own, such as `linux/amd64` on an Apple Silicon Mac, runs under emulation and is noticeably slower.
 
 ## Running from an image
 
@@ -207,10 +207,14 @@ Caddy runs on the host network, and the application listens only on `127.0.0.1:1
 
 This file uses Compose `configs` with `content`, which needs Docker Compose 2.23 or later.
 
-It uses the image that CI publishes to `ghcr.io/denuser/fuchsia-photos` on every push to `master`, for `linux/amd64`. Each image has two tags:
+It uses the image that CI publishes to `ghcr.io/denuser/fuchsia-photos`, for `linux/amd64` and `linux/arm64`; Docker picks the one for the NAS. The `arm64` image has not been tried on an ARM NAS yet. The tags are:
 
 - `latest`, the newest build of `master`;
-- `sha-<commit>`, for example `sha-6593702`, which never changes.
+- `sha-<commit>`, for example `sha-6593702`, which never changes;
+- `X.Y.Z`, for example `0.1.0`, a release, which never changes;
+- `X.Y`, the newest release of that minor version.
+
+Release notes are on the GitHub releases page and in `CHANGELOG.md`.
 
 Copy `deploy/compose.image.yaml` to a folder on the NAS as `docker-compose.yml`. Next to it, create a `.env` file with `POSTGRES_PASSWORD`, `SITE_ADDRESS` and any of the other variables from [First start](#first-start), apart from `HTTP_PORT`. Some of them differ here:
 
@@ -236,7 +240,7 @@ docker compose pull
 docker compose up -d
 ```
 
-To run a specific build, set `IMAGE_TAG=sha-<commit>` in `.env`. Going back to an older build is safe only if no migrations were added since: migrations run forward only, so after a new one an older build may not start against the database.
+To run a specific release or build, set `IMAGE_TAG=0.1.0` or `IMAGE_TAG=sha-<commit>` in `.env`. Going back to an older build is safe only if no migrations were added since: migrations run forward only, so after a new one an older build may not start against the database.
 
 ## Running on TrueNAS
 
@@ -374,7 +378,7 @@ sudo docker exec -it <container> fuchsia-photos create-admin admin
 
 ### Updates
 
-TrueNAS compares the `latest` image on the NAS with the one in the registry and shows **Update** on the app when they differ. Updating pulls the new image and recreates the containers, and migrations run on start. A pinned tag such as `sha-<commit>` never shows an update.
+TrueNAS compares the `latest` image on the NAS with the one in the registry and shows **Update** on the app when they differ. Updating pulls the new image and recreates the containers, and migrations run on start. A pinned tag such as `0.1.0` or `sha-<commit>` never shows an update.
 
 The check needs **Check for image updates** turned on in the **Apps** settings. It runs once a day and when the Docker service starts. To check right away, run this in the TrueNAS shell and then reload the Apps page:
 

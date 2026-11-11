@@ -190,6 +190,24 @@ On failure it prints the failed step and saves a screenshot to `frontend/e2e/res
 
 ## CI
 
-`.github/workflows/ci.yml` builds the `linux/amd64` production image, which includes the frontend type checks and build and the backend build. On pull requests it only builds it. On pushes to `master` it also publishes it to `ghcr.io/denuser/fuchsia-photos` with the tags `latest` and `sha-<commit>`; only this job can write packages.
+`.github/workflows/ci.yml` builds the production image, which includes the frontend type checks and build and the backend build. On pull requests it only builds it for `linux/amd64`. On pushes to `master` and of version tags it builds `linux/amd64` and `linux/arm64`, each on a runner of its own architecture, and publishes both to `ghcr.io/denuser/fuchsia-photos` as one image:
 
-Tests do not run in CI, so run `make test` and, for interface changes, `make e2e` before pushing.
+- a push to `master` tags it `latest` and `sha-<commit>`;
+- a tag `vX.Y.Z` tags it `X.Y.Z`, `X.Y` and `sha-<commit>`, leaves `latest` alone and creates a GitHub release.
+
+Only the publishing jobs can write packages, and only the release job can write to the repository.
+
+Tests do not run in CI, so run `make test` and, for interface changes, `make e2e` before pushing. On an Apple Silicon Mac, `make e2e` builds and runs the `linux/arm64` image.
+
+### Releases
+
+Versions follow [semantic versioning](https://semver.org/), starting at `0.1.0`. Changes go under "Unreleased" in `CHANGELOG.md` as they are made. To release, on an up-to-date `master` with no uncommitted changes:
+
+```sh
+make release VERSION=0.1.0
+git push --follow-tags
+```
+
+`make release` turns "Unreleased" into `## 0.1.0 - <today>`, starts a new empty "Unreleased" above it, commits that as "Release 0.1.0" and tags the commit `v0.1.0`. It pushes nothing, so the commit and the tag can still be dropped with `git tag -d v0.1.0` and `git reset --hard HEAD~1`. It stops if the "Unreleased" section is empty or the tag exists.
+
+On the tag, CI publishes the image with the version tags and creates the release with that section of `CHANGELOG.md` as its notes. Do not create the release on GitHub or with `gh release create`: the release job would then fail, as the release would exist already. A version with a hyphen, such as `0.2.0-rc.1`, becomes a pre-release and gets no `X.Y` tag.
