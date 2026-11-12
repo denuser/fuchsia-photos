@@ -5,6 +5,7 @@ SELECT p.id, p.preview_format::text AS preview_format
 FROM photos p
 WHERE p.status = 'ready'
   AND p.purged_at IS NULL
+  AND p.live_photo_id IS NULL
   AND p.preview_format IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM photo_embeddings e WHERE e.photo_id = p.id AND e.model = @model)
   AND NOT EXISTS (SELECT 1 FROM photo_embedding_failures f
@@ -34,9 +35,10 @@ SET attempts = photo_embedding_failures.attempts + 1, error = EXCLUDED.error, fa
 -- name: CountEmbeddings :one
 SELECT
     (SELECT count(*) FROM photos p
-     WHERE p.status = 'ready' AND p.purged_at IS NULL AND p.preview_format IS NOT NULL)::bigint AS photos,
+     WHERE p.status = 'ready' AND p.purged_at IS NULL AND p.preview_format IS NOT NULL
+       AND p.live_photo_id IS NULL)::bigint AS photos,
     (SELECT count(*) FROM photo_embeddings e JOIN photos p ON p.id = e.photo_id
-     WHERE e.model = @model AND p.purged_at IS NULL)::bigint AS embedded,
+     WHERE e.model = @model AND p.purged_at IS NULL AND p.live_photo_id IS NULL)::bigint AS embedded,
     (SELECT count(*) FROM photo_embedding_failures f
      WHERE f.model = @model AND f.attempts >= @max_attempts::integer)::bigint AS failed;
 
@@ -57,6 +59,7 @@ JOIN photos p ON p.id = e.photo_id
 WHERE e.model = @model
   AND p.status = 'ready'
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND photo_visible_to(p, @viewer_id::bigint, false)
   AND (sqlc.narg(max_distance)::float8 IS NULL
        OR e.embedding <=> CAST(@query::text AS halfvec) <= sqlc.narg(max_distance)::float8)
@@ -73,6 +76,7 @@ WHERE s.photo_id = @photo_id
   AND s.model = @model
   AND p.status = 'ready'
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND photo_visible_to(p, @viewer_id::bigint, false)
 ORDER BY e.embedding <=> s.embedding, p.id
 LIMIT @max_rows;

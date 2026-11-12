@@ -28,6 +28,9 @@ type Metadata struct {
 	// MotionTag names the tag that holds the video of a motion photo, empty
 	// when the photo has none.
 	MotionTag string
+	// ContentIdentifier is the tag that the photo and the video of an iPhone
+	// Live Photo share, empty for other files.
+	ContentIdentifier string
 }
 
 // Tags that hold the video embedded in a motion photo: Google's format, which
@@ -87,6 +90,9 @@ func fromFields(fields map[string]any, video bool) (Metadata, error) {
 		delete(fields, tag)
 	}
 	meta := Metadata{TakenAt: takenAt(fields, video)}
+	if id, ok := fields["ContentIdentifier"].(string); ok {
+		meta.ContentIdentifier = strings.TrimSpace(id)
+	}
 	if !video {
 		for _, tag := range motionTags {
 			// Without -b, exiftool describes binary data instead of returning it.

@@ -643,8 +643,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The video of a motion photo
-         * @description Extracted from the photo during processing. Cached like a preview, so add the preview version to the address
+         * The video of a motion photo or a Live Photo
+         * @description Extracted from a motion photo during processing, or the original of the video of a Live Photo. Cached like a preview, so add the preview version to the address
          */
         get: operations["getMotion"];
         put?: never;
@@ -1084,7 +1084,7 @@ export interface components {
         };
         /** @description Jobs of one kind. Finished jobs are kept for a day, so the finished counts cover a day at most */
         JobKindStats: {
-            /** @description process_photo, render_grid, render_previews, folder_scan, embed_photos, backfill_motion or cleanup */
+            /** @description process_photo, render_grid, render_previews, folder_scan, embed_photos, backfill_motion, pair_live_photos or cleanup */
             kind: string;
             /** Format: int64 */
             waiting: number;
@@ -1293,8 +1293,13 @@ export interface components {
             previewVersion: number;
             /** @description The length of a video in seconds. Null for photos, and for videos not processed yet or that do not say */
             duration: number | null;
-            /** @description Whether a motion photo has a video to play from /photos/{id}/motion */
+            /** @description Whether a motion photo or a Live Photo has a video to play from /photos/{id}/motion */
             hasMotion: boolean;
+            /**
+             * Format: int64
+             * @description Set on the video of a Live Photo to the photo it plays as the motion of. Lists leave such videos out; only events carry them, so that pages drop them
+             */
+            livePhotoId: number | null;
             /** @description Shooting details from EXIF. Null when the photo has none */
             camera: components["schemas"]["Camera"] | null;
             /** @description Where the photo was taken. Null when it has no location or an administrator hides locations */

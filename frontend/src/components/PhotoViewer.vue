@@ -132,7 +132,7 @@ function onVideoMetadata(event: Event) {
   }
 }
 
-// The motion of a motion photo plays once over the photo, by the button, and
+// The motion of a motion photo or a Live Photo plays once over the photo, by the button, and
 // the photo comes back at its end.
 const motionPlaying = ref(false)
 const motionFailed = ref(false)

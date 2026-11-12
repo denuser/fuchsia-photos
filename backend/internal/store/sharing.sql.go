@@ -15,6 +15,7 @@ SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE $1::text), 'YYYY-MM'):
        count(*) AS count
 FROM photos p
 WHERE p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND ($2::bigint IS NULL OR p.owner_id = $2::bigint)
 GROUP BY 1
 ORDER BY 1 DESC
@@ -57,6 +58,7 @@ SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE $1::text), 'YYYY-MM'):
 FROM photos p
 WHERE p.owner_id <> $2::bigint
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND p.status = 'ready'
   AND (photo_shared_directly(p, $2::bigint)
        OR ($3::boolean AND photo_in_visible_album(p, $2::bigint)))
@@ -166,9 +168,10 @@ func (q *Queries) ListAlbumShareUsers(ctx context.Context, albumID int64) ([]Lis
 }
 
 const listAllPhotos = `-- name: ListAllPhotos :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id
 FROM photos p
 WHERE p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND ($1::bigint IS NULL OR p.owner_id = $1::bigint)
   AND ($2::timestamptz IS NULL OR p.sort_at >= $2::timestamptz)
   AND ($3::timestamptz IS NULL OR p.sort_at < $3::timestamptz)
@@ -229,6 +232,8 @@ func (q *Queries) ListAllPhotos(ctx context.Context, arg ListAllPhotosParams) ([
 			&i.PreviewVersion,
 			&i.Duration,
 			&i.HasMotion,
+			&i.ContentIdentifier,
+			&i.LivePhotoID,
 		); err != nil {
 			return nil, err
 		}
@@ -273,10 +278,11 @@ func (q *Queries) ListPhotoShareUsers(ctx context.Context, photoID int64) ([]Lis
 }
 
 const listSharedPhotos = `-- name: ListSharedPhotos :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id
 FROM photos p
 WHERE p.owner_id <> $1::bigint
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND p.status = 'ready'
   AND (photo_shared_directly(p, $1::bigint)
        OR ($2::boolean AND photo_in_visible_album(p, $1::bigint)))
@@ -342,6 +348,8 @@ func (q *Queries) ListSharedPhotos(ctx context.Context, arg ListSharedPhotosPara
 			&i.PreviewVersion,
 			&i.Duration,
 			&i.HasMotion,
+			&i.ContentIdentifier,
+			&i.LivePhotoID,
 		); err != nil {
 			return nil, err
 		}

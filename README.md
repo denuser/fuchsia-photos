@@ -34,7 +34,7 @@ It is built for modest hardware. It is developed and measured on an Intel N150 w
 - Nightly database dumps with a tested restore, request logs and the job queue on the administration page
 - English and Russian interface, light, dark and high contrast themes
 
-Supported formats: JPEG, PNG, WebP and HEIC photos, MP4 and MOV videos, and the motion of Google and Samsung motion photos. RAW is not supported yet, and the video of an iPhone Live Photo comes in as a video of its own.
+Supported formats: JPEG, PNG, WebP and HEIC photos, MP4 and MOV videos, and the motion of Google and Samsung motion photos and iPhone Live Photos. RAW is not supported yet.
 
 ## Requirements
 

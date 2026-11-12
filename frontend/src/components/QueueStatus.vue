@@ -4,7 +4,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { API_BASE, type QueueStats } from '../api/client'
 import { formatDateTime, t } from '../i18n'
 
-const kinds = ['process_photo', 'render_grid', 'render_previews', 'folder_scan', 'embed_photos', 'backfill_motion', 'cleanup'] as const
+const kinds = ['process_photo', 'render_grid', 'render_previews', 'folder_scan', 'embed_photos', 'backfill_motion', 'pair_live_photos', 'cleanup'] as const
 
 const stats = ref<QueueStats | null>(null)
 // Set while the connection is down: "retrying" while the browser reconnects,

@@ -115,7 +115,7 @@ FolderSync needs HTTPS: given an `http://` address, it still tries TLS and repor
 
 1. In the web interface, open **Profile**. Under **Upload from a phone**, choose **New app password** and name the device.
 2. In the app, add a WebDAV server with the address, your login and the app password. The account password does not work there.
-3. Set the app to upload only. Photos and videos are accepted, other files are refused. The video of an iPhone Live Photo comes in as a video of its own, next to its photo.
+3. Set the app to upload only. Photos and videos are accepted, other files are refused. The video of an iPhone Live Photo is paired with its photo and plays as its motion, as long as the app keeps Apple's `ContentIdentifier` tag in both files.
 4. To sort uploads into albums, give each folder pair in the app its own server folder, such as `/Camera` and `/Telegram`. Then, under **Albums for folders** in the profile, choose **Link a folder** and pick the folder and the album. A folder can be linked before the app creates it, and `/` links the whole tree.
 
 Files deleted in the app, or by the app's sync, disappear from the WebDAV folder and stay in the library. Photos in the trash stay there when the app sends them again. A photo can be up to 512 MiB and a video up to 4 GiB.

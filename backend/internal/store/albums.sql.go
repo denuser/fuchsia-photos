@@ -19,6 +19,7 @@ WHERE a.id = $1
   AND a.owner_id = $2
   AND p.id = ANY ($3::bigint[])
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
 ON CONFLICT DO NOTHING
 `
 
@@ -88,10 +89,10 @@ SELECT a.id, a.owner_id, a.name, a.created_at, a.cover_photo_id AS chosen_cover_
        (a.visibility = 'all' OR EXISTS (SELECT 1 FROM album_shares s WHERE s.album_id = a.id))::boolean AS shared,
        (SELECT count(*)
         FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
-        WHERE ap.album_id = a.id AND p.deleted_at IS NULL)::bigint AS photo_count,
+        WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.live_photo_id IS NULL)::bigint AS photo_count,
        COALESCE((SELECT p.id
                  FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
-                 WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.status = 'ready'
+                 WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.live_photo_id IS NULL AND p.status = 'ready'
                  ORDER BY p.id = a.cover_photo_id DESC NULLS LAST, p.sort_at DESC, p.id DESC
                  LIMIT 1), 0)::bigint AS cover_id
 FROM albums a
@@ -137,10 +138,10 @@ SELECT a.id, a.owner_id, a.name, a.created_at, a.cover_photo_id AS chosen_cover_
        (a.visibility = 'all' OR EXISTS (SELECT 1 FROM album_shares s WHERE s.album_id = a.id))::boolean AS shared,
        (SELECT count(*)
         FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
-        WHERE ap.album_id = a.id AND p.deleted_at IS NULL)::bigint AS photo_count,
+        WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.live_photo_id IS NULL)::bigint AS photo_count,
        COALESCE((SELECT p.id
                  FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
-                 WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.status = 'ready'
+                 WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.live_photo_id IS NULL AND p.status = 'ready'
                  ORDER BY p.id = a.cover_photo_id DESC NULLS LAST, p.sort_at DESC, p.id DESC
                  LIMIT 1), 0)::bigint AS cover_id
 FROM albums a
@@ -200,10 +201,10 @@ SELECT a.id, a.owner_id, a.name, a.created_at, a.cover_photo_id AS chosen_cover_
        (a.visibility = 'all' OR EXISTS (SELECT 1 FROM album_shares s WHERE s.album_id = a.id))::boolean AS shared,
        (SELECT count(*)
         FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
-        WHERE ap.album_id = a.id AND p.deleted_at IS NULL)::bigint AS photo_count,
+        WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.live_photo_id IS NULL)::bigint AS photo_count,
        COALESCE((SELECT p.id
                  FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
-                 WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.status = 'ready'
+                 WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.live_photo_id IS NULL AND p.status = 'ready'
                  ORDER BY p.id = a.cover_photo_id DESC NULLS LAST, p.sort_at DESC, p.id DESC
                  LIMIT 1), 0)::bigint AS cover_id
 FROM albums a
@@ -297,7 +298,8 @@ WHERE a.id = $2
   AND a.owner_id = $3
   AND EXISTS (SELECT 1
               FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
-              WHERE ap.album_id = a.id AND ap.photo_id = $1 AND p.deleted_at IS NULL)
+              WHERE ap.album_id = a.id AND ap.photo_id = $1
+                AND p.deleted_at IS NULL AND p.live_photo_id IS NULL)
 `
 
 type SetAlbumCoverParams struct {

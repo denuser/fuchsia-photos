@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
+	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
 	"github.com/denuser/fuchsia-photos/backend/internal/metadata"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
@@ -53,8 +55,11 @@ type photoJSON struct {
 	PreviewVersion int32 `json:"previewVersion"`
 	// The length of a video in seconds, null for photos.
 	Duration *float64 `json:"duration"`
-	// Whether a motion photo has a video to play.
+	// Whether a motion photo or a Live Photo has a video to play.
 	HasMotion bool `json:"hasMotion"`
+	// Set on the video of a Live Photo, which plays as the motion of that
+	// photo. Only events carry such videos, so that pages drop them.
+	LivePhotoID *int64 `json:"livePhotoId"`
 
 	Camera   *metadata.Camera   `json:"camera"`
 	Location *metadata.Location `json:"location"`
@@ -91,6 +96,7 @@ func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 		Location:       location,
 		Duration:       p.Duration,
 		HasMotion:      p.HasMotion,
+		LivePhotoID:    p.LivePhotoID,
 	}
 }
 
@@ -422,9 +428,14 @@ func (s *server) restorePhotos(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.Queries.RestorePhotos(r.Context(), store.RestorePhotosParams{OwnerID: currentUser(r).ID, Ids: ids}); err != nil {
+	owner := currentUser(r).ID
+	if err := s.Queries.RestorePhotos(r.Context(), store.RestorePhotosParams{OwnerID: owner, Ids: ids}); err != nil {
 		internalError(w, r, err)
 		return
+	}
+	// A video may have come in while its photo was in the trash.
+	if _, err := jobs.PairLivePhotos(r.Context(), s.Ingest.Pool, &owner, nil); err != nil {
+		slog.Warn("pair live photos", "error", err)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -628,8 +639,10 @@ func (s *server) getVideo(w http.ResponseWriter, r *http.Request) {
 	s.serveFile(w, r, s.Layout.Original(photo.OwnerID, photo.Sha256, photo.Mime))
 }
 
-// getMotion serves the video of a motion photo. Like a preview, it is made
-// again only with the previews, so its address carries their version.
+// getMotion serves the video of a motion photo, or the original of the video
+// of a Live Photo. Whoever can see the photo can play it. Like a preview, a
+// motion photo's video is made again only with the previews, so its address
+// carries their version; the video of a Live Photo never changes.
 func (s *server) getMotion(w http.ResponseWriter, r *http.Request) {
 	photo, ok := s.visiblePhoto(w, r)
 	if !ok {
@@ -639,9 +652,18 @@ func (s *server) getMotion(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "the photo has no motion")
 		return
 	}
+	path := s.Layout.Motion(photo.ID)
+	video, err := s.Queries.GetLivePhotoVideo(r.Context(), &photo.ID)
+	switch {
+	case err == nil:
+		path = s.Layout.Original(video.OwnerID, video.Sha256, video.Mime)
+	case !errors.Is(err, pgx.ErrNoRows):
+		internalError(w, r, err)
+		return
+	}
 	w.Header().Set("Cache-Control", previewCacheRule)
 	w.Header().Set("Content-Type", "video/mp4")
-	s.serveFile(w, r, s.Layout.Motion(photo.ID))
+	s.serveFile(w, r, path)
 }
 
 func (s *server) serveFile(w http.ResponseWriter, r *http.Request, path string) {

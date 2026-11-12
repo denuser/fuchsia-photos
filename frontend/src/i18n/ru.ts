@@ -421,6 +421,7 @@ const ru: typeof en = {
       folder_scan: 'Сканирование папок',
       embed_photos: 'Машинное обучение',
       backfill_motion: 'Движение ранее загруженных фото',
+      pair_live_photos: 'Связывание Live Photos',
       cleanup: 'Очистка',
     },
   },

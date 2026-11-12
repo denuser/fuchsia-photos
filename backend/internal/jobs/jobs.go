@@ -47,6 +47,7 @@ func (ProcessPhotoArgs) InsertOpts() river.InsertOpts {
 
 type processPhotoWorker struct {
 	river.WorkerDefaults[ProcessPhotoArgs]
+	pool     *pgxpool.Pool
 	queries  *store.Queries
 	layout   storage.Layout
 	metadata *metadata.Reader
@@ -154,7 +155,53 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) err
 	if err != nil {
 		return fmt.Errorf("update photo: %w", err)
 	}
+
+	// The other file of a Live Photo may have come first.
+	if meta.ContentIdentifier != "" {
+		if _, err := PairLivePhotos(ctx, w.pool, &photo.OwnerID, &meta.ContentIdentifier); err != nil {
+			// The pair_live_photos job tries again.
+			slog.Warn("pair live photo", "photo", photo.ID, "error", err)
+		}
+	}
 	return nil
+}
+
+// PairLivePhotos pairs the photos and videos of Live Photos that have no pair
+// yet, those of one owner and identifier when they are given, and returns how
+// many pairs it made. Pairing runs under a lock of its own, so files that
+// finish processing at the same moment are paired once. It also gives back
+// the motion to paired photos whose processing overwrote it while a pairing
+// was being committed; processing calls it after every photo with the tag.
+func PairLivePhotos(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, contentIdentifier *string) (int, error) {
+	paired := 0
+	for {
+		var rows []store.PairLivePhotosRow
+		err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+			queries := store.New(tx)
+			if err := queries.LockLivePhotoPairing(ctx); err != nil {
+				return err
+			}
+			var err error
+			rows, err = queries.PairLivePhotos(ctx, store.PairLivePhotosParams{
+				OwnerID:           ownerID,
+				ContentIdentifier: contentIdentifier,
+			})
+			if err != nil || len(rows) > 0 {
+				return err
+			}
+			return queries.RepairLivePhotoMotion(ctx, store.RepairLivePhotoMotionParams{
+				OwnerID:           ownerID,
+				ContentIdentifier: contentIdentifier,
+			})
+		})
+		if err != nil {
+			return paired, fmt.Errorf("pair live photos: %w", err)
+		}
+		if len(rows) == 0 {
+			return paired, nil
+		}
+		paired += len(rows)
+	}
 }
 
 // renderVideo makes the previews of a video from its poster frame. A missing
@@ -434,6 +481,32 @@ func (w *backfillMotionWorker) Work(ctx context.Context, _ *river.Job[BackfillMo
 	}
 }
 
+// PairLivePhotosArgs queues the pairing of Live Photos that processing did
+// not pair: files processed before the application paired them, and files
+// whose pairing failed. It runs at every start and once a day.
+type PairLivePhotosArgs struct{}
+
+// Kind implements river.JobArgs.
+func (PairLivePhotosArgs) Kind() string { return "pair_live_photos" }
+
+// InsertOpts implements river.JobArgsWithInsertOpts. New photos go first.
+func (PairLivePhotosArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{Priority: 4}
+}
+
+type pairLivePhotosWorker struct {
+	river.WorkerDefaults[PairLivePhotosArgs]
+	pool *pgxpool.Pool
+}
+
+func (w *pairLivePhotosWorker) Work(ctx context.Context, _ *river.Job[PairLivePhotosArgs]) error {
+	paired, err := PairLivePhotos(ctx, w.pool, nil, nil)
+	if paired > 0 {
+		slog.Info("paired live photos", "pairs", paired)
+	}
+	return err
+}
+
 // CleanupArgs queues routine housekeeping.
 type CleanupArgs struct{}
 
@@ -495,12 +568,13 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 	queries := store.New(pool)
 
 	workers := river.NewWorkers()
-	process := &processPhotoWorker{queries: queries, layout: cfg.Layout, metadata: cfg.Metadata}
+	process := &processPhotoWorker{pool: pool, queries: queries, layout: cfg.Layout, metadata: cfg.Metadata}
 	river.AddWorker(workers, process)
 	river.AddWorker(workers, &renderPreviewsWorker{process: process})
 	river.AddWorker(workers, &renderGridWorker{queries: queries, layout: cfg.Layout})
 	river.AddWorker(workers, &cleanupWorker{queries: queries, layout: cfg.Layout})
 	river.AddWorker(workers, &backfillMotionWorker{process: process})
+	river.AddWorker(workers, &pairLivePhotosWorker{pool: pool})
 	if cfg.Register != nil {
 		cfg.Register(workers)
 	}
@@ -519,6 +593,11 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 		river.NewPeriodicJob(
 			river.PeriodicInterval(24*time.Hour),
 			func() (river.JobArgs, *river.InsertOpts) { return BackfillMotionArgs{}, nil },
+			&river.PeriodicJobOpts{RunOnStart: true},
+		),
+		river.NewPeriodicJob(
+			river.PeriodicInterval(24*time.Hour),
+			func() (river.JobArgs, *river.InsertOpts) { return PairLivePhotosArgs{}, nil },
 			&river.PeriodicJobOpts{RunOnStart: true},
 		),
 	}, cfg.PeriodicJobs...)

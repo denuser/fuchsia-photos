@@ -67,7 +67,8 @@ export function videoUrl(id: number) {
   return `${API_BASE}/photos/${id}/video`
 }
 
-// The video of a motion photo. Cached like a preview, so it carries the version.
+// The video of a motion photo or a Live Photo. Cached like a preview, so it
+// carries the version.
 export function motionUrl(id: number, version = 0) {
   const url = `${API_BASE}/photos/${id}/motion`
   return version ? `${url}?v=${version}` : url

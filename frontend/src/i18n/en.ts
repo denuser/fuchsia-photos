@@ -421,6 +421,7 @@ export default {
       folder_scan: 'Folder scans',
       embed_photos: 'Machine learning',
       backfill_motion: 'Motion of earlier photos',
+      pair_live_photos: 'Pairing Live Photos',
       cleanup: 'Cleanup',
     },
   },

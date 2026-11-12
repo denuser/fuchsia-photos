@@ -957,8 +957,8 @@ paths:
   /photos/{id}/motion:
     get:
       operationId: getMotion
-      summary: The video of a motion photo
-      description: Extracted from the photo during processing. Cached like a preview, so add the preview version to the address
+      summary: The video of a motion photo or a Live Photo
+      description: Extracted from a motion photo during processing, or the original of the video of a Live Photo. Cached like a preview, so add the preview version to the address
       parameters:
         - $ref: "#/components/parameters/Id"
       responses:
@@ -1555,7 +1555,7 @@ components:
       required: [kind, waiting, running, retrying, doneHour, doneDay, failedDay]
       properties:
         kind:
-          description: process_photo, render_grid, render_previews, folder_scan, embed_photos, backfill_motion or cleanup
+          description: process_photo, render_grid, render_previews, folder_scan, embed_photos, backfill_motion, pair_live_photos or cleanup
           type: string
         waiting:
           type: integer
@@ -1812,7 +1812,7 @@ components:
     Photo:
       type: object
       description: A photo or a video, which the MIME type tells apart
-      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, duration, hasMotion, camera, location]
+      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, duration, hasMotion, livePhotoId, camera, location]
       properties:
         id:
           type: integer
@@ -1854,8 +1854,12 @@ components:
           description: The length of a video in seconds. Null for photos, and for videos not processed yet or that do not say
           type: [number, "null"]
         hasMotion:
-          description: Whether a motion photo has a video to play from /photos/{id}/motion
+          description: Whether a motion photo or a Live Photo has a video to play from /photos/{id}/motion
           type: boolean
+        livePhotoId:
+          description: Set on the video of a Live Photo to the photo it plays as the motion of. Lists leave such videos out; only events carry them, so that pages drop them
+          type: [integer, "null"]
+          format: int64
         camera:
           description: Shooting details from EXIF. Null when the photo has none
           oneOf:

@@ -50,6 +50,7 @@ WHERE (p.owner_id = $2
        OR ($3::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, $2::bigint) OR photo_in_visible_album(p, $2::bigint))))
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND ($4::timestamptz IS NULL OR p.sort_at >= $4::timestamptz)
   AND ($5::timestamptz IS NULL OR p.sort_at < $5::timestamptz)
   AND ($6::bigint IS NULL
@@ -136,8 +137,47 @@ func (q *Queries) DeletePurgedPhoto(ctx context.Context, id int64) error {
 	return err
 }
 
+const getLivePhotoVideo = `-- name: GetLivePhotoVideo :one
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id FROM photos WHERE live_photo_id = $1 AND purged_at IS NULL
+`
+
+// The video of a Live Photo, which plays as the photo's motion.
+func (q *Queries) GetLivePhotoVideo(ctx context.Context, photoID *int64) (Photo, error) {
+	row := q.db.QueryRow(ctx, getLivePhotoVideo, photoID)
+	var i Photo
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Sha256,
+		&i.Mime,
+		&i.Size,
+		&i.Width,
+		&i.Height,
+		&i.TakenAt,
+		&i.Exif,
+		&i.Status,
+		&i.Error,
+		&i.Visibility,
+		&i.CreatedAt,
+		&i.DeletedAt,
+		&i.OriginalName,
+		&i.PreviewFormat,
+		&i.SortAt,
+		&i.UpdatedAt,
+		&i.PurgedAt,
+		&i.Camera,
+		&i.Lens,
+		&i.PreviewVersion,
+		&i.Duration,
+		&i.HasMotion,
+		&i.ContentIdentifier,
+		&i.LivePhotoID,
+	)
+	return i, err
+}
+
 const getPhoto = `-- name: GetPhoto :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion FROM photos WHERE id = $1
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id FROM photos WHERE id = $1
 `
 
 func (q *Queries) GetPhoto(ctx context.Context, id int64) (Photo, error) {
@@ -168,12 +208,14 @@ func (q *Queries) GetPhoto(ctx context.Context, id int64) (Photo, error) {
 		&i.PreviewVersion,
 		&i.Duration,
 		&i.HasMotion,
+		&i.ContentIdentifier,
+		&i.LivePhotoID,
 	)
 	return i, err
 }
 
 const getPhotoByHash = `-- name: GetPhotoByHash :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion FROM photos WHERE owner_id = $1 AND sha256 = $2
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id FROM photos WHERE owner_id = $1 AND sha256 = $2
 `
 
 type GetPhotoByHashParams struct {
@@ -209,12 +251,15 @@ func (q *Queries) GetPhotoByHash(ctx context.Context, arg GetPhotoByHashParams) 
 		&i.PreviewVersion,
 		&i.Duration,
 		&i.HasMotion,
+		&i.ContentIdentifier,
+		&i.LivePhotoID,
 	)
 	return i, err
 }
 
 const getTrashedPhoto = `-- name: GetTrashedPhoto :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion FROM photos WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL AND purged_at IS NULL
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id FROM photos
+WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL AND purged_at IS NULL AND live_photo_id IS NULL
 `
 
 type GetTrashedPhotoParams struct {
@@ -222,6 +267,7 @@ type GetTrashedPhotoParams struct {
 	OwnerID int64
 }
 
+// The video of a Live Photo is purged with its photo, and not on its own.
 func (q *Queries) GetTrashedPhoto(ctx context.Context, arg GetTrashedPhotoParams) (Photo, error) {
 	row := q.db.QueryRow(ctx, getTrashedPhoto, arg.ID, arg.OwnerID)
 	var i Photo
@@ -250,12 +296,14 @@ func (q *Queries) GetTrashedPhoto(ctx context.Context, arg GetTrashedPhotoParams
 		&i.PreviewVersion,
 		&i.Duration,
 		&i.HasMotion,
+		&i.ContentIdentifier,
+		&i.LivePhotoID,
 	)
 	return i, err
 }
 
 const getVisiblePhoto = `-- name: GetVisiblePhoto :one
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id
 FROM photos p
 WHERE p.id = $1
   AND p.purged_at IS NULL
@@ -297,6 +345,8 @@ func (q *Queries) GetVisiblePhoto(ctx context.Context, arg GetVisiblePhotoParams
 		&i.PreviewVersion,
 		&i.Duration,
 		&i.HasMotion,
+		&i.ContentIdentifier,
+		&i.LivePhotoID,
 	)
 	return i, err
 }
@@ -304,7 +354,7 @@ func (q *Queries) GetVisiblePhoto(ctx context.Context, arg GetVisiblePhotoParams
 const insertPhoto = `-- name: InsertPhoto :one
 INSERT INTO photos (owner_id, sha256, mime, size, original_name)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id
 `
 
 type InsertPhotoParams struct {
@@ -349,6 +399,8 @@ func (q *Queries) InsertPhoto(ctx context.Context, arg InsertPhotoParams) (Photo
 		&i.PreviewVersion,
 		&i.Duration,
 		&i.HasMotion,
+		&i.ContentIdentifier,
+		&i.LivePhotoID,
 	)
 	return i, err
 }
@@ -360,6 +412,7 @@ WHERE (p.owner_id = $1
        OR ($2::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, $1::bigint) OR photo_in_visible_album(p, $1::bigint))))
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND p.camera IS NOT NULL
   AND ($3::timestamptz IS NULL OR p.sort_at >= $3::timestamptz)
   AND ($4::timestamptz IS NULL OR p.sort_at < $4::timestamptz)
@@ -421,7 +474,7 @@ func (q *Queries) ListCameras(ctx context.Context, arg ListCamerasParams) ([]Lis
 }
 
 const listChangedPhotos = `-- name: ListChangedPhotos :many
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id
 FROM photos
 WHERE owner_id = $1 AND updated_at > $2 AND purged_at IS NULL
 ORDER BY updated_at
@@ -469,6 +522,8 @@ func (q *Queries) ListChangedPhotos(ctx context.Context, arg ListChangedPhotosPa
 			&i.PreviewVersion,
 			&i.Duration,
 			&i.HasMotion,
+			&i.ContentIdentifier,
+			&i.LivePhotoID,
 		); err != nil {
 			return nil, err
 		}
@@ -487,6 +542,7 @@ WHERE (p.owner_id = $1
        OR ($2::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, $1::bigint) OR photo_in_visible_album(p, $1::bigint))))
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND p.lens IS NOT NULL
   AND ($3::timestamptz IS NULL OR p.sort_at >= $3::timestamptz)
   AND ($4::timestamptz IS NULL OR p.sort_at < $4::timestamptz)
@@ -622,12 +678,13 @@ func (q *Queries) ListReadyPhotoIDs(ctx context.Context) ([]int64, error) {
 }
 
 const listTimeline = `-- name: ListTimeline :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id
 FROM photos p
 WHERE (p.owner_id = $1
        OR ($2::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, $1::bigint) OR photo_in_visible_album(p, $1::bigint))))
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND ($3::timestamptz IS NULL
        OR (p.sort_at, p.id) < ($3::timestamptz, $4::bigint))
   AND ($5::timestamptz IS NULL OR p.sort_at >= $5::timestamptz)
@@ -709,6 +766,8 @@ func (q *Queries) ListTimeline(ctx context.Context, arg ListTimelineParams) ([]P
 			&i.PreviewVersion,
 			&i.Duration,
 			&i.HasMotion,
+			&i.ContentIdentifier,
+			&i.LivePhotoID,
 		); err != nil {
 			return nil, err
 		}
@@ -721,11 +780,12 @@ func (q *Queries) ListTimeline(ctx context.Context, arg ListTimelineParams) ([]P
 }
 
 const listTrash = `-- name: ListTrash :many
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id
 FROM photos
 WHERE owner_id = $1
   AND deleted_at IS NOT NULL
   AND purged_at IS NULL
+  AND live_photo_id IS NULL
   AND ($2::timestamptz IS NULL
        OR (deleted_at, id) < ($2::timestamptz, $3::bigint))
 ORDER BY deleted_at DESC, id DESC
@@ -778,6 +838,8 @@ func (q *Queries) ListTrash(ctx context.Context, arg ListTrashParams) ([]Photo, 
 			&i.PreviewVersion,
 			&i.Duration,
 			&i.HasMotion,
+			&i.ContentIdentifier,
+			&i.LivePhotoID,
 		); err != nil {
 			return nil, err
 		}
@@ -795,6 +857,7 @@ FROM photos
 WHERE owner_id = $1
   AND deleted_at IS NOT NULL
   AND purged_at IS NULL
+  AND live_photo_id IS NULL
 ORDER BY id
 LIMIT $2
 `
@@ -822,6 +885,17 @@ func (q *Queries) ListTrashedPhotoIDs(ctx context.Context, arg ListTrashedPhotoI
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockLivePhotoPairing = `-- name: LockLivePhotoPairing :exec
+SELECT pg_advisory_xact_lock(hashtextextended('live_photo_pairing', 0))
+`
+
+// Serializes pairing, so that two workers that finish the two files of one
+// Live Photo at once cannot pair either of them twice.
+func (q *Queries) LockLivePhotoPairing(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockLivePhotoPairing)
+	return err
 }
 
 const lockPhotoFile = `-- name: LockPhotoFile :exec
@@ -855,7 +929,7 @@ func (q *Queries) MarkPhotoFailed(ctx context.Context, arg MarkPhotoFailedParams
 }
 
 const markPhotoReady = `-- name: MarkPhotoReady :exec
-UPDATE photos
+UPDATE photos p
 SET status = 'ready',
     error = NULL,
     width = $1,
@@ -865,9 +939,10 @@ SET status = 'ready',
     exif = $4,
     preview_format = $5,
     duration = $6,
-    has_motion = $7,
+    -- The video of a Live Photo is its motion too.
+    has_motion = $7 OR EXISTS (SELECT 1 FROM photos v WHERE v.live_photo_id = p.id),
     updated_at = now()
-WHERE id = $8 AND purged_at IS NULL
+WHERE p.id = $8 AND p.purged_at IS NULL
 `
 
 type MarkPhotoReadyParams struct {
@@ -895,6 +970,147 @@ func (q *Queries) MarkPhotoReady(ctx context.Context, arg MarkPhotoReadyParams) 
 	return err
 }
 
+const pairLivePhotos = `-- name: PairLivePhotos :many
+WITH stills AS (
+    SELECT DISTINCT ON (s.owner_id, s.content_identifier) s.id, s.owner_id, s.content_identifier
+    FROM photos s
+    WHERE s.content_identifier IS NOT NULL
+      AND s.mime NOT LIKE 'video/%'
+      AND s.status = 'ready'
+      AND s.deleted_at IS NULL
+      AND s.live_photo_id IS NULL
+      AND NOT EXISTS (SELECT 1 FROM photos o WHERE o.live_photo_id = s.id)
+      AND ($1::bigint IS NULL OR s.owner_id = $1::bigint)
+      AND ($2::text IS NULL OR s.content_identifier = $2::text)
+    ORDER BY s.owner_id, s.content_identifier, s.id
+),
+videos AS (
+    SELECT DISTINCT ON (v.owner_id, v.content_identifier) v.id, v.owner_id, v.content_identifier
+    FROM photos v
+    WHERE v.content_identifier IS NOT NULL
+      AND v.mime LIKE 'video/%'
+      AND v.status = 'ready'
+      AND v.deleted_at IS NULL
+      AND v.live_photo_id IS NULL
+      AND ($1::bigint IS NULL OR v.owner_id = $1::bigint)
+      AND ($2::text IS NULL OR v.content_identifier = $2::text)
+    ORDER BY v.owner_id, v.content_identifier, v.id
+),
+pairs AS (
+    SELECT s.id AS still_id, v.id AS video_id
+    FROM stills s
+    JOIN videos v ON v.owner_id = s.owner_id AND v.content_identifier = s.content_identifier
+),
+stills_marked AS (
+    UPDATE photos p
+    SET has_motion = true, updated_at = now()
+    FROM pairs
+    WHERE p.id = pairs.still_id
+)
+UPDATE photos p
+SET live_photo_id = pairs.still_id, updated_at = now()
+FROM pairs
+WHERE p.id = pairs.video_id
+RETURNING p.id AS video_id, p.live_photo_id::bigint AS photo_id
+`
+
+type PairLivePhotosParams struct {
+	OwnerID           *int64
+	ContentIdentifier *string
+}
+
+type PairLivePhotosRow struct {
+	VideoID int64
+	PhotoID int64
+}
+
+// Pairs the photos and videos of Live Photos that share a ContentIdentifier
+// and have no pair yet, optionally only those of one owner and identifier.
+// Each run pairs the oldest photo with the oldest video of each identifier, so
+// it is run until it pairs nothing. Neither file may be in the trash: a video
+// pairs with its photo when the photo is restored. The photo takes the video
+// as its motion, and both move updated_at, so that open pages drop the video.
+func (q *Queries) PairLivePhotos(ctx context.Context, arg PairLivePhotosParams) ([]PairLivePhotosRow, error) {
+	rows, err := q.db.Query(ctx, pairLivePhotos, arg.OwnerID, arg.ContentIdentifier)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PairLivePhotosRow
+	for rows.Next() {
+		var i PairLivePhotosRow
+		if err := rows.Scan(&i.VideoID, &i.PhotoID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const purgeLivePhotoVideo = `-- name: PurgeLivePhotoVideo :one
+UPDATE photos
+SET purged_at = now(),
+    deleted_at = COALESCE(deleted_at, now()),
+    updated_at = now(),
+    visibility = 'private',
+    original_name = '',
+    width = NULL,
+    height = NULL,
+    taken_at = NULL,
+    exif = NULL,
+    error = NULL,
+    preview_format = NULL,
+    duration = NULL,
+    has_motion = false
+WHERE id = $1 AND live_photo_id = $2 AND purged_at IS NULL
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id
+`
+
+type PurgeLivePhotoVideoParams struct {
+	ID      int64
+	PhotoID *int64
+}
+
+// Purges the video of a Live Photo with its photo, like PurgePhoto. It does not
+// ask for the video to be in the trash: a video paired while its photo was
+// being moved there may have stayed out of it.
+func (q *Queries) PurgeLivePhotoVideo(ctx context.Context, arg PurgeLivePhotoVideoParams) (Photo, error) {
+	row := q.db.QueryRow(ctx, purgeLivePhotoVideo, arg.ID, arg.PhotoID)
+	var i Photo
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Sha256,
+		&i.Mime,
+		&i.Size,
+		&i.Width,
+		&i.Height,
+		&i.TakenAt,
+		&i.Exif,
+		&i.Status,
+		&i.Error,
+		&i.Visibility,
+		&i.CreatedAt,
+		&i.DeletedAt,
+		&i.OriginalName,
+		&i.PreviewFormat,
+		&i.SortAt,
+		&i.UpdatedAt,
+		&i.PurgedAt,
+		&i.Camera,
+		&i.Lens,
+		&i.PreviewVersion,
+		&i.Duration,
+		&i.HasMotion,
+		&i.ContentIdentifier,
+		&i.LivePhotoID,
+	)
+	return i, err
+}
+
 const purgePhoto = `-- name: PurgePhoto :one
 UPDATE photos
 SET purged_at = now(),
@@ -910,7 +1126,7 @@ SET purged_at = now(),
     duration = NULL,
     has_motion = false
 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL AND purged_at IS NULL
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id
 `
 
 type PurgePhotoParams struct {
@@ -947,15 +1163,44 @@ func (q *Queries) PurgePhoto(ctx context.Context, arg PurgePhotoParams) (Photo, 
 		&i.PreviewVersion,
 		&i.Duration,
 		&i.HasMotion,
+		&i.ContentIdentifier,
+		&i.LivePhotoID,
 	)
 	return i, err
 }
 
+const repairLivePhotoMotion = `-- name: RepairLivePhotoMotion :exec
+UPDATE photos p
+SET has_motion = true, updated_at = now()
+WHERE NOT p.has_motion
+  AND p.purged_at IS NULL
+  AND ($1::bigint IS NULL OR p.owner_id = $1::bigint)
+  AND ($2::text IS NULL OR p.content_identifier = $2::text)
+  AND EXISTS (SELECT 1 FROM photos v WHERE v.live_photo_id = p.id AND v.purged_at IS NULL)
+`
+
+type RepairLivePhotoMotionParams struct {
+	OwnerID           *int64
+	ContentIdentifier *string
+}
+
+// Gives back the motion to paired photos that lost it: processing that waited
+// for a pairing to commit writes the flag from what it saw before.
+func (q *Queries) RepairLivePhotoMotion(ctx context.Context, arg RepairLivePhotoMotionParams) error {
+	_, err := q.db.Exec(ctx, repairLivePhotoMotion, arg.OwnerID, arg.ContentIdentifier)
+	return err
+}
+
 const restorePhoto = `-- name: RestorePhoto :one
-UPDATE photos
+WITH video_restored AS (
+    UPDATE photos v
+    SET deleted_at = NULL, updated_at = now()
+    WHERE v.live_photo_id = $1 AND v.deleted_at IS NOT NULL AND v.purged_at IS NULL
+)
+UPDATE photos p
 SET deleted_at = NULL, updated_at = now()
-WHERE id = $1 AND purged_at IS NULL
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion
+WHERE p.id = $1 AND p.purged_at IS NULL
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id
 `
 
 func (q *Queries) RestorePhoto(ctx context.Context, id int64) (Photo, error) {
@@ -986,6 +1231,8 @@ func (q *Queries) RestorePhoto(ctx context.Context, id int64) (Photo, error) {
 		&i.PreviewVersion,
 		&i.Duration,
 		&i.HasMotion,
+		&i.ContentIdentifier,
+		&i.LivePhotoID,
 	)
 	return i, err
 }
@@ -993,7 +1240,10 @@ func (q *Queries) RestorePhoto(ctx context.Context, id int64) (Photo, error) {
 const restorePhotos = `-- name: RestorePhotos :exec
 UPDATE photos
 SET deleted_at = NULL, updated_at = now()
-WHERE owner_id = $1 AND id = ANY ($2::bigint[]) AND deleted_at IS NOT NULL AND purged_at IS NULL
+WHERE owner_id = $1
+  AND (id = ANY ($2::bigint[]) AND live_photo_id IS NULL OR live_photo_id = ANY ($2::bigint[]))
+  AND deleted_at IS NOT NULL
+  AND purged_at IS NULL
 `
 
 type RestorePhotosParams struct {
@@ -1022,7 +1272,7 @@ func (q *Queries) SetPhotoMotion(ctx context.Context, id int64) error {
 const trashPhotos = `-- name: TrashPhotos :exec
 UPDATE photos
 SET deleted_at = now(), updated_at = now()
-WHERE id = ANY ($1::bigint[])
+WHERE (id = ANY ($1::bigint[]) AND live_photo_id IS NULL OR live_photo_id = ANY ($1::bigint[]))
   AND deleted_at IS NULL
   AND (owner_id = $2::bigint OR $3::boolean)
 `
@@ -1033,6 +1283,8 @@ type TrashPhotosParams struct {
 	ActorIsAdmin bool
 }
 
+// The video of a Live Photo goes into the trash and out of it with its photo,
+// and not on its own.
 func (q *Queries) TrashPhotos(ctx context.Context, arg TrashPhotosParams) error {
 	_, err := q.db.Exec(ctx, trashPhotos, arg.Ids, arg.ActorID, arg.ActorIsAdmin)
 	return err

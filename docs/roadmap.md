@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** stage 6, with the stage 7 spike in progress: search by description and similar photos, with the ML service on a Mac. Stage 8 has started: videos and motion photos upload and play. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work, with nightly database dumps, a tested restore, request logs and the job queue on the administration page. Phones upload over WebDAV, checked with PhotoSync and FolderSync on the NAS. The stage 0 benchmark set the preview format and worker count for JPEG photos.
+**Status:** stage 6, with the stage 7 spike in progress: search by description and similar photos, with the ML service on a Mac. Stage 8 has started: videos, motion photos and Live Photos upload and play. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work, with nightly database dumps, a tested restore, request logs and the job queue on the administration page. Phones upload over WebDAV, checked with PhotoSync and FolderSync on the NAS. The stage 0 benchmark set the preview format and worker count for JPEG photos.
 
 Decisions are in the [architecture](architecture.md).
 
@@ -49,7 +49,9 @@ Decisions are in the [architecture](architecture.md).
     - [x] Backend tests with a small sample video, and a video in the browser test
     - [x] Motion photo extraction checked on 2026-11-11 with the real files of [MotionPhotoSamples](https://github.com/NightMean/MotionPhotoSamples): a Pixel 9 Pro XL and Samsung phones and a tablet, in JPEG and HEIC, each giving a whole MP4. Most of them are HEVC
     - [ ] Check on real devices: the poster of an HDR video from an iPhone, and playback in Safari on an iPhone and in Firefox
-  - [ ] Live Photos: the iPhone photo and its video as one item, pairing files that come in either order, including those imported before
+  - [x] Live Photos: the iPhone photo and its video as one item, pairing files that come in either order, including those imported before, as described under [Live Photos](architecture.md)
+    - Pairing checked on 2026-11-12 with the iPhone 15 pair of [MotionPhotoSamples](https://github.com/NightMean/MotionPhotoSamples): the HEIC and the HEVC MOV share the tag, and the video paired with the photo whichever came first
+    - [ ] Check on real devices: an iPhone library uploaded over WebDAV, and the motion in Safari and in Firefox
   - [ ] Step 2, if needed: transcoding
     - [ ] Benchmark on the NAS: software transcoding of 1080p and 4K HEVC to H.264 against hardware transcoding through VAAPI, which needs `/dev/dri` in the container
     - [ ] Depending on the result, a playable copy for videos the browser cannot play, made on a queue of its own with one worker and low priority, as folder scans are

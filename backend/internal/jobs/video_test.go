@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -203,5 +204,143 @@ func TestBackfillMotion(t *testing.T) {
 	}
 	if current, _ := e.queries.GetPhoto(ctx, plain.ID); current.HasMotion {
 		t.Error("a plain photo got motion")
+	}
+}
+
+// The video of a Live Photo that comes after its photo is paired when it is
+// processed, and the photo keeps the video as its motion when its previews
+// are made again. The fixture photo cannot carry Apple's maker notes, so the
+// photo gets its identifier in the database, as reading them would leave it.
+func TestLivePhotoPairsWhenProcessed(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	still := waitForStatus(t, e, upload(t, e, "landscape.jpg").ID, "ready")
+	_, err := e.pool.Exec(ctx, `UPDATE photos SET exif = exif || '{"ContentIdentifier": "LIVE-1"}' WHERE id = $1`, still.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	path := filepath.Join(t.TempDir(), "live.mov")
+	data, err := os.ReadFile(filepath.Join("..", "media", "testdata", "video.mov"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("exiftool", "-q", "-overwrite_original", "-Keys:ContentIdentifier=LIVE-1", path).CombinedOutput()
+	if err != nil {
+		t.Fatalf("exiftool: %v: %s", err, out)
+	}
+	data, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.ingest.Ingest(ctx, e.owner, bytes.NewReader(data), "live.mov", ingest.PriorityInteractive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	video := waitForStatus(t, e, res.Photo.ID, "ready")
+	if video.ContentIdentifier == nil || *video.ContentIdentifier != "LIVE-1" {
+		t.Fatalf("content identifier = %v", video.ContentIdentifier)
+	}
+	// Pairing follows the update that marks the video ready.
+	deadline := time.Now().Add(10 * time.Second)
+	for video.LivePhotoID == nil && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+		if video, err = e.queries.GetPhoto(ctx, video.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if video.LivePhotoID == nil || *video.LivePhotoID != still.ID {
+		t.Fatalf("live photo = %v, want %d", video.LivePhotoID, still.ID)
+	}
+	if still, err = e.queries.GetPhoto(ctx, still.ID); err != nil || !still.HasMotion {
+		t.Fatalf("has motion = %v, err = %v", still.HasMotion, err)
+	}
+
+	if _, err := e.ingest.Jobs.Insert(ctx, jobs.RenderPreviewsArgs{PhotoID: still.ID}, nil); err != nil {
+		t.Fatal(err)
+	}
+	deadline = time.Now().Add(30 * time.Second)
+	for {
+		current, err := e.queries.GetPhoto(ctx, still.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if current.PreviewVersion != still.PreviewVersion {
+			if !current.HasMotion {
+				t.Error("the photo lost its video with new previews")
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the previews were not made again")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// The periodic job pairs files processed before the application paired them,
+// one photo with one video, and only those of the same owner.
+func TestPairLivePhotosJob(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	other, err := e.queries.CreateUser(ctx, store.CreateUserParams{Login: "boris", PasswordHash: "x", Role: "user"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo := waitForStatus(t, e, upload(t, e, "landscape.jpg").ID, "ready")
+	second := waitForStatus(t, e, upload(t, e, "landscape.heic").ID, "ready")
+	mov := waitForStatus(t, e, upload(t, e, "video.mov").ID, "ready")
+	mp4 := waitForStatus(t, e, upload(t, e, "video.mp4").ID, "ready")
+	data, err := os.ReadFile(filepath.Join("..", "media", "testdata", "rotated.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.ingest.Ingest(ctx, other.ID, bytes.NewReader(data), "rotated.jpg", ingest.PriorityInteractive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stranger := waitForStatus(t, e, res.Photo.ID, "ready")
+	_, err = e.pool.Exec(ctx, `UPDATE photos SET exif = exif || '{"ContentIdentifier": "LIVE-2"}' WHERE id = ANY ($1)`,
+		[]int64{photo.ID, second.ID, mov.ID, stranger.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := e.ingest.Jobs.Insert(ctx, jobs.PairLivePhotosArgs{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		current, err := e.queries.GetPhoto(ctx, mov.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if current.LivePhotoID != nil {
+			if *current.LivePhotoID != photo.ID {
+				t.Errorf("the video paired with %d, want the oldest photo %d", *current.LivePhotoID, photo.ID)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the video was not paired")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	for _, id := range []int64{second.ID, stranger.ID, mp4.ID} {
+		current, err := e.queries.GetPhoto(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if current.HasMotion || current.LivePhotoID != nil {
+			t.Errorf("photo %d was paired", id)
+		}
+	}
+
+	// Another run finds nothing left to pair.
+	if paired, err := jobs.PairLivePhotos(ctx, e.pool, nil, nil); err != nil || paired != 0 {
+		t.Errorf("paired %d again, err = %v", paired, err)
 	}
 }

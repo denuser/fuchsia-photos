@@ -184,9 +184,10 @@ func importedDuplicate(photo store.Photo) Result {
 	}
 }
 
-// Purge permanently deletes a photo from the owner's trash, with its files. It
-// does nothing if the photo is not in the trash. Once started, it ignores
-// cancellation, so that a closed page cannot separate a record from its files.
+// Purge permanently deletes a photo from the owner's trash, with its files and
+// the video of a Live Photo. It does nothing if the photo is not in the trash.
+// Once started, it ignores cancellation, so that a closed page cannot separate
+// a record from its files.
 func (s *Service) Purge(ctx context.Context, ownerID, photoID int64) error {
 	ctx = context.WithoutCancel(ctx)
 	tx, err := s.Pool.Begin(ctx)
@@ -220,27 +221,49 @@ func (s *Service) Purge(ctx context.Context, ownerID, photoID int64) error {
 	if err := queries.DeletePhotoLinks(ctx, photoID); err != nil {
 		return fmt.Errorf("delete photo links: %w", err)
 	}
+	purged := []store.Photo{photo}
+
+	video, err := queries.GetLivePhotoVideo(ctx, &photoID)
+	switch {
+	case err == nil:
+		if err := queries.LockPhotoFile(ctx, store.LockPhotoFileParams{OwnerID: video.OwnerID, Sha256: video.Sha256}); err != nil {
+			return fmt.Errorf("lock video: %w", err)
+		}
+		if _, err := queries.PurgeLivePhotoVideo(ctx, store.PurgeLivePhotoVideoParams{ID: video.ID, PhotoID: &photoID}); err != nil {
+			return fmt.Errorf("delete video: %w", err)
+		}
+		if err := queries.DeletePhotoLinks(ctx, video.ID); err != nil {
+			return fmt.Errorf("delete video links: %w", err)
+		}
+		purged = append(purged, video)
+	case !errors.Is(err, pgx.ErrNoRows):
+		return fmt.Errorf("look up video: %w", err)
+	}
 
 	// The record goes only if the file does. A commit that fails after this leaves
 	// the photo in the trash without its original, and purging it again finishes the job.
-	err = os.Remove(s.Layout.Original(photo.OwnerID, photo.Sha256, photo.Mime))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("remove original: %w", err)
+	for _, p := range purged {
+		err = os.Remove(s.Layout.Original(p.OwnerID, p.Sha256, p.Mime))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove original: %w", err)
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
 
 	// A stray preview is harmless: photo ids are never reused.
-	files := []string{s.Layout.Motion(photo.ID)}
-	if photo.PreviewFormat != nil {
-		for _, kind := range []string{storage.PreviewGrid, storage.PreviewViewer} {
-			files = append(files, s.Layout.Preview(photo.ID, kind, *photo.PreviewFormat))
+	for _, p := range purged {
+		files := []string{s.Layout.Motion(p.ID)}
+		if p.PreviewFormat != nil {
+			for _, kind := range []string{storage.PreviewGrid, storage.PreviewViewer} {
+				files = append(files, s.Layout.Preview(p.ID, kind, *p.PreviewFormat))
+			}
 		}
-	}
-	for _, file := range files {
-		if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
-			slog.Warn("remove preview", "photo", photo.ID, "error", err)
+		for _, file := range files {
+			if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
+				slog.Warn("remove preview", "photo", p.ID, "error", err)
+			}
 		}
 	}
 	return nil
@@ -327,8 +350,17 @@ func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhot
 }
 
 // duplicate handles a file the owner already has. Uploading a photo from the
-// trash again means the owner wants it back.
+// trash again means the owner wants it back. The video of a Live Photo is
+// answered with its photo and brings nothing back: restoring the photo would
+// need the lock on its file too, which a purge takes before the video's.
 func (s *Service) duplicate(ctx context.Context, tx pgx.Tx, queries *store.Queries, photo store.Photo) (Result, error) {
+	if photo.LivePhotoID != nil {
+		still, err := queries.GetPhoto(ctx, *photo.LivePhotoID)
+		if err != nil {
+			return Result{}, fmt.Errorf("look up live photo: %w", err)
+		}
+		return Result{Photo: still, Duplicate: true}, nil
+	}
 	if photo.DeletedAt == nil {
 		return Result{Photo: photo, Duplicate: true}, nil
 	}
@@ -338,6 +370,12 @@ func (s *Service) duplicate(ctx context.Context, tx pgx.Tx, queries *store.Queri
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Result{}, fmt.Errorf("commit: %w", err)
+	}
+	// A video may have come in while its photo was in the trash.
+	if restored.ContentIdentifier != nil {
+		if _, err := jobs.PairLivePhotos(ctx, s.Pool, &restored.OwnerID, restored.ContentIdentifier); err != nil {
+			slog.Warn("pair live photo", "photo", restored.ID, "error", err)
+		}
 	}
 	return Result{Photo: restored, Duplicate: true, Restored: true}, nil
 }
