@@ -48,11 +48,14 @@ Decisions are in the [architecture](architecture.md).
     - [x] Motion photos: the video embedded in a Google or Samsung motion photo is extracted during processing, kept next to the previews and played in the viewer. Photos uploaded earlier get it from a job of their own, without reprocessing the library
     - [x] Backend tests with a small sample video, and a video in the browser test
     - [x] Motion photo extraction checked on 2026-11-11 with the real files of [MotionPhotoSamples](https://github.com/NightMean/MotionPhotoSamples): a Pixel 9 Pro XL and Samsung phones and a tablet, in JPEG and HEIC, each giving a whole MP4. Most of them are HEVC
-    - [ ] Check on real devices: the poster of an HDR video from an iPhone, and playback in Safari on an iPhone and in Firefox
+    - [x] Playback checked on 2026-11-12 in Safari on an iPhone and in Firefox
+    - [ ] Check on real devices: the poster of an HDR video from an iPhone
+      - A PQ video in H.264, not from an iPhone, got a tone-mapped poster with normal colours in the application image on 2026-11-12
   - [x] Live Photos: the iPhone photo and its video as one item, pairing files that come in either order, including those imported before, as described under [Live Photos](architecture.md)
     - Pairing checked on 2026-11-12 with the iPhone 15 pair of [MotionPhotoSamples](https://github.com/NightMean/MotionPhotoSamples): the HEIC and the HEVC MOV share the tag, and the video paired with the photo whichever came first
     - The motion checked on 2026-11-12 in Chrome on a Mac, with Live Photos from an iPad uploaded to the development stack. The browser's file picker gave only their photos, so their videos were uploaded too
-    - [ ] Check on real devices: an iPhone library uploaded over WebDAV, and the motion in Safari and in Firefox
+    - The motion checked on 2026-11-12 in Safari and in Firefox
+    - [ ] Check on real devices: an iPhone library uploaded over WebDAV
   - [ ] Step 2, if needed: transcoding
     - [ ] Benchmark on the NAS: software transcoding of 1080p and 4K HEVC to H.264 against hardware transcoding through VAAPI, which needs `/dev/dri` in the container
     - [ ] Depending on the result, a playable copy for videos the browser cannot play, made on a queue of its own with one worker and low priority, as folder scans are
