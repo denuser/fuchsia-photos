@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -34,8 +35,14 @@ type Metadata struct {
 }
 
 // Tags that hold the video embedded in a motion photo: Google's format, which
-// other makers use too, and Samsung's own.
-var motionTags = []string{"MotionPhotoVideo", "EmbeddedVideoFile"}
+// other makers use too, Samsung's own, and Google's older MicroVideo, which
+// gives only how far from the end of the file the video starts.
+var motionTags = []string{"MotionPhotoVideo", "EmbeddedVideoFile", microVideoOffset}
+
+// exiftool does not extract the video of a MicroVideo photo (Pixel 2 and 3
+// and other phones up to about 2019), so ExtractMotion cuts it from the end
+// of the file.
+const microVideoOffset = "MicroVideoOffset"
 
 // Reader keeps one exiftool process running, because starting Perl for every
 // photo would be slow. It handles one photo at a time.
@@ -122,9 +129,40 @@ func ExtractMotion(ctx context.Context, path, tag string) ([]byte, error) {
 		return nil, fmt.Errorf("extract motion video of %s: %w: %s", path, err, strings.TrimSpace(stderr.String()))
 	}
 	data := stdout.Bytes()
+	if tag == microVideoOffset {
+		var err error
+		if data, err = fileTail(path, strings.TrimSpace(string(data))); err != nil {
+			return nil, fmt.Errorf("extract motion video of %s: %w", path, err)
+		}
+	}
 	// Every MP4 starts with an ftyp box.
 	if len(data) < 12 || string(data[4:8]) != "ftyp" {
 		return nil, fmt.Errorf("extract motion video of %s: %s holds no MP4", path, tag)
+	}
+	return data, nil
+}
+
+// fileTail reads the last length bytes of the file at path.
+func fileTail(path, length string) ([]byte, error) {
+	n, err := strconv.ParseInt(length, 10, 64)
+	if err != nil || n <= 0 {
+		return nil, fmt.Errorf("%s %q is not a length", microVideoOffset, length)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if n > info.Size() {
+		return nil, fmt.Errorf("%s %d is beyond the start of the file", microVideoOffset, n)
+	}
+	data := make([]byte, n)
+	if _, err := f.ReadAt(data, info.Size()-n); err != nil {
+		return nil, err
 	}
 	return data, nil
 }

@@ -681,7 +681,8 @@ WHERE status = 'ready'
   AND purged_at IS NULL
   AND NOT has_motion
   AND mime NOT LIKE 'video/%'
-  AND (exif -> 'MotionPhotoVideo' IS NOT NULL OR exif -> 'EmbeddedVideoFile' IS NOT NULL)
+  AND (exif -> 'MotionPhotoVideo' IS NOT NULL OR exif -> 'EmbeddedVideoFile' IS NOT NULL
+       OR exif -> 'MicroVideoOffset' IS NOT NULL)
   AND id > $1
 ORDER BY id
 LIMIT $2

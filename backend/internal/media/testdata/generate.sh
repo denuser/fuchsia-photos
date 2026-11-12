@@ -69,3 +69,11 @@ EOF
 cp landscape.jpg "$tmp/still.jpg"
 exiftool -q -overwrite_original "-xmp<=$tmp/motion.xmp" "$tmp/still.jpg"
 cat "$tmp/still.jpg" "$tmp/motion.mp4" > motion.jpg
+
+# A motion photo in Google's older MicroVideo format, as a Pixel 2 or 3 made
+# it: the same video follows the JPEG, and XMP gives only its length, which
+# exiftool does not extract.
+cp landscape.jpg "$tmp/micro.jpg"
+exiftool -q -overwrite_original -XMP-GCamera:MicroVideo=1 -XMP-GCamera:MicroVideoVersion=1 \
+    "-XMP-GCamera:MicroVideoOffset=$length" -XMP-GCamera:MicroVideoPresentationTimestampUs=0 "$tmp/micro.jpg"
+cat "$tmp/micro.jpg" "$tmp/motion.mp4" > microvideo.jpg

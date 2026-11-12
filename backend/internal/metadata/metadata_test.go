@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -106,35 +107,67 @@ func TestMotionTag(t *testing.T) {
 	}
 }
 
-// The fixture follows Google's format, made by media/testdata/generate.sh.
+// The fixtures follow Google's formats, made by media/testdata/generate.sh.
 func TestExtractMotion(t *testing.T) {
 	reader, err := NewReader()
 	if err != nil {
 		t.Skip("exiftool is not installed:", err)
 	}
 	defer reader.Close()
-	path := filepath.Join("..", "media", "testdata", "motion.jpg")
-	meta, err := reader.Read(path, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if meta.MotionTag != "MotionPhotoVideo" {
-		t.Fatalf("MotionTag = %q", meta.MotionTag)
-	}
-	video, err := ExtractMotion(context.Background(), path, meta.MotionTag)
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.HasSuffix(data, video) || string(video[4:8]) != "ftyp" {
-		t.Error("the extracted video is not the end of the file")
-	}
+	for _, c := range []struct{ file, tag string }{
+		{"motion.jpg", "MotionPhotoVideo"},
+		{"microvideo.jpg", "MicroVideoOffset"},
+	} {
+		path := filepath.Join("..", "media", "testdata", c.file)
+		meta, err := reader.Read(path, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if meta.MotionTag != c.tag {
+			t.Fatalf("%s: MotionTag = %q, want %q", c.file, meta.MotionTag, c.tag)
+		}
+		video, err := ExtractMotion(context.Background(), path, meta.MotionTag)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.HasSuffix(data, video) || string(video[4:8]) != "ftyp" {
+			t.Errorf("%s: the extracted video is not the end of the file", c.file)
+		}
+		if MotionTag(meta.Tags) != c.tag {
+			t.Errorf("%s: stored tags name %q", c.file, MotionTag(meta.Tags))
+		}
 
-	if _, err := ExtractMotion(context.Background(), filepath.Join("..", "media", "testdata", "landscape.jpg"), meta.MotionTag); err == nil {
-		t.Error("a photo without motion gave a video")
+		if _, err := ExtractMotion(context.Background(), filepath.Join("..", "media", "testdata", "landscape.jpg"), meta.MotionTag); err == nil {
+			t.Errorf("%s: a photo without motion gave a video", c.tag)
+		}
+	}
+}
+
+// An offset that does not lead to an MP4 gives no video.
+func TestExtractMicroVideoBadOffset(t *testing.T) {
+	if _, err := exec.LookPath("exiftool"); err != nil {
+		t.Skip("exiftool is not installed")
+	}
+	data, err := os.ReadFile(filepath.Join("..", "media", "testdata", "microvideo.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	for name, mangle := range map[string]func([]byte) []byte{
+		"short":     func(d []byte) []byte { return append(d, 0, 0, 0, 0) },
+		"truncated": func(d []byte) []byte { return d[:len(d)-100] },
+	} {
+		path := filepath.Join(dir, name+".jpg")
+		if err := os.WriteFile(path, mangle(append([]byte(nil), data...)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ExtractMotion(context.Background(), path, "MicroVideoOffset"); err == nil {
+			t.Errorf("%s: a wrong offset gave a video", name)
+		}
 	}
 }
 

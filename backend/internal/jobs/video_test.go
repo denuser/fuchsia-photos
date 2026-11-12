@@ -86,16 +86,19 @@ func TestBrokenVideoFailsWithoutRetrying(t *testing.T) {
 func TestMotionPhoto(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
-	photo := waitForStatus(t, e, upload(t, e, "motion.jpg").ID, "ready")
-	if !photo.HasMotion || photo.Duration != nil {
-		t.Fatalf("has motion = %v, duration = %v", photo.HasMotion, photo.Duration)
-	}
-	video, err := os.ReadFile(e.layout.Motion(photo.ID))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(video[4:8]) != "ftyp" {
-		t.Error("the motion file is not an MP4")
+	var photo store.Photo
+	for _, file := range []string{"microvideo.jpg", "motion.jpg"} {
+		photo = waitForStatus(t, e, upload(t, e, file).ID, "ready")
+		if !photo.HasMotion || photo.Duration != nil {
+			t.Fatalf("%s: has motion = %v, duration = %v", file, photo.HasMotion, photo.Duration)
+		}
+		video, err := os.ReadFile(e.layout.Motion(photo.ID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(video[4:8]) != "ftyp" {
+			t.Errorf("%s: the motion file is not an MP4", file)
+		}
 	}
 
 	plain := waitForStatus(t, e, upload(t, e, "landscape.jpg").ID, "ready")
@@ -168,39 +171,44 @@ func TestUploadLimits(t *testing.T) {
 func TestBackfillMotion(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
-	photo := waitForStatus(t, e, upload(t, e, "motion.jpg").ID, "ready")
+	var photos []store.Photo
+	for _, file := range []string{"motion.jpg", "microvideo.jpg"} {
+		photo := waitForStatus(t, e, upload(t, e, file).ID, "ready")
+		photos = append(photos, photo)
+		// As an earlier version left it.
+		if _, err := e.pool.Exec(ctx, `UPDATE photos SET has_motion = false WHERE id = $1`, photo.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(e.layout.Motion(photo.ID)); err != nil {
+			t.Fatal(err)
+		}
+	}
 	plain := waitForStatus(t, e, upload(t, e, "landscape.jpg").ID, "ready")
-
-	// As an earlier version left it.
-	if _, err := e.pool.Exec(ctx, `UPDATE photos SET has_motion = false WHERE id = $1`, photo.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Remove(e.layout.Motion(photo.ID)); err != nil {
-		t.Fatal(err)
-	}
 
 	if _, err := e.ingest.Jobs.Insert(ctx, jobs.BackfillMotionArgs{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(30 * time.Second)
-	for {
-		current, err := e.queries.GetPhoto(ctx, photo.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if current.HasMotion {
-			if current.PreviewVersion != photo.PreviewVersion {
-				t.Error("the backfill made new previews")
+	for _, photo := range photos {
+		for {
+			current, err := e.queries.GetPhoto(ctx, photo.ID)
+			if err != nil {
+				t.Fatal(err)
 			}
-			break
+			if current.HasMotion {
+				if current.PreviewVersion != photo.PreviewVersion {
+					t.Error("the backfill made new previews")
+				}
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("the motion of photo %d was not backfilled", photo.ID)
+			}
+			time.Sleep(50 * time.Millisecond)
 		}
-		if time.Now().After(deadline) {
-			t.Fatal("the motion was not backfilled")
+		if _, err := os.Stat(e.layout.Motion(photo.ID)); err != nil {
+			t.Error(err)
 		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	if _, err := os.Stat(e.layout.Motion(photo.ID)); err != nil {
-		t.Error(err)
 	}
 	if current, _ := e.queries.GetPhoto(ctx, plain.ID); current.HasMotion {
 		t.Error("a plain photo got motion")
