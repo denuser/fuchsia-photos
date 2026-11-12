@@ -36,7 +36,7 @@ Decisions are in the [architecture](architecture.md).
   - Decisions, settled on 2026-11-11:
     - Live Photos and motion photos: step 1 plays the video embedded in Android motion photos as the motion of the photo. The video file of an iPhone Live Photo comes in as a video of its own until a later step pairs it with its photo, the way Immich and Nextcloud Memories hide it behind the photo. Pairing needs both files in any order, from three sources, with the trash, sharing and every photo list taking the pair into account, which is most of the cost
     - A video may be up to 4 GB per upload, a photo stays at 512 MB. A failed upload starts again from the beginning, with no resuming
-    - ffmpeg and ffprobe from Debian inside the application image, run as separate processes. A separate service would need the files sent over the network or a shared volume, for an image smaller by a few hundred MB
+    - ffmpeg and ffprobe inside the application image, run as separate processes. A separate service would need the files sent over the network or a shared volume. On 2026-11-12 Debian's package gave way to a minimal build of the same release, which took the arm64 image from 932 MB to 448 MB on disk
     - Transcoding waits for the benchmark: no VAAPI driver and no `/dev/dri` in step 1
   - [ ] Step 1: accept and play
     - [x] Detect MP4 and MOV in ingest, next to HEIC, which shares the `ftyp` container, and accept them from the browser, WebDAV and folder scans
