@@ -60,6 +60,7 @@ WHERE (p.owner_id = $2
            AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($7::bigint[]))))
   AND ($8::text[] IS NULL OR p.camera = ANY ($8::text[]))
   AND ($9::text[] IS NULL OR p.lens = ANY ($9::text[]))
+  AND ($10::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($10::text[]))
 GROUP BY 1
 ORDER BY 1 DESC
 `
@@ -74,6 +75,7 @@ type CountTimelineMonthsParams struct {
 	TagIds     []int64
 	Cameras    []string
 	Lenses     []string
+	Kinds      []string
 }
 
 type CountTimelineMonthsRow struct {
@@ -94,6 +96,7 @@ func (q *Queries) CountTimelineMonths(ctx context.Context, arg CountTimelineMont
 		arg.TagIds,
 		arg.Cameras,
 		arg.Lenses,
+		arg.Kinds,
 	)
 	if err != nil {
 		return nil, err
@@ -422,6 +425,7 @@ WHERE (p.owner_id = $1
        OR (p.owner_id = $1
            AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($6::bigint[]))))
   AND ($7::text[] IS NULL OR p.lens = ANY ($7::text[]))
+  AND ($8::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($8::text[]))
 GROUP BY p.camera
 ORDER BY p.camera
 `
@@ -434,6 +438,7 @@ type ListCamerasParams struct {
 	AlbumID    *int64
 	TagIds     []int64
 	Lenses     []string
+	Kinds      []string
 }
 
 type ListCamerasRow struct {
@@ -441,10 +446,10 @@ type ListCamerasRow struct {
 	Count int64
 }
 
-// The cameras and lenses of the photos ListTimeline filters, with how many
-// photos each took, for the filters of the timeline. Each list takes every
-// filter but its own: the filter keeps any of its names, so a name not chosen
-// yet counts the photos it would add.
+// The cameras, lenses and media kinds of the photos ListTimeline filters, with
+// how many photos each has, for the filters of the timeline. Each list takes
+// every filter but its own: the filter keeps any of its names, so a name not
+// chosen yet counts the photos it would add. A kind is photo_kind's name.
 func (q *Queries) ListCameras(ctx context.Context, arg ListCamerasParams) ([]ListCamerasRow, error) {
 	rows, err := q.db.Query(ctx, listCameras,
 		arg.OwnerID,
@@ -454,6 +459,7 @@ func (q *Queries) ListCameras(ctx context.Context, arg ListCamerasParams) ([]Lis
 		arg.AlbumID,
 		arg.TagIds,
 		arg.Lenses,
+		arg.Kinds,
 	)
 	if err != nil {
 		return nil, err
@@ -535,6 +541,72 @@ func (q *Queries) ListChangedPhotos(ctx context.Context, arg ListChangedPhotosPa
 	return items, nil
 }
 
+const listKinds = `-- name: ListKinds :many
+SELECT photo_kind(p.mime, p.has_motion)::text AS name, count(*) AS count
+FROM photos p
+WHERE (p.owner_id = $1
+       OR ($2::boolean AND p.status = 'ready'
+           AND (photo_shared_directly(p, $1::bigint) OR photo_in_visible_album(p, $1::bigint))))
+  AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
+  AND ($3::timestamptz IS NULL OR p.sort_at >= $3::timestamptz)
+  AND ($4::timestamptz IS NULL OR p.sort_at < $4::timestamptz)
+  AND ($5::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $5::bigint))
+  AND ($6::bigint[] IS NULL
+       OR (p.owner_id = $1
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($6::bigint[]))))
+  AND ($7::text[] IS NULL OR p.camera = ANY ($7::text[]))
+  AND ($8::text[] IS NULL OR p.lens = ANY ($8::text[]))
+GROUP BY 1
+ORDER BY 1
+`
+
+type ListKindsParams struct {
+	OwnerID    int64
+	WithShared bool
+	FromTime   *time.Time
+	ToTime     *time.Time
+	AlbumID    *int64
+	TagIds     []int64
+	Cameras    []string
+	Lenses     []string
+}
+
+type ListKindsRow struct {
+	Name  string
+	Count int64
+}
+
+func (q *Queries) ListKinds(ctx context.Context, arg ListKindsParams) ([]ListKindsRow, error) {
+	rows, err := q.db.Query(ctx, listKinds,
+		arg.OwnerID,
+		arg.WithShared,
+		arg.FromTime,
+		arg.ToTime,
+		arg.AlbumID,
+		arg.TagIds,
+		arg.Cameras,
+		arg.Lenses,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListKindsRow
+	for rows.Next() {
+		var i ListKindsRow
+		if err := rows.Scan(&i.Name, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLenses = `-- name: ListLenses :many
 SELECT p.lens::text AS name, count(*) AS count
 FROM photos p
@@ -552,6 +624,7 @@ WHERE (p.owner_id = $1
        OR (p.owner_id = $1
            AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($6::bigint[]))))
   AND ($7::text[] IS NULL OR p.camera = ANY ($7::text[]))
+  AND ($8::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($8::text[]))
 GROUP BY p.lens
 ORDER BY p.lens
 `
@@ -564,6 +637,7 @@ type ListLensesParams struct {
 	AlbumID    *int64
 	TagIds     []int64
 	Cameras    []string
+	Kinds      []string
 }
 
 type ListLensesRow struct {
@@ -580,6 +654,7 @@ func (q *Queries) ListLenses(ctx context.Context, arg ListLensesParams) ([]ListL
 		arg.AlbumID,
 		arg.TagIds,
 		arg.Cameras,
+		arg.Kinds,
 	)
 	if err != nil {
 		return nil, err
@@ -696,8 +771,9 @@ WHERE (p.owner_id = $1
            AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($8::bigint[]))))
   AND ($9::text[] IS NULL OR p.camera = ANY ($9::text[]))
   AND ($10::text[] IS NULL OR p.lens = ANY ($10::text[]))
+  AND ($11::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($11::text[]))
 ORDER BY p.sort_at DESC, p.id DESC
-LIMIT $11
+LIMIT $12
 `
 
 type ListTimelineParams struct {
@@ -711,6 +787,7 @@ type ListTimelineParams struct {
 	TagIds      []int64
 	Cameras     []string
 	Lenses      []string
+	Kinds       []string
 	MaxRows     int32
 }
 
@@ -732,6 +809,7 @@ func (q *Queries) ListTimeline(ctx context.Context, arg ListTimelineParams) ([]P
 		arg.TagIds,
 		arg.Cameras,
 		arg.Lenses,
+		arg.Kinds,
 		arg.MaxRows,
 	)
 	if err != nil {

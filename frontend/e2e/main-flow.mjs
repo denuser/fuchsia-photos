@@ -573,6 +573,14 @@ const steps = {
     // The motion lasts a second, and the photo comes back after it.
     await waitFor('the motion to end', () => !document.querySelector('[data-testid=viewer-motion]'))
     await page.keyboard.press('Escape')
+
+    // The type filter keeps the video alone.
+    await page.getByRole('combobox', { name: 'Any of these types' }).click()
+    await page.getByRole('option', { name: /Videos.*1 photo/ }).click()
+    await page.keyboard.press('Escape')
+    await tiles(1)
+    await page.getByTestId('applied-filters').getByRole('button', { name: 'Clear all filters' }).click()
+    await tiles(5)
   },
   'the server agrees with the screen': async () => {
     const [library, trash] = [await apiTotal('photos'), await apiTotal('photos/trash')]

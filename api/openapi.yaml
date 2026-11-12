@@ -390,6 +390,13 @@ paths:
             type: array
             items:
               type: string
+        - name: kind
+          in: query
+          description: Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/MediaKind"
         - name: album
           in: query
           description: Only photos of this album
@@ -589,6 +596,13 @@ paths:
             type: array
             items:
               type: string
+        - name: kind
+          in: query
+          description: Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/MediaKind"
         - name: album
           in: query
           description: Only photos of this album
@@ -627,8 +641,8 @@ paths:
   /photos/cameras:
     get:
       operationId: listCameras
-      summary: List the cameras and lenses of the photos listPhotos gives
-      description: For the camera and lens filters of listPhotos, and takes its filters. Each list leaves out its own filter, so that its counts are the photos each name would add. Photos in the trash are left out
+      summary: List the cameras, lenses and media kinds of the photos listPhotos gives
+      description: For the camera, lens and kind filters of listPhotos, and takes its filters. Each list leaves out its own filter, so that its counts are the photos each name would add. Photos in the trash are left out
       parameters:
         - name: from
           in: query
@@ -664,6 +678,13 @@ paths:
             type: array
             items:
               type: string
+        - name: kind
+          in: query
+          description: Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/MediaKind"
         - name: album
           in: query
           description: Only photos of this album
@@ -678,7 +699,7 @@ paths:
             default: false
       responses:
         "200":
-          description: Cameras and lenses by name, with the number of photos each took
+          description: Cameras, lenses and media kinds by name, with the number of photos of each
           content:
             application/json:
               schema:
@@ -1911,7 +1932,7 @@ components:
           type: number
     CameraLists:
       type: object
-      required: [cameras, lenses]
+      required: [cameras, lenses, kinds]
       properties:
         cameras:
           type: array
@@ -1921,6 +1942,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/NameCount"
+        kinds:
+          description: The media kinds that have photos, by the names of MediaKind
+          type: array
+          items:
+            $ref: "#/components/schemas/NameCount"
+    MediaKind:
+      type: string
+      enum: [photo, motion, video]
     NameCount:
       type: object
       required: [name, count]

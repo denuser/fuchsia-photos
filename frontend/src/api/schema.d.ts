@@ -418,8 +418,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the cameras and lenses of the photos listPhotos gives
-         * @description For the camera and lens filters of listPhotos, and takes its filters. Each list leaves out its own filter, so that its counts are the photos each name would add. Photos in the trash are left out
+         * List the cameras, lenses and media kinds of the photos listPhotos gives
+         * @description For the camera, lens and kind filters of listPhotos, and takes its filters. Each list leaves out its own filter, so that its counts are the photos each name would add. Photos in the trash are left out
          */
         get: operations["listCameras"];
         put?: never;
@@ -1332,7 +1332,11 @@ export interface components {
         CameraLists: {
             cameras: components["schemas"]["NameCount"][];
             lenses: components["schemas"]["NameCount"][];
+            /** @description The media kinds that have photos, by the names of MediaKind */
+            kinds: components["schemas"]["NameCount"][];
         };
+        /** @enum {string} */
+        MediaKind: "photo" | "motion" | "video";
         NameCount: {
             name: string;
             /** Format: int64 */
@@ -1945,6 +1949,8 @@ export interface operations {
                 camera?: string[];
                 /** @description Only photos taken with one of these lenses, named as listCameras gives them */
                 lens?: string[];
+                /** @description Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them */
+                kind?: components["schemas"]["MediaKind"][];
                 /** @description Only photos of this album */
                 album?: number;
                 /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
@@ -2149,6 +2155,8 @@ export interface operations {
                 camera?: string[];
                 /** @description Only photos taken with one of these lenses, named as listCameras gives them */
                 lens?: string[];
+                /** @description Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them */
+                kind?: components["schemas"]["MediaKind"][];
                 /** @description Only photos of this album */
                 album?: number;
                 /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
@@ -2206,6 +2214,8 @@ export interface operations {
                 camera?: string[];
                 /** @description Only photos taken with one of these lenses, named as listCameras gives them */
                 lens?: string[];
+                /** @description Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them */
+                kind?: components["schemas"]["MediaKind"][];
                 /** @description Only photos of this album */
                 album?: number;
                 /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
@@ -2217,7 +2227,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cameras and lenses by name, with the number of photos each took */
+            /** @description Cameras, lenses and media kinds by name, with the number of photos of each */
             200: {
                 headers: {
                     [name: string]: unknown;

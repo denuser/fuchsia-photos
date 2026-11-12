@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/denuser/fuchsia-photos/backend/internal/auth"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 )
 
@@ -113,5 +114,54 @@ func TestCameraFilters(t *testing.T) {
 		if len(got.Cameras) != 2 {
 			t.Errorf("cameras = %+v", got.Cameras)
 		}
+	})
+}
+
+// Each item is exactly one kind: a video, a photo with motion or a still
+// photo. The video of a paired Live Photo is not an item of its own, and its
+// photo counts as motion.
+func TestKindFilter(t *testing.T) {
+	e := setup(t)
+	e.addUser("anna", auth.RoleUser)
+	anna := e.loggedIn("anna")
+
+	still := anna.addPhoto("landscape.jpg")
+	markReady(t, e, still)
+	video := anna.addPhoto("video.mp4")
+	markReady(t, e, video)
+	motion := anna.addPhoto("motion.jpg")
+	markReady(t, e, motion)
+	if _, err := e.pool.Exec(context.Background(), `UPDATE photos SET has_motion = true WHERE id = $1`, motion); err != nil {
+		t.Fatal(err)
+	}
+	live := anna.addPhoto("landscape.heic")
+	markLive(t, e, live, "LIVE-1")
+	liveVideo := anna.addPhoto("video.mov")
+	markLive(t, e, liveVideo, "LIVE-1")
+	if paired := pairLivePhotos(t, e); paired != 1 {
+		t.Fatalf("paired %d, want 1", paired)
+	}
+
+	t.Run("filters by any of the kinds", func(t *testing.T) {
+		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=photo"), still)
+		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=video"), video)
+		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=motion"), live, motion)
+		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=motion&kind=video"), live, motion, video)
+		wantMonths(t, anna.months("/api/v1/photos/months?tz=UTC&kind=motion"), monthJSON{time.Now().UTC().Format("2006-01"), 2})
+	})
+
+	t.Run("counts the kinds with the other filters but its own", func(t *testing.T) {
+		got := decode[struct {
+			Kinds []nameCountJSON `json:"kinds"`
+		}](t, anna.get("/api/v1/photos/cameras?kind=video"))
+		want := []nameCountJSON{{"motion", 2}, {"photo", 1}, {"video", 1}}
+		if !reflect.DeepEqual(got.Kinds, want) {
+			t.Errorf("kinds = %+v, want %+v", got.Kinds, want)
+		}
+	})
+
+	t.Run("refuses an unknown kind", func(t *testing.T) {
+		wantStatus(t, anna.get("/api/v1/photos?kind=gif"), http.StatusBadRequest)
+		wantStatus(t, anna.get("/api/v1/photos/cameras?kind=gif"), http.StatusBadRequest)
 	})
 }

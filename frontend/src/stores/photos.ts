@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 
-import { API_BASE, api, type Photo, type PhotoEvent } from '../api/client'
+import { API_BASE, api, type MediaKind, type Photo, type PhotoEvent } from '../api/client'
 
 // The server takes this many photos in one bulk action.
 const BULK_SIZE = 500
@@ -19,6 +19,8 @@ export interface PhotoQuery {
   tags?: number[]
   cameras?: string[]
   lenses?: string[]
+  // Still photos, photos with motion or videos.
+  kinds?: MediaKind[]
   from?: string
   to?: string
   // Photos that match a description, best first.
@@ -157,12 +159,13 @@ function fetchMonths(query: PhotoQuery) {
 }
 
 // The filters of the user's own list, other than the album and the dates. An empty one is left out.
-export function listFilters({ withShared, tags, cameras, lenses }: PhotoQuery) {
+export function listFilters({ withShared, tags, cameras, lenses, kinds }: PhotoQuery) {
   return {
     withShared: withShared || undefined,
     tag: tags?.length ? tags : undefined,
     camera: cameras?.length ? cameras : undefined,
     lens: lenses?.length ? lenses : undefined,
+    kind: kinds?.length ? kinds : undefined,
   }
 }
 
@@ -187,7 +190,7 @@ export const usePhotosStore = defineStore('photos', () => {
   // Only the whole library and the trash can tell from a photo alone that it
   // belongs in the list. Other lists learn about new members by loading.
   const unfiltered = computed(() => {
-    const { shared, everyone, album, tags, cameras, lenses, from, to } = query.value
+    const { shared, everyone, album, tags, cameras, lenses, kinds, from, to } = query.value
     return (
       !ranked(query.value) &&
       !shared &&
@@ -196,6 +199,7 @@ export const usePhotosStore = defineStore('photos', () => {
       !tags?.length &&
       !cameras?.length &&
       !lenses?.length &&
+      !kinds?.length &&
       !from &&
       !to
     )

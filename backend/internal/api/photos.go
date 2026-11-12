@@ -152,6 +152,7 @@ func (s *server) countPhotoMonths(w http.ResponseWriter, r *http.Request) {
 		TagIds:     filter.TagIds,
 		Cameras:    filter.Cameras,
 		Lenses:     filter.Lenses,
+		Kinds:      filter.Kinds,
 	})
 	if err != nil {
 		internalError(w, r, err)
@@ -183,6 +184,15 @@ func (s *server) timelineFilter(w http.ResponseWriter, r *http.Request) (store.L
 	// Names as listCameras gives them. A name no photo has matches nothing.
 	params.Cameras = query["camera"]
 	params.Lenses = query["lens"]
+	for _, kind := range query["kind"] {
+		switch kind {
+		case "photo", "motion", "video":
+			params.Kinds = append(params.Kinds, kind)
+		default:
+			writeError(w, http.StatusBadRequest, "invalid kind")
+			return params, false
+		}
+	}
 	switch query.Get("withShared") {
 	case "", "false":
 	case "true":
@@ -218,15 +228,16 @@ func (s *server) timelineFilter(w http.ResponseWriter, r *http.Request) (store.L
 	return params, true
 }
 
-// nameCountJSON is a camera or a lens and the number of photos taken with it.
+// nameCountJSON is a camera, a lens or a media kind and the number of photos
+// of it.
 type nameCountJSON struct {
 	Name  string `json:"name"`
 	Count int64  `json:"count"`
 }
 
-// listCameras gives the cameras and lenses of the photos listPhotos gives for
-// the same filters. Each list leaves out its own filter, so that the timeline
-// can show how many photos another camera or lens would add.
+// listCameras gives the cameras, lenses and media kinds of the photos
+// listPhotos gives for the same filters. Each list leaves out its own filter,
+// so that the timeline can show how many photos another choice would add.
 func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
 	filter, ok := s.timelineFilter(w, r)
 	if !ok {
@@ -240,6 +251,7 @@ func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
 		AlbumID:    filter.AlbumID,
 		TagIds:     filter.TagIds,
 		Lenses:     filter.Lenses,
+		Kinds:      filter.Kinds,
 	})
 	if err != nil {
 		internalError(w, r, err)
@@ -253,6 +265,21 @@ func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
 		AlbumID:    filter.AlbumID,
 		TagIds:     filter.TagIds,
 		Cameras:    filter.Cameras,
+		Kinds:      filter.Kinds,
+	})
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	kinds, err := s.Queries.ListKinds(r.Context(), store.ListKindsParams{
+		OwnerID:    filter.OwnerID,
+		WithShared: filter.WithShared,
+		FromTime:   filter.FromTime,
+		ToTime:     filter.ToTime,
+		AlbumID:    filter.AlbumID,
+		TagIds:     filter.TagIds,
+		Cameras:    filter.Cameras,
+		Lenses:     filter.Lenses,
 	})
 	if err != nil {
 		internalError(w, r, err)
@@ -261,12 +288,16 @@ func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
 	out := struct {
 		Cameras []nameCountJSON `json:"cameras"`
 		Lenses  []nameCountJSON `json:"lenses"`
-	}{make([]nameCountJSON, len(cameras)), make([]nameCountJSON, len(lenses))}
+		Kinds   []nameCountJSON `json:"kinds"`
+	}{make([]nameCountJSON, len(cameras)), make([]nameCountJSON, len(lenses)), make([]nameCountJSON, len(kinds))}
 	for i, row := range cameras {
 		out.Cameras[i] = nameCountJSON(row)
 	}
 	for i, row := range lenses {
 		out.Lenses[i] = nameCountJSON(row)
+	}
+	for i, row := range kinds {
+		out.Kinds[i] = nameCountJSON(row)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
