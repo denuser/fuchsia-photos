@@ -203,6 +203,7 @@ func TestScanLeavesOutWhatIsNotContent(t *testing.T) {
 	e.copyFixture("landscape.png", "@eaDir/a.jpg/thumb.png")
 	e.copyFixture("landscape.png", "#recycle/old.png")
 	e.copyFixture("landscape.png", ".git/x.png")
+	e.copyFixture("landscape.png", "IMG_0001.AAE")
 	outside := t.TempDir()
 	if err := os.WriteFile(filepath.Join(outside, "secret.png"), []byte("x"), 0o640); err != nil {
 		t.Fatal(err)

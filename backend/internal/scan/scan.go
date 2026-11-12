@@ -183,6 +183,13 @@ func skipped(name string) bool {
 	return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "@") || strings.HasPrefix(name, "#")
 }
 
+// sidecar recognizes files that describe a photo rather than hold one, such as
+// the edits Apple Photos exports next to an original in an .aae file, like the
+// range a slow-motion video plays slowed. They are left out without a report.
+func sidecar(name string) bool {
+	return strings.EqualFold(path.Ext(name), ".aae")
+}
+
 type worker struct {
 	river.WorkerDefaults[Args]
 	service *Service
@@ -270,6 +277,9 @@ func (s *Service) list(ctx context.Context, run store.ImportRun) (time.Duration,
 			if entry.IsDir() {
 				return fs.SkipDir
 			}
+			return nil
+		}
+		if !entry.IsDir() && sidecar(entry.Name()) {
 			return nil
 		}
 		// Links are left out, so that they cannot bring in a file twice.
