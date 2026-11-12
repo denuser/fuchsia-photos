@@ -545,6 +545,11 @@ const steps = {
     await previews(5)
     await page.getByTestId('tile-video').getByText('0:02').waitFor()
     await page.getByTestId('tile-motion').waitFor()
+    // Every file here was processed, so none may be marked as failed.
+    const failed = await page.getByTestId('tile-failed').count()
+    if (failed > 0) {
+      throw new Error(`${failed} processed photos are marked as failed`)
+    }
 
     await page.getByLabel('video.mp4', { exact: true }).click()
     const video = page.getByTestId('viewer-video')

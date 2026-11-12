@@ -254,6 +254,12 @@ onBeforeUnmount(() => {
             @click="onTileClick(photo, $event)"
           >
             <img v-if="photo.status === 'ready'" :src="previewUrl(photo.id, 'grid', photo.previewVersion)" :alt="photo.name" decoding="async" />
+            <v-progress-circular v-else-if="photo.status === 'pending'" indeterminate size="24" width="2" />
+            <v-tooltip v-else :text="t('grid.failed', { name: photo.name })" location="top">
+              <template #activator="{ props: tooltip }">
+                <v-icon v-bind="tooltip" icon="fa-triangle-exclamation" data-testid="tile-failed" />
+              </template>
+            </v-tooltip>
             <span
               v-if="isVideo(photo)"
               class="badge"
@@ -266,12 +272,6 @@ onBeforeUnmount(() => {
             <span v-else-if="photo.hasMotion" class="badge" data-testid="tile-motion" :title="t('grid.motion')">
               <v-icon icon="fa-regular-circle-dot" size="small" />
             </span>
-            <v-progress-circular v-else-if="photo.status === 'pending'" indeterminate size="24" width="2" />
-            <v-tooltip v-else :text="t('grid.failed', { name: photo.name })" location="top">
-              <template #activator="{ props: tooltip }">
-                <v-icon v-bind="tooltip" icon="fa-triangle-exclamation" />
-              </template>
-            </v-tooltip>
           </button>
           <button
             v-if="selectable(photo)"
