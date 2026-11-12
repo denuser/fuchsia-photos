@@ -4,7 +4,9 @@ package metadata
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -38,6 +40,13 @@ type Metadata struct {
 // other makers use too, Samsung's own, and Google's older MicroVideo, which
 // gives only how far from the end of the file the video starts.
 var motionTags = []string{"MotionPhotoVideo", "EmbeddedVideoFile", microVideoOffset}
+
+// HuaweiLiveTrailer names Huawei's and Honor's moving pictures, which carry
+// no tag: the video follows the JPEG, and the file ends with text fields of
+// 20 bytes, the last of them "LIVE_" and the length of what the fields
+// follow. Read finds it by the end of the file, so photos processed before
+// it was supported get no motion from the backfill.
+const HuaweiLiveTrailer = "HuaweiLiveTrailer"
 
 // exiftool does not extract the video of a MicroVideo photo (Pixel 2 and 3
 // and other phones up to about 2019), so ExtractMotion cuts it from the end
@@ -74,7 +83,13 @@ func (r *Reader) Read(path string, video bool) (Metadata, error) {
 	if file.Err != nil {
 		return Metadata{}, fmt.Errorf("read metadata of %s: %w", path, file.Err)
 	}
-	return fromFields(file.Fields, video)
+	meta, err := fromFields(file.Fields, video)
+	if err == nil && !video && meta.MotionTag == "" {
+		if _, err := huaweiVideo(path); err == nil {
+			meta.MotionTag = HuaweiLiveTrailer
+		}
+	}
+	return meta, err
 }
 
 // MotionTag names the tag of stored tags that holds the video of a motion
@@ -121,6 +136,13 @@ func fromFields(fields map[string]any, video bool) (Metadata, error) {
 // Read named. It runs exiftool of its own, as the long-running one returns
 // tags as JSON through a buffer too small for a video.
 func ExtractMotion(ctx context.Context, path, tag string) ([]byte, error) {
+	if tag == HuaweiLiveTrailer {
+		data, err := huaweiVideo(path)
+		if err != nil {
+			return nil, fmt.Errorf("extract motion video of %s: %w", path, err)
+		}
+		return data, nil
+	}
 	var stdout, stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, "exiftool", "-b", "-"+tag, path)
 	cmd.Stdout = &stdout
@@ -165,6 +187,77 @@ func fileTail(path, length string) ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
+}
+
+// huaweiVideo returns the video before the trailer of a Huawei or Honor
+// moving picture. A tablet from 2018 writes two fields ("540:540" and
+// "LIVE_" with the video's length); later writers add a field between the
+// video and those two and count it in the length, so the video ends where
+// its last MP4 box does.
+func huaweiVideo(path string) ([]byte, error) {
+	const field, fields = 20, 2
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	trailerAt := info.Size() - field*fields
+	if trailerAt <= 0 {
+		return nil, errors.New("no moving picture trailer")
+	}
+	last := make([]byte, field)
+	if _, err := f.ReadAt(last, info.Size()-field); err != nil {
+		return nil, err
+	}
+	text := strings.TrimRight(string(last), " \x00")
+	length, ok := strings.CutPrefix(text, "LIVE_")
+	if !ok {
+		return nil, errors.New("no moving picture trailer")
+	}
+	n, err := strconv.ParseInt(length, 10, 64)
+	if err != nil || n <= 0 || n > trailerAt {
+		return nil, fmt.Errorf("moving picture length %q is not a length", length)
+	}
+	data := make([]byte, n)
+	if _, err := f.ReadAt(data, trailerAt-n); err != nil {
+		return nil, err
+	}
+	end := mp4Length(data)
+	if end == 0 {
+		return nil, errors.New("the moving picture holds no MP4")
+	}
+	return data[:end], nil
+}
+
+// mp4Length returns how many bytes at the start of data are whole top-level
+// MP4 boxes, the first of them ftyp, or 0.
+func mp4Length(data []byte) int {
+	if len(data) < 12 || string(data[4:8]) != "ftyp" {
+		return 0
+	}
+	pos := 0
+	for len(data)-pos >= 8 {
+		size := uint64(binary.BigEndian.Uint32(data[pos:]))
+		header := uint64(8)
+		switch size {
+		case 0: // The box runs to the end.
+			return len(data)
+		case 1: // A 64-bit size follows the type.
+			if len(data)-pos < 16 {
+				return pos
+			}
+			size, header = binary.BigEndian.Uint64(data[pos+8:]), 16
+		}
+		if size < header || size > uint64(len(data)-pos) {
+			return pos
+		}
+		pos += int(size)
+	}
+	return pos
 }
 
 // stripNUL removes NUL characters, which some cameras write and jsonb rejects.

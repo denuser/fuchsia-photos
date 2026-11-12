@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -114,9 +115,14 @@ func TestExtractMotion(t *testing.T) {
 		t.Skip("exiftool is not installed:", err)
 	}
 	defer reader.Close()
-	for _, c := range []struct{ file, tag string }{
-		{"motion.jpg", "MotionPhotoVideo"},
-		{"microvideo.jpg", "MicroVideoOffset"},
+	// trailer is how many bytes follow the video.
+	for _, c := range []struct {
+		file, tag string
+		trailer   int
+	}{
+		{"motion.jpg", "MotionPhotoVideo", 0},
+		{"microvideo.jpg", "MicroVideoOffset", 0},
+		{"huawei.jpg", HuaweiLiveTrailer, 40},
 	} {
 		path := filepath.Join("..", "media", "testdata", c.file)
 		meta, err := reader.Read(path, false)
@@ -134,10 +140,11 @@ func TestExtractMotion(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.HasSuffix(data, video) || string(video[4:8]) != "ftyp" {
+		if !bytes.HasSuffix(data[:len(data)-c.trailer], video) || string(video[4:8]) != "ftyp" {
 			t.Errorf("%s: the extracted video is not the end of the file", c.file)
 		}
-		if MotionTag(meta.Tags) != c.tag {
+		// A Huawei moving picture has no tag to store.
+		if want := c.tag; MotionTag(meta.Tags) != want && want != HuaweiLiveTrailer {
 			t.Errorf("%s: stored tags name %q", c.file, MotionTag(meta.Tags))
 		}
 
@@ -167,6 +174,44 @@ func TestExtractMicroVideoBadOffset(t *testing.T) {
 		}
 		if _, err := ExtractMotion(context.Background(), path, "MicroVideoOffset"); err == nil {
 			t.Errorf("%s: a wrong offset gave a video", name)
+		}
+	}
+}
+
+// Later writers put one more field between the video and the two that end
+// the file, and count it in the length. Fields that do not hold a length of
+// whole MP4 boxes give no video.
+func TestHuaweiTrailers(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "media", "testdata", "huawei.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo, video := data[:len(data)-40-5400], data[len(data)-40-5400:len(data)-40]
+	if string(video[4:8]) != "ftyp" {
+		t.Fatal("the fixture's video is not where the trailer says")
+	}
+	field := func(s string) string { return fmt.Sprintf("%-20s", s) }
+	dir := t.TempDir()
+	for name, c := range map[string]struct {
+		trailer string
+		ok      bool
+	}{
+		"v2":         {field("v2_f00") + field("0:1000") + field(fmt.Sprint("LIVE_", len(video)+20)), true},
+		"too long":   {field("540:540") + field(fmt.Sprint("LIVE_", len(data))), false},
+		"short":      {field("540:540") + field(fmt.Sprint("LIVE_", len(video)-4)), false},
+		"no trailer": {field("540:540") + field("something else"), false},
+	} {
+		path := filepath.Join(dir, strings.ReplaceAll(name, " ", "_")+".jpg")
+		file := append(append(append([]byte(nil), photo...), video...), c.trailer...)
+		if err := os.WriteFile(path, file, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := ExtractMotion(context.Background(), path, HuaweiLiveTrailer)
+		if c.ok && (err != nil || !bytes.Equal(got, video)) {
+			t.Errorf("%s: got %d bytes, %v", name, len(got), err)
+		}
+		if !c.ok && err == nil {
+			t.Errorf("%s: gave a video", name)
 		}
 	}
 }

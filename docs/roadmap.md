@@ -50,6 +50,7 @@ Decisions are in the [architecture](architecture.md).
     - [x] Motion photo extraction checked on 2026-11-11 with the real files of [MotionPhotoSamples](https://github.com/NightMean/MotionPhotoSamples): a Pixel 9 Pro XL and Samsung phones and a tablet, in JPEG and HEIC, each giving a whole MP4. Most of them are HEVC
     - [x] Playback checked on 2026-11-12 in Safari on an iPhone and in Firefox
     - [x] Google's older MicroVideo motion photos, which give only `MicroVideoOffset`, checked on 2026-11-12 with `MVIMG_` files from [Wikimedia Commons](https://commons.wikimedia.org/w/index.php?search=MVIMG_&ns6=1): a Pixel 2, a Pixel 3 XL, a Nokia 3.1 Plus and an ASUS phone each gave a whole MP4. Two files kept the tag after an editor dropped the video and stayed still photos
+    - [x] Huawei and Honor moving pictures, found by the `LIVE_` trailer at the end of the file, checked on 2026-11-12 with a Huawei MediaPad M5 file. Photos processed before are not backfilled
     - [ ] Check on real devices: the poster of an HDR video from an iPhone
       - A PQ video in H.264, not from an iPhone, got a tone-mapped poster with normal colours in the application image on 2026-11-12
   - [x] Live Photos: the iPhone photo and its video as one item, pairing files that come in either order, including those imported before, as described under [Live Photos](architecture.md)

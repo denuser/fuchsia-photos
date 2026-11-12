@@ -87,7 +87,7 @@ func TestMotionPhoto(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	var photo store.Photo
-	for _, file := range []string{"microvideo.jpg", "motion.jpg"} {
+	for _, file := range []string{"huawei.jpg", "microvideo.jpg", "motion.jpg"} {
 		photo = waitForStatus(t, e, upload(t, e, file).ID, "ready")
 		if !photo.HasMotion || photo.Duration != nil {
 			t.Fatalf("%s: has motion = %v, duration = %v", file, photo.HasMotion, photo.Duration)

@@ -77,3 +77,11 @@ cp landscape.jpg "$tmp/micro.jpg"
 exiftool -q -overwrite_original -XMP-GCamera:MicroVideo=1 -XMP-GCamera:MicroVideoVersion=1 \
     "-XMP-GCamera:MicroVideoOffset=$length" -XMP-GCamera:MicroVideoPresentationTimestampUs=0 "$tmp/micro.jpg"
 cat "$tmp/micro.jpg" "$tmp/motion.mp4" > microvideo.jpg
+
+# A moving picture as a Huawei tablet made it: the same video follows the
+# JPEG, and two text fields of 20 bytes end the file, the last giving the
+# video's length.
+{
+    cat landscape.jpg "$tmp/motion.mp4"
+    printf '%-20s%-20s' 540:540 "LIVE_$length"
+} > huawei.jpg
