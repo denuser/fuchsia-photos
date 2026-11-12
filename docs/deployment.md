@@ -120,6 +120,16 @@ FolderSync needs HTTPS: given an `http://` address, it still tries TLS and repor
 
 Files deleted in the app, or by the app's sync, disappear from the WebDAV folder and stay in the library. Photos in the trash stay there when the app sends them again. A photo can be up to 512 MiB and a video up to 4 GiB.
 
+## Live Photos
+
+A Live Photo plays its motion only when both of its files reach the library, the photo and the MOV video. They pair in either order, from any of the upload paths.
+
+- **From an iPhone,** upload over [WebDAV](#uploading-from-a-phone-over-webdav) with an app that sends a Live Photo as its photo and its video.
+- **From a Mac,** select the Live Photos in Photos and choose **File → Export → Export Unmodified Original**. This gives `IMG_0001.HEIC` and `IMG_0001.MOV`. Upload both through the browser, or import the folder.
+- **Uploading through the browser's file picker** brings only the photo. The picker on macOS and on the iPhone hands a web page the still image alone, often converted to JPEG. Such a photo pairs later if its MOV is uploaded too.
+
+The picker also exports a video anew each time it is chosen, with the export time written into the file. So the same video chosen twice from Photos is stored twice, as the two files differ. Videos chosen from the Finder, or exported once, are recognized as duplicates.
+
 Revoke a password in the profile if a device is lost. Whoever has it can upload photos as that user and download the originals uploaded over WebDAV, but not log in to the web interface.
 
 The server logs every WebDAV request with its method, path, status and client, to see how real clients behave.

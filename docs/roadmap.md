@@ -51,6 +51,7 @@ Decisions are in the [architecture](architecture.md).
     - [ ] Check on real devices: the poster of an HDR video from an iPhone, and playback in Safari on an iPhone and in Firefox
   - [x] Live Photos: the iPhone photo and its video as one item, pairing files that come in either order, including those imported before, as described under [Live Photos](architecture.md)
     - Pairing checked on 2026-11-12 with the iPhone 15 pair of [MotionPhotoSamples](https://github.com/NightMean/MotionPhotoSamples): the HEIC and the HEVC MOV share the tag, and the video paired with the photo whichever came first
+    - The motion checked on 2026-11-12 in Chrome on a Mac, with Live Photos from an iPad uploaded to the development stack. The browser's file picker gave only their photos, so their videos were uploaded too
     - [ ] Check on real devices: an iPhone library uploaded over WebDAV, and the motion in Safari and in Firefox
   - [ ] Step 2, if needed: transcoding
     - [ ] Benchmark on the NAS: software transcoding of 1080p and 4K HEVC to H.264 against hardware transcoding through VAAPI, which needs `/dev/dri` in the container
