@@ -5,6 +5,7 @@ SELECT p.*
 FROM photos p
 WHERE p.owner_id <> @viewer_id::bigint
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND p.status = 'ready'
   AND (photo_shared_directly(p, @viewer_id::bigint)
        OR (@include_albums::boolean AND photo_in_visible_album(p, @viewer_id::bigint)))
@@ -22,6 +23,7 @@ SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE @tz::text), 'YYYY-MM')
 FROM photos p
 WHERE p.owner_id <> @viewer_id::bigint
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND p.status = 'ready'
   AND (photo_shared_directly(p, @viewer_id::bigint)
        OR (@include_albums::boolean AND photo_in_visible_album(p, @viewer_id::bigint)))
@@ -33,6 +35,7 @@ ORDER BY 1 DESC;
 SELECT p.*
 FROM photos p
 WHERE p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND (sqlc.narg(owner_id)::bigint IS NULL OR p.owner_id = sqlc.narg(owner_id)::bigint)
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
@@ -47,6 +50,7 @@ SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE @tz::text), 'YYYY-MM')
        count(*) AS count
 FROM photos p
 WHERE p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND (sqlc.narg(owner_id)::bigint IS NULL OR p.owner_id = sqlc.narg(owner_id)::bigint)
 GROUP BY 1
 ORDER BY 1 DESC;

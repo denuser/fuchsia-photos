@@ -264,7 +264,10 @@ export interface paths {
          */
         get: operations["listPhotos"];
         put?: never;
-        /** Upload a photo */
+        /**
+         * Upload a photo or a video
+         * @description JPEG, PNG, WebP and HEIC photos up to 512 MiB, MP4 and MOV videos up to 4 GiB
+         */
         post: operations["uploadPhoto"];
         delete?: never;
         options?: never;
@@ -415,8 +418,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the cameras and lenses of the photos listPhotos gives
-         * @description For the camera and lens filters of listPhotos, and takes its filters. Each list leaves out its own filter, so that its counts are the photos each name would add. Photos in the trash are left out
+         * List the cameras, lenses and media kinds of the photos listPhotos gives
+         * @description For the camera, lens and kind filters of listPhotos, and takes its filters. Each list leaves out its own filter, so that its counts are the photos each name would add. Photos in the trash are left out
          */
         get: operations["listCameras"];
         put?: never;
@@ -604,6 +607,46 @@ export interface paths {
         };
         /** Download the original file */
         get: operations["getOriginal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/{id}/video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Play the original of a video
+         * @description Serves the original inline as video/mp4, for a video element, with range requests. QuickTime files are sent as MP4 too, as some browsers refuse video/quicktime
+         */
+        get: operations["getVideo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/photos/{id}/motion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The video of a motion photo or a Live Photo
+         * @description Extracted from a motion photo during processing, or the original of the video of a Live Photo. Cached like a preview, so add the preview version to the address
+         */
+        get: operations["getMotion"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1041,7 +1084,7 @@ export interface components {
         };
         /** @description Jobs of one kind. Finished jobs are kept for a day, so the finished counts cover a day at most */
         JobKindStats: {
-            /** @description process_photo, render_grid, render_previews, folder_scan, embed_photos or cleanup */
+            /** @description process_photo, render_grid, render_previews, folder_scan, embed_photos, backfill_motion, pair_live_photos or cleanup */
             kind: string;
             /** Format: int64 */
             waiting: number;
@@ -1221,6 +1264,7 @@ export interface components {
             /** @description Users to stop sharing with */
             remove?: number[];
         };
+        /** @description A photo or a video, which the MIME type tells apart */
         Photo: {
             /** Format: int64 */
             id: number;
@@ -1247,6 +1291,15 @@ export interface components {
             deletedAt: string | null;
             /** @description Changes when the previews are made again. Previews are cached for a long time, so their address carries it */
             previewVersion: number;
+            /** @description The length of a video in seconds. Null for photos, and for videos not processed yet or that do not say */
+            duration: number | null;
+            /** @description Whether a motion photo or a Live Photo has a video to play from /photos/{id}/motion */
+            hasMotion: boolean;
+            /**
+             * Format: int64
+             * @description Set on the video of a Live Photo to the photo it plays as the motion of. Lists leave such videos out; only events carry them, so that pages drop them
+             */
+            livePhotoId: number | null;
             /** @description Shooting details from EXIF. Null when the photo has none */
             camera: components["schemas"]["Camera"] | null;
             /** @description Where the photo was taken. Null when it has no location or an administrator hides locations */
@@ -1279,7 +1332,11 @@ export interface components {
         CameraLists: {
             cameras: components["schemas"]["NameCount"][];
             lenses: components["schemas"]["NameCount"][];
+            /** @description The media kinds that have photos, by the names of MediaKind */
+            kinds: components["schemas"]["NameCount"][];
         };
+        /** @enum {string} */
+        MediaKind: "photo" | "motion" | "video";
         NameCount: {
             name: string;
             /** Format: int64 */
@@ -1892,6 +1949,8 @@ export interface operations {
                 camera?: string[];
                 /** @description Only photos taken with one of these lenses, named as listCameras gives them */
                 lens?: string[];
+                /** @description Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them */
+                kind?: components["schemas"]["MediaKind"][];
                 /** @description Only photos of this album */
                 album?: number;
                 /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
@@ -2096,6 +2155,8 @@ export interface operations {
                 camera?: string[];
                 /** @description Only photos taken with one of these lenses, named as listCameras gives them */
                 lens?: string[];
+                /** @description Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them */
+                kind?: components["schemas"]["MediaKind"][];
                 /** @description Only photos of this album */
                 album?: number;
                 /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
@@ -2153,6 +2214,8 @@ export interface operations {
                 camera?: string[];
                 /** @description Only photos taken with one of these lenses, named as listCameras gives them */
                 lens?: string[];
+                /** @description Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them */
+                kind?: components["schemas"]["MediaKind"][];
                 /** @description Only photos of this album */
                 album?: number;
                 /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
@@ -2164,7 +2227,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cameras and lenses by name, with the number of photos each took */
+            /** @description Cameras, lenses and media kinds by name, with the number of photos of each */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2423,6 +2486,60 @@ export interface operations {
                 };
                 content: {
                     "image/*": string;
+                    "video/*": string;
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    getVideo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The video */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp4": string;
+                };
+            };
+            /** @description The requested range of the video */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    getMotion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The video */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp4": string;
                 };
             };
             404: components["responses"]["Error"];

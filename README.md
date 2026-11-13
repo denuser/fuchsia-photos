@@ -34,7 +34,7 @@ It is built for modest hardware. It is developed and measured on an Intel N150 w
 - Nightly database dumps with a tested restore, request logs and the job queue on the administration page
 - English and Russian interface, light, dark and high contrast themes
 
-Supported formats: JPEG, PNG, WebP and HEIC. Video and RAW are not supported yet.
+Supported formats: JPEG, PNG, WebP and HEIC photos, MP4 and MOV videos, and the motion of Google and Samsung motion photos and iPhone Live Photos. A Live Photo needs both of its files, which the browser's file picker does not hand over: see [Live Photos](docs/deployment.md#live-photos). RAW is not supported yet.
 
 ## Requirements
 

@@ -1,10 +1,16 @@
-// Package metadata reads photo metadata with exiftool.
+// Package metadata reads the metadata of photos and videos with exiftool.
 package metadata
 
 import (
+	"bytes"
+	"context"
+	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -22,7 +28,30 @@ var fileTags = []string{
 type Metadata struct {
 	Tags    []byte // JSON
 	TakenAt *time.Time
+	// MotionTag names the tag that holds the video of a motion photo, empty
+	// when the photo has none.
+	MotionTag string
+	// ContentIdentifier is the tag that the photo and the video of an iPhone
+	// Live Photo share, empty for other files.
+	ContentIdentifier string
 }
+
+// Tags that hold the video embedded in a motion photo: Google's format, which
+// other makers use too, Samsung's own, and Google's older MicroVideo, which
+// gives only how far from the end of the file the video starts.
+var motionTags = []string{"MotionPhotoVideo", "EmbeddedVideoFile", microVideoOffset}
+
+// HuaweiLiveTrailer names Huawei's and Honor's moving pictures, which carry
+// no tag: the video follows the JPEG, and the file ends with text fields of
+// 20 bytes, the last of them "LIVE_" and the length of what the fields
+// follow. Read finds it by the end of the file, so photos processed before
+// it was supported get no motion from the backfill.
+const HuaweiLiveTrailer = "HuaweiLiveTrailer"
+
+// exiftool does not extract the video of a MicroVideo photo (Pixel 2 and 3
+// and other phones up to about 2019), so ExtractMotion cuts it from the end
+// of the file.
+const microVideoOffset = "MicroVideoOffset"
 
 // Reader keeps one exiftool process running, because starting Perl for every
 // photo would be slow. It handles one photo at a time.
@@ -48,24 +77,187 @@ func (r *Reader) Close() error {
 	return r.tool.Close()
 }
 
-// Read returns the metadata of the photo at path.
-func (r *Reader) Read(path string) (Metadata, error) {
+// Read returns the metadata of the photo or the video at path.
+func (r *Reader) Read(path string, video bool) (Metadata, error) {
 	file := r.tool.ExtractMetadata(path)[0]
 	if file.Err != nil {
 		return Metadata{}, fmt.Errorf("read metadata of %s: %w", path, file.Err)
 	}
-	return fromFields(file.Fields)
+	meta, err := fromFields(file.Fields, video)
+	if err == nil && !video && meta.MotionTag == "" {
+		if _, err := huaweiVideo(path); err == nil {
+			meta.MotionTag = HuaweiLiveTrailer
+		}
+	}
+	return meta, err
 }
 
-func fromFields(fields map[string]any) (Metadata, error) {
+// MotionTag names the tag of stored tags that holds the video of a motion
+// photo, as Read does, or is empty.
+func MotionTag(tags []byte) string {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(tags, &fields) != nil {
+		return ""
+	}
+	for _, tag := range motionTags {
+		if _, ok := fields[tag]; ok {
+			return tag
+		}
+	}
+	return ""
+}
+
+func fromFields(fields map[string]any, video bool) (Metadata, error) {
 	for _, tag := range fileTags {
 		delete(fields, tag)
+	}
+	meta := Metadata{TakenAt: takenAt(fields, video)}
+	if id, ok := fields["ContentIdentifier"].(string); ok {
+		meta.ContentIdentifier = strings.TrimSpace(id)
+	}
+	if !video {
+		for _, tag := range motionTags {
+			// Without -b, exiftool describes binary data instead of returning it.
+			if _, ok := fields[tag]; ok {
+				meta.MotionTag = tag
+				break
+			}
+		}
 	}
 	tags, err := json.Marshal(stripNUL(fields))
 	if err != nil {
 		return Metadata{}, fmt.Errorf("encode metadata: %w", err)
 	}
-	return Metadata{Tags: tags, TakenAt: takenAt(fields)}, nil
+	meta.Tags = tags
+	return meta, nil
+}
+
+// ExtractMotion returns the video embedded in a motion photo, from the tag
+// Read named. It runs exiftool of its own, as the long-running one returns
+// tags as JSON through a buffer too small for a video.
+func ExtractMotion(ctx context.Context, path, tag string) ([]byte, error) {
+	if tag == HuaweiLiveTrailer {
+		data, err := huaweiVideo(path)
+		if err != nil {
+			return nil, fmt.Errorf("extract motion video of %s: %w", path, err)
+		}
+		return data, nil
+	}
+	var stdout, stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "exiftool", "-b", "-"+tag, path)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("extract motion video of %s: %w: %s", path, err, strings.TrimSpace(stderr.String()))
+	}
+	data := stdout.Bytes()
+	if tag == microVideoOffset {
+		var err error
+		if data, err = fileTail(path, strings.TrimSpace(string(data))); err != nil {
+			return nil, fmt.Errorf("extract motion video of %s: %w", path, err)
+		}
+	}
+	// Every MP4 starts with an ftyp box.
+	if len(data) < 12 || string(data[4:8]) != "ftyp" {
+		return nil, fmt.Errorf("extract motion video of %s: %s holds no MP4", path, tag)
+	}
+	return data, nil
+}
+
+// fileTail reads the last length bytes of the file at path.
+func fileTail(path, length string) ([]byte, error) {
+	n, err := strconv.ParseInt(length, 10, 64)
+	if err != nil || n <= 0 {
+		return nil, fmt.Errorf("%s %q is not a length", microVideoOffset, length)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if n > info.Size() {
+		return nil, fmt.Errorf("%s %d is beyond the start of the file", microVideoOffset, n)
+	}
+	data := make([]byte, n)
+	if _, err := f.ReadAt(data, info.Size()-n); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// huaweiVideo returns the video before the trailer of a Huawei or Honor
+// moving picture. A tablet from 2018 writes two fields ("540:540" and
+// "LIVE_" with the video's length); later writers add a field between the
+// video and those two and count it in the length, so the video ends where
+// its last MP4 box does.
+func huaweiVideo(path string) ([]byte, error) {
+	const field, fields = 20, 2
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	trailerAt := info.Size() - field*fields
+	if trailerAt <= 0 {
+		return nil, errors.New("no moving picture trailer")
+	}
+	last := make([]byte, field)
+	if _, err := f.ReadAt(last, info.Size()-field); err != nil {
+		return nil, err
+	}
+	text := strings.TrimRight(string(last), " \x00")
+	length, ok := strings.CutPrefix(text, "LIVE_")
+	if !ok {
+		return nil, errors.New("no moving picture trailer")
+	}
+	n, err := strconv.ParseInt(length, 10, 64)
+	if err != nil || n <= 0 || n > trailerAt {
+		return nil, fmt.Errorf("moving picture length %q is not a length", length)
+	}
+	data := make([]byte, n)
+	if _, err := f.ReadAt(data, trailerAt-n); err != nil {
+		return nil, err
+	}
+	end := mp4Length(data)
+	if end == 0 {
+		return nil, errors.New("the moving picture holds no MP4")
+	}
+	return data[:end], nil
+}
+
+// mp4Length returns how many bytes at the start of data are whole top-level
+// MP4 boxes, the first of them ftyp, or 0.
+func mp4Length(data []byte) int {
+	if len(data) < 12 || string(data[4:8]) != "ftyp" {
+		return 0
+	}
+	pos := 0
+	for len(data)-pos >= 8 {
+		size := uint64(binary.BigEndian.Uint32(data[pos:]))
+		header := uint64(8)
+		switch size {
+		case 0: // The box runs to the end.
+			return len(data)
+		case 1: // A 64-bit size follows the type.
+			if len(data)-pos < 16 {
+				return pos
+			}
+			size, header = binary.BigEndian.Uint64(data[pos+8:]), 16
+		}
+		if size < header || size > uint64(len(data)-pos) {
+			return pos
+		}
+		pos += int(size)
+	}
+	return pos
 }
 
 // stripNUL removes NUL characters, which some cameras write and jsonb rejects.
@@ -85,10 +277,26 @@ func stripNUL(v any) any {
 	return v
 }
 
-func takenAt(fields map[string]any) *time.Time {
-	dates := []struct{ date, offset string }{
+var (
+	photoDates = []struct{ date, offset string }{
 		{"DateTimeOriginal", "OffsetTimeOriginal"},
 		{"CreateDate", "OffsetTimeDigitized"},
+	}
+	// An iPhone writes CreationDate with the local offset. QuickTime's own
+	// CreateDate has none and is in UTC by the standard, which is how
+	// parseDate reads a date without an offset, so exiftool's QuickTimeUTC
+	// option is not needed.
+	videoDates = []struct{ date, offset string }{
+		{"DateTimeOriginal", ""},
+		{"CreationDate", ""},
+		{"CreateDate", ""},
+	}
+)
+
+func takenAt(fields map[string]any, video bool) *time.Time {
+	dates := photoDates
+	if video {
+		dates = videoDates
 	}
 	for _, d := range dates {
 		value, _ := fields[d.date].(string)

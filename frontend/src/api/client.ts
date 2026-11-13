@@ -13,6 +13,7 @@ export type ImportRun = components['schemas']['ImportRun']
 export type Photo = components['schemas']['Photo']
 export type Language = components['schemas']['Language']
 export type Location = components['schemas']['Location']
+export type MediaKind = components['schemas']['MediaKind']
 export type NameCount = components['schemas']['NameCount']
 export type MetadataSettings = components['schemas']['MetadataSettings']
 export type MLStatus = components['schemas']['MLStatus']
@@ -60,4 +61,20 @@ export function previewUrl(id: number, kind: 'grid' | 'viewer', version = 0) {
 
 export function originalUrl(id: number) {
   return `${API_BASE}/photos/${id}/original`
+}
+
+// The original of a video, sent for playing rather than as a download.
+export function videoUrl(id: number) {
+  return `${API_BASE}/photos/${id}/video`
+}
+
+// The video of a motion photo or a Live Photo. Cached like a preview, so it
+// carries the version.
+export function motionUrl(id: number, version = 0) {
+  const url = `${API_BASE}/photos/${id}/motion`
+  return version ? `${url}?v=${version}` : url
+}
+
+export function isVideo(photo: Pick<Photo, 'mime'>) {
+  return photo.mime.startsWith('video/')
 }

@@ -6,10 +6,12 @@
 - Go 1.27
 - Node.js 24 and pnpm 12
 - Google Chrome, for `make e2e`
-- libvips, pkg-config and exiftool: `brew install vips pkg-config exiftool`
+- libvips, pkg-config, exiftool and ffmpeg: `brew install vips pkg-config exiftool ffmpeg`
 - uv, for the ML service: `brew install uv`
 
 The backend links against libvips through cgo, so it needs a working C toolchain on the host.
+
+Videos are processed with `ffprobe` and `ffmpeg` run as separate processes. Without them the server warns at the start, and videos wait in the queue until processing gives up on them. Homebrew's ffmpeg has no `zscale` filter, so on the host the posters of HDR videos, such as an iPhone's, are not tone mapped and look grey; the image has it.
 
 The host may have a newer libvips than production: Homebrew has 8.18, while the image has 8.16 from Debian. Run `make test` before pushing, as it uses the same versions as the image.
 

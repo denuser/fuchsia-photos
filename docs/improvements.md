@@ -1,6 +1,6 @@
 # Improvements
 
-The current list of improvements, in order of priority. All of them are done except 6 and 8, which are planned. Stages 0 to 6 of the [roadmap](roadmap.md) are done too.
+The current list of improvements, in order of priority. All of them are done except 6, 8 and 9, which are planned. Stages 0 to 6 of the [roadmap](roadmap.md) are done too.
 
 ## 1. Administration page
 
@@ -115,3 +115,12 @@ Plan:
 4. Backend tests: the nearest place, the language fallback, and no place name when locations are hidden.
 
 The user's interface language is stored with the user (improvement 7), so the API can pick the language of a name from it, and from the browser's `Accept-Language` when it is automatic.
+
+## 9. OPPO motion photos and older Huawei moving pictures
+
+**Status:** planned, not started.
+
+Motion photos play for Google's formats (Motion Photo and the older MicroVideo, Xiaomi included), Samsung's, and Huawei and Honor moving pictures. Two gaps are left:
+
+1. **OPPO, OnePlus and realme.** Descriptions of the format say it is a Google Motion Photo with OPPO's own XMP fields (`OLivePhotoVersion`, `MotionPhotoOwner`), so `MotionPhotoVideo` should already find the video. No real file has confirmed it. Get an original from a phone with Live Photo on, sent as a file rather than as a photo in a messenger, which drops the video, and check it with `exiftool -b -MotionPhotoVideo` and `ffprobe`. If no phone is at hand, a file from an OPPO converter checks the parsing but not what a phone writes. Scanning Wikimedia Commons originals in bulk does not work: upload.wikimedia.org answers 429 even at one request a second.
+2. **Huawei and Honor photos processed before 2026-11-12.** Their stored tags do not tell a moving picture apart, so `backfill_motion` does not find them. It could read the end of the file of every Huawei and Honor photo by `Make`, once rather than daily, for example with a mark that the check was done.

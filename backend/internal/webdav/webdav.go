@@ -38,8 +38,9 @@ import (
 const Prefix = "/webdav"
 
 const (
-	// maxFileBytes matches the limit of browser uploads.
-	maxFileBytes = 512 << 20
+	// maxFileBytes is the largest video. Ingest holds photos to their own,
+	// smaller limit, as for browser uploads.
+	maxFileBytes = ingest.MaxVideoBytes
 	// Limits that keep a path a sensible size for the database.
 	maxPathBytes = 1024
 	maxNameBytes = 255
@@ -219,9 +220,9 @@ func (h *Handler) put(w http.ResponseWriter, r *http.Request, fs *fileSystem) {
 	var tooBig *http.MaxBytesError
 	switch {
 	case errors.Is(err, ingest.ErrUnsupported):
-		http.Error(w, "only JPEG, PNG, WebP and HEIC photos are supported", http.StatusUnsupportedMediaType)
+		http.Error(w, ingest.ErrUnsupportedMessage, http.StatusUnsupportedMediaType)
 		return
-	case errors.As(err, &tooBig):
+	case errors.Is(err, ingest.ErrTooLarge), errors.As(err, &tooBig):
 		http.Error(w, "the file is too large", http.StatusRequestEntityTooLarge)
 		return
 	case err != nil:

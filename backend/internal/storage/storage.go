@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Preview kinds.
@@ -15,10 +16,12 @@ const (
 )
 
 var extensions = map[string]string{
-	"image/jpeg": ".jpg",
-	"image/png":  ".png",
-	"image/webp": ".webp",
-	"image/heic": ".heic",
+	"image/jpeg":      ".jpg",
+	"image/png":       ".png",
+	"image/webp":      ".webp",
+	"image/heic":      ".heic",
+	"video/mp4":       ".mp4",
+	"video/quicktime": ".mov",
 }
 
 // Layout holds the root folders of the application's files.
@@ -52,6 +55,17 @@ func (l Layout) Original(ownerID int64, sha256 []byte, mime string) string {
 // Preview returns the path of a preview. The format is the file extension.
 func (l Layout) Preview(photoID int64, kind, format string) string {
 	return filepath.Join(l.Cache, "previews", fmt.Sprintf("%02x", photoID%256), fmt.Sprintf("%d-%s.%s", photoID, kind, format))
+}
+
+// Motion returns the path of the video extracted from a motion photo. Like
+// the previews, it can be made again from the original.
+func (l Layout) Motion(photoID int64) string {
+	return filepath.Join(l.Cache, "previews", fmt.Sprintf("%02x", photoID%256), fmt.Sprintf("%d-motion.mp4", photoID))
+}
+
+// IsVideo tells whether a MIME type of the library is a video.
+func IsVideo(mime string) bool {
+	return strings.HasPrefix(mime, "video/")
 }
 
 // WriteFileAtomic writes data so that path never holds a partial file.

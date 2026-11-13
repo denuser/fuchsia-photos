@@ -371,8 +371,9 @@ const steps = {
     await page.goto(`${BASE}/import`)
     await page.getByLabel('Owner').click()
     await page.getByRole('option', { name: 'guest' }).click()
-    await scanFolder(1, 'added', PHOTOS.length + 1) // The fixtures hold one more photo than the upload uses.
-    await scanFolder(2, 'duplicates', PHOTOS.length + 1)
+    // The fixtures hold two photos and three videos more than the upload uses.
+    await scanFolder(1, 'added', PHOTOS.length + 5)
+    await scanFolder(2, 'duplicates', PHOTOS.length + 5)
   },
   'an administrator shows where photos were taken': async () => {
     const location = page.getByTestId('viewer').getByRole('link', { name: '59.93000, 30.33000' })
@@ -538,10 +539,53 @@ const steps = {
     // The browser is set to en-US, so Automatic means English.
     await page.getByText('Interface language').waitFor()
   },
+  'a video plays in the viewer, and a motion photo plays its motion': async () => {
+    await page.goto(BASE)
+    await page.locator('input[type=file]').setInputFiles(['video.mp4', 'motion.jpg'].map((f) => join(FIXTURES, f)))
+    await previews(5)
+    await page.getByTestId('tile-video').getByText('0:02').waitFor()
+    await page.getByTestId('tile-motion').waitFor()
+    // Every file here was processed, so none may be marked as failed.
+    const failed = await page.getByTestId('tile-failed').count()
+    if (failed > 0) {
+      throw new Error(`${failed} processed photos are marked as failed`)
+    }
+
+    await page.getByLabel('video.mp4', { exact: true }).click()
+    const video = page.getByTestId('viewer-video')
+    await video.waitFor()
+    // The camera details show at the bottom, and must leave the video's controls clear.
+    await page.getByTestId('camera').getByText('iPhone 15').waitFor()
+    const covered = await video.evaluate((v) => {
+      const box = v.getBoundingClientRect()
+      return document.elementFromPoint(box.left + box.width / 2, box.bottom - 20) !== v
+    })
+    if (covered) {
+      throw new Error('the bar with the camera details covers the controls of the video')
+    }
+    await video.evaluate((v) => v.play())
+    await waitFor('the video to play', () => document.querySelector('[data-testid=viewer-video]')?.currentTime > 0)
+    await page.keyboard.press('Escape')
+
+    await page.getByLabel('motion.jpg', { exact: true }).click()
+    await page.getByTestId('viewer-motion-button').click()
+    await page.getByTestId('viewer-motion').waitFor()
+    // The motion lasts a second, and the photo comes back after it.
+    await waitFor('the motion to end', () => !document.querySelector('[data-testid=viewer-motion]'))
+    await page.keyboard.press('Escape')
+
+    // The type filter keeps the video alone.
+    await page.getByRole('combobox', { name: 'Any of these types' }).click()
+    await page.getByRole('option', { name: /Videos.*1 photo/ }).click()
+    await page.keyboard.press('Escape')
+    await tiles(1)
+    await page.getByTestId('applied-filters').getByRole('button', { name: 'Clear all filters' }).click()
+    await tiles(5)
+  },
   'the server agrees with the screen': async () => {
     const [library, trash] = [await apiTotal('photos'), await apiTotal('photos/trash')]
-    if (library !== 3 || trash !== 0) {
-      throw new Error(`the library has ${library} photos and the trash ${trash}, want 3 and 0`)
+    if (library !== 5 || trash !== 0) {
+      throw new Error(`the library has ${library} photos and the trash ${trash}, want 5 and 0`)
     }
   },
 }

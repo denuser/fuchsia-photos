@@ -73,28 +73,32 @@ type MetadataSetting struct {
 }
 
 type Photo struct {
-	ID             int64
-	OwnerID        int64
-	Sha256         []byte
-	Mime           string
-	Size           int64
-	Width          *int32
-	Height         *int32
-	TakenAt        *time.Time
-	Exif           []byte
-	Status         string
-	Error          *string
-	Visibility     string
-	CreatedAt      time.Time
-	DeletedAt      *time.Time
-	OriginalName   string
-	PreviewFormat  *string
-	SortAt         time.Time
-	UpdatedAt      time.Time
-	PurgedAt       *time.Time
-	Camera         *string
-	Lens           *string
-	PreviewVersion int32
+	ID                int64
+	OwnerID           int64
+	Sha256            []byte
+	Mime              string
+	Size              int64
+	Width             *int32
+	Height            *int32
+	TakenAt           *time.Time
+	Exif              []byte
+	Status            string
+	Error             *string
+	Visibility        string
+	CreatedAt         time.Time
+	DeletedAt         *time.Time
+	OriginalName      string
+	PreviewFormat     *string
+	SortAt            time.Time
+	UpdatedAt         time.Time
+	PurgedAt          *time.Time
+	Camera            *string
+	Lens              *string
+	PreviewVersion    int32
+	Duration          *float64
+	HasMotion         bool
+	ContentIdentifier *string
+	LivePhotoID       *int64
 }
 
 type PhotoEmbedding struct {

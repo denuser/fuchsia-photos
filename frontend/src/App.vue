@@ -115,7 +115,7 @@ window.addEventListener('beforeunload', (event) => {
         ref="fileInput"
         type="file"
         multiple
-        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,video/mp4,video/quicktime,.mp4,.mov"
         hidden
         @change="chosen"
       />

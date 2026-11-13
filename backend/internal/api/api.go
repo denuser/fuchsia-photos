@@ -100,6 +100,8 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/photos/{id}/sharing", s.authenticated(s.getPhotoSharing))
 	mux.HandleFunc("GET /api/v1/photos/{id}/previews/{kind}", s.authenticated(s.getPreview))
 	mux.HandleFunc("GET /api/v1/photos/{id}/original", s.authenticated(s.getOriginal))
+	mux.HandleFunc("GET /api/v1/photos/{id}/video", s.authenticated(s.getVideo))
+	mux.HandleFunc("GET /api/v1/photos/{id}/motion", s.authenticated(s.getMotion))
 	mux.HandleFunc("GET /api/v1/photos/{id}/similar", s.authenticated(s.listSimilarPhotos))
 
 	mux.HandleFunc("GET /api/v1/search", s.authenticated(s.searchPhotos))

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"os"
@@ -18,13 +19,16 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
+	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
 	"github.com/denuser/fuchsia-photos/backend/internal/metadata"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 )
 
 const (
-	maxUploadBytes   = 512 << 20
+	// The largest video, with room for the multipart framing around it.
+	// Ingest holds each kind of file to its own limit.
+	maxUploadBytes   = ingest.MaxVideoBytes + 1<<20
 	defaultPageSize  = 200
 	maxPageSize      = 500
 	maxBulkPhotos    = 500
@@ -49,6 +53,13 @@ type photoJSON struct {
 	DeletedAt *time.Time `json:"deletedAt"`
 	// Previews are cached for a long time, so their address carries it.
 	PreviewVersion int32 `json:"previewVersion"`
+	// The length of a video in seconds, null for photos.
+	Duration *float64 `json:"duration"`
+	// Whether a motion photo or a Live Photo has a video to play.
+	HasMotion bool `json:"hasMotion"`
+	// Set on the video of a Live Photo, which plays as the motion of that
+	// photo. Only events carry such videos, so that pages drop them.
+	LivePhotoID *int64 `json:"livePhotoId"`
 
 	Camera   *metadata.Camera   `json:"camera"`
 	Location *metadata.Location `json:"location"`
@@ -83,6 +94,9 @@ func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 		Camera:         camera,
 		PreviewVersion: p.PreviewVersion,
 		Location:       location,
+		Duration:       p.Duration,
+		HasMotion:      p.HasMotion,
+		LivePhotoID:    p.LivePhotoID,
 	}
 }
 
@@ -138,6 +152,7 @@ func (s *server) countPhotoMonths(w http.ResponseWriter, r *http.Request) {
 		TagIds:     filter.TagIds,
 		Cameras:    filter.Cameras,
 		Lenses:     filter.Lenses,
+		Kinds:      filter.Kinds,
 	})
 	if err != nil {
 		internalError(w, r, err)
@@ -169,6 +184,15 @@ func (s *server) timelineFilter(w http.ResponseWriter, r *http.Request) (store.L
 	// Names as listCameras gives them. A name no photo has matches nothing.
 	params.Cameras = query["camera"]
 	params.Lenses = query["lens"]
+	for _, kind := range query["kind"] {
+		switch kind {
+		case "photo", "motion", "video":
+			params.Kinds = append(params.Kinds, kind)
+		default:
+			writeError(w, http.StatusBadRequest, "invalid kind")
+			return params, false
+		}
+	}
 	switch query.Get("withShared") {
 	case "", "false":
 	case "true":
@@ -204,15 +228,16 @@ func (s *server) timelineFilter(w http.ResponseWriter, r *http.Request) (store.L
 	return params, true
 }
 
-// nameCountJSON is a camera or a lens and the number of photos taken with it.
+// nameCountJSON is a camera, a lens or a media kind and the number of photos
+// of it.
 type nameCountJSON struct {
 	Name  string `json:"name"`
 	Count int64  `json:"count"`
 }
 
-// listCameras gives the cameras and lenses of the photos listPhotos gives for
-// the same filters. Each list leaves out its own filter, so that the timeline
-// can show how many photos another camera or lens would add.
+// listCameras gives the cameras, lenses and media kinds of the photos
+// listPhotos gives for the same filters. Each list leaves out its own filter,
+// so that the timeline can show how many photos another choice would add.
 func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
 	filter, ok := s.timelineFilter(w, r)
 	if !ok {
@@ -226,6 +251,7 @@ func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
 		AlbumID:    filter.AlbumID,
 		TagIds:     filter.TagIds,
 		Lenses:     filter.Lenses,
+		Kinds:      filter.Kinds,
 	})
 	if err != nil {
 		internalError(w, r, err)
@@ -239,6 +265,21 @@ func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
 		AlbumID:    filter.AlbumID,
 		TagIds:     filter.TagIds,
 		Cameras:    filter.Cameras,
+		Kinds:      filter.Kinds,
+	})
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	kinds, err := s.Queries.ListKinds(r.Context(), store.ListKindsParams{
+		OwnerID:    filter.OwnerID,
+		WithShared: filter.WithShared,
+		FromTime:   filter.FromTime,
+		ToTime:     filter.ToTime,
+		AlbumID:    filter.AlbumID,
+		TagIds:     filter.TagIds,
+		Cameras:    filter.Cameras,
+		Lenses:     filter.Lenses,
 	})
 	if err != nil {
 		internalError(w, r, err)
@@ -247,12 +288,16 @@ func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
 	out := struct {
 		Cameras []nameCountJSON `json:"cameras"`
 		Lenses  []nameCountJSON `json:"lenses"`
-	}{make([]nameCountJSON, len(cameras)), make([]nameCountJSON, len(lenses))}
+		Kinds   []nameCountJSON `json:"kinds"`
+	}{make([]nameCountJSON, len(cameras)), make([]nameCountJSON, len(lenses)), make([]nameCountJSON, len(kinds))}
 	for i, row := range cameras {
 		out.Cameras[i] = nameCountJSON(row)
 	}
 	for i, row := range lenses {
 		out.Lenses[i] = nameCountJSON(row)
+	}
+	for i, row := range kinds {
+		out.Kinds[i] = nameCountJSON(row)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -414,9 +459,14 @@ func (s *server) restorePhotos(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.Queries.RestorePhotos(r.Context(), store.RestorePhotosParams{OwnerID: currentUser(r).ID, Ids: ids}); err != nil {
+	owner := currentUser(r).ID
+	if err := s.Queries.RestorePhotos(r.Context(), store.RestorePhotosParams{OwnerID: owner, Ids: ids}); err != nil {
 		internalError(w, r, err)
 		return
+	}
+	// A video may have come in while its photo was in the trash.
+	if _, err := jobs.PairLivePhotos(r.Context(), s.Ingest.Pool, &owner, nil); err != nil {
+		slog.Warn("pair live photos", "error", err)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -526,8 +576,8 @@ func uploadError(w http.ResponseWriter, r *http.Request, err error) {
 	var tooBig *http.MaxBytesError
 	switch {
 	case errors.Is(err, ingest.ErrUnsupported):
-		writeError(w, http.StatusUnsupportedMediaType, "only JPEG, PNG, WebP and HEIC photos are supported")
-	case errors.As(err, &tooBig):
+		writeError(w, http.StatusUnsupportedMediaType, ingest.ErrUnsupportedMessage)
+	case errors.Is(err, ingest.ErrTooLarge), errors.As(err, &tooBig):
 		writeError(w, http.StatusRequestEntityTooLarge, "the file is too large")
 	default:
 		internalError(w, r, err)
@@ -601,6 +651,50 @@ func (s *server) getOriginal(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": photo.OriginalName}))
 	s.serveFile(w, r, s.Layout.Original(photo.OwnerID, photo.Sha256, photo.Mime))
+}
+
+// getVideo serves the original of a video for playback, as an MP4. QuickTime
+// is close enough to MP4 for browsers, and some refuse to play a file sent as
+// video/quicktime.
+func (s *server) getVideo(w http.ResponseWriter, r *http.Request) {
+	photo, ok := s.visiblePhoto(w, r)
+	if !ok {
+		return
+	}
+	if !storage.IsVideo(photo.Mime) {
+		writeError(w, http.StatusNotFound, "not a video")
+		return
+	}
+	w.Header().Set("Content-Type", "video/mp4")
+	w.Header().Set("Cache-Control", "private, no-cache")
+	s.serveFile(w, r, s.Layout.Original(photo.OwnerID, photo.Sha256, photo.Mime))
+}
+
+// getMotion serves the video of a motion photo, or the original of the video
+// of a Live Photo. Whoever can see the photo can play it. Like a preview, a
+// motion photo's video is made again only with the previews, so its address
+// carries their version; the video of a Live Photo never changes.
+func (s *server) getMotion(w http.ResponseWriter, r *http.Request) {
+	photo, ok := s.visiblePhoto(w, r)
+	if !ok {
+		return
+	}
+	if photo.Status != "ready" || !photo.HasMotion {
+		writeError(w, http.StatusNotFound, "the photo has no motion")
+		return
+	}
+	path := s.Layout.Motion(photo.ID)
+	video, err := s.Queries.GetLivePhotoVideo(r.Context(), &photo.ID)
+	switch {
+	case err == nil:
+		path = s.Layout.Original(video.OwnerID, video.Sha256, video.Mime)
+	case !errors.Is(err, pgx.ErrNoRows):
+		internalError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", previewCacheRule)
+	w.Header().Set("Content-Type", "video/mp4")
+	s.serveFile(w, r, path)
 }
 
 func (s *server) serveFile(w http.ResponseWriter, r *http.Request, path string) {

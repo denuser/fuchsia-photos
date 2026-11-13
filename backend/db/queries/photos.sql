@@ -30,6 +30,7 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND (sqlc.narg(after_sort_at)::timestamptz IS NULL
        OR (p.sort_at, p.id) < (sqlc.narg(after_sort_at)::timestamptz, sqlc.narg(after_id)::bigint))
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
@@ -41,6 +42,7 @@ WHERE (p.owner_id = @owner_id
            AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[]))))
   AND (sqlc.narg(cameras)::text[] IS NULL OR p.camera = ANY (sqlc.narg(cameras)::text[]))
   AND (sqlc.narg(lenses)::text[] IS NULL OR p.lens = ANY (sqlc.narg(lenses)::text[]))
+  AND (sqlc.narg(kinds)::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY (sqlc.narg(kinds)::text[]))
 ORDER BY p.sort_at DESC, p.id DESC
 LIMIT @max_rows;
 
@@ -54,6 +56,7 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
   AND (sqlc.narg(album_id)::bigint IS NULL
@@ -63,13 +66,14 @@ WHERE (p.owner_id = @owner_id
            AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[]))))
   AND (sqlc.narg(cameras)::text[] IS NULL OR p.camera = ANY (sqlc.narg(cameras)::text[]))
   AND (sqlc.narg(lenses)::text[] IS NULL OR p.lens = ANY (sqlc.narg(lenses)::text[]))
+  AND (sqlc.narg(kinds)::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY (sqlc.narg(kinds)::text[]))
 GROUP BY 1
 ORDER BY 1 DESC;
 
--- The cameras and lenses of the photos ListTimeline filters, with how many
--- photos each took, for the filters of the timeline. Each list takes every
--- filter but its own: the filter keeps any of its names, so a name not chosen
--- yet counts the photos it would add.
+-- The cameras, lenses and media kinds of the photos ListTimeline filters, with
+-- how many photos each has, for the filters of the timeline. Each list takes
+-- every filter but its own: the filter keeps any of its names, so a name not
+-- chosen yet counts the photos it would add. A kind is photo_kind's name.
 -- name: ListCameras :many
 SELECT p.camera::text AS name, count(*) AS count
 FROM photos p
@@ -77,6 +81,7 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND p.camera IS NOT NULL
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
@@ -86,6 +91,7 @@ WHERE (p.owner_id = @owner_id
        OR (p.owner_id = @owner_id
            AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[]))))
   AND (sqlc.narg(lenses)::text[] IS NULL OR p.lens = ANY (sqlc.narg(lenses)::text[]))
+  AND (sqlc.narg(kinds)::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY (sqlc.narg(kinds)::text[]))
 GROUP BY p.camera
 ORDER BY p.camera;
 
@@ -96,6 +102,7 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
   AND p.lens IS NOT NULL
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
@@ -105,8 +112,29 @@ WHERE (p.owner_id = @owner_id
        OR (p.owner_id = @owner_id
            AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[]))))
   AND (sqlc.narg(cameras)::text[] IS NULL OR p.camera = ANY (sqlc.narg(cameras)::text[]))
+  AND (sqlc.narg(kinds)::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY (sqlc.narg(kinds)::text[]))
 GROUP BY p.lens
 ORDER BY p.lens;
+
+-- name: ListKinds :many
+SELECT photo_kind(p.mime, p.has_motion)::text AS name, count(*) AS count
+FROM photos p
+WHERE (p.owner_id = @owner_id
+       OR (@with_shared::boolean AND p.status = 'ready'
+           AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
+  AND p.deleted_at IS NULL
+  AND p.live_photo_id IS NULL
+  AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
+  AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
+  AND (sqlc.narg(album_id)::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = sqlc.narg(album_id)::bigint))
+  AND (sqlc.narg(tag_ids)::bigint[] IS NULL
+       OR (p.owner_id = @owner_id
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY (sqlc.narg(tag_ids)::bigint[]))))
+  AND (sqlc.narg(cameras)::text[] IS NULL OR p.camera = ANY (sqlc.narg(cameras)::text[]))
+  AND (sqlc.narg(lenses)::text[] IS NULL OR p.lens = ANY (sqlc.narg(lenses)::text[]))
+GROUP BY 1
+ORDER BY 1;
 
 -- name: ListTrash :many
 SELECT *
@@ -114,6 +142,7 @@ FROM photos
 WHERE owner_id = @owner_id
   AND deleted_at IS NOT NULL
   AND purged_at IS NULL
+  AND live_photo_id IS NULL
   AND (sqlc.narg(after_deleted_at)::timestamptz IS NULL
        OR (deleted_at, id) < (sqlc.narg(after_deleted_at)::timestamptz, sqlc.narg(after_id)::bigint))
 ORDER BY deleted_at DESC, id DESC
@@ -134,7 +163,7 @@ FROM photos
 WHERE owner_id = @owner_id AND deleted_at IS NULL;
 
 -- name: MarkPhotoReady :exec
-UPDATE photos
+UPDATE photos p
 SET status = 'ready',
     error = NULL,
     width = @width,
@@ -143,28 +172,41 @@ SET status = 'ready',
     sort_at = COALESCE(sqlc.narg(taken_at), sort_at),
     exif = @exif,
     preview_format = @preview_format,
+    duration = sqlc.narg(duration),
+    -- The video of a Live Photo is its motion too.
+    has_motion = @has_motion OR EXISTS (SELECT 1 FROM photos v WHERE v.live_photo_id = p.id),
     updated_at = now()
-WHERE id = @id AND purged_at IS NULL;
+WHERE p.id = @id AND p.purged_at IS NULL;
 
 -- name: MarkPhotoFailed :exec
 UPDATE photos SET status = 'failed', error = @error, updated_at = now() WHERE id = @id AND purged_at IS NULL;
 
+-- The video of a Live Photo goes into the trash and out of it with its photo,
+-- and not on its own.
 -- name: TrashPhotos :exec
 UPDATE photos
 SET deleted_at = now(), updated_at = now()
-WHERE id = ANY (@ids::bigint[])
+WHERE (id = ANY (@ids::bigint[]) AND live_photo_id IS NULL OR live_photo_id = ANY (@ids::bigint[]))
   AND deleted_at IS NULL
   AND (owner_id = @actor_id::bigint OR @actor_is_admin::boolean);
 
 -- name: RestorePhotos :exec
 UPDATE photos
 SET deleted_at = NULL, updated_at = now()
-WHERE owner_id = @owner_id AND id = ANY (@ids::bigint[]) AND deleted_at IS NOT NULL AND purged_at IS NULL;
+WHERE owner_id = @owner_id
+  AND (id = ANY (@ids::bigint[]) AND live_photo_id IS NULL OR live_photo_id = ANY (@ids::bigint[]))
+  AND deleted_at IS NOT NULL
+  AND purged_at IS NULL;
 
 -- name: RestorePhoto :one
-UPDATE photos
+WITH video_restored AS (
+    UPDATE photos v
+    SET deleted_at = NULL, updated_at = now()
+    WHERE v.live_photo_id = @id AND v.deleted_at IS NOT NULL AND v.purged_at IS NULL
+)
+UPDATE photos p
 SET deleted_at = NULL, updated_at = now()
-WHERE id = @id AND purged_at IS NULL
+WHERE p.id = @id AND p.purged_at IS NULL
 RETURNING *;
 
 -- name: ListTrashedPhotoIDs :many
@@ -173,6 +215,7 @@ FROM photos
 WHERE owner_id = @owner_id
   AND deleted_at IS NOT NULL
   AND purged_at IS NULL
+  AND live_photo_id IS NULL
 ORDER BY id
 LIMIT @max_rows;
 
@@ -188,7 +231,9 @@ SET purged_at = now(),
     taken_at = NULL,
     exif = NULL,
     error = NULL,
-    preview_format = NULL
+    preview_format = NULL,
+    duration = NULL,
+    has_motion = false
 WHERE id = @id AND owner_id = @owner_id AND deleted_at IS NOT NULL AND purged_at IS NULL
 RETURNING *;
 
@@ -209,8 +254,10 @@ DELETE FROM photos WHERE id = @id AND purged_at IS NOT NULL;
 -- name: LockPhotoFile :exec
 SELECT pg_advisory_xact_lock(hashtextextended(format('%s/%s', @owner_id::bigint, encode(@sha256::bytea, 'hex')), 0));
 
+-- The video of a Live Photo is purged with its photo, and not on its own.
 -- name: GetTrashedPhoto :one
-SELECT * FROM photos WHERE id = @id AND owner_id = @owner_id AND deleted_at IS NOT NULL AND purged_at IS NULL;
+SELECT * FROM photos
+WHERE id = @id AND owner_id = @owner_id AND deleted_at IS NOT NULL AND purged_at IS NULL AND live_photo_id IS NULL;
 
 -- name: ListReadyPhotoIDs :many
 SELECT id FROM photos WHERE status = 'ready' AND purged_at IS NULL ORDER BY id;
@@ -221,3 +268,115 @@ UPDATE photos
 SET preview_version = preview_version + 1,
     updated_at = now()
 WHERE id = @id AND status = 'ready' AND purged_at IS NULL;
+
+-- Photos processed before motion photos were supported, whose stored tags
+-- name an embedded video that was never extracted.
+-- name: ListPhotosMissingMotion :many
+SELECT id, owner_id, sha256, mime, exif
+FROM photos
+WHERE status = 'ready'
+  AND purged_at IS NULL
+  AND NOT has_motion
+  AND mime NOT LIKE 'video/%'
+  AND (exif -> 'MotionPhotoVideo' IS NOT NULL OR exif -> 'EmbeddedVideoFile' IS NOT NULL
+       OR exif -> 'MicroVideoOffset' IS NOT NULL)
+  AND id > @after_id
+ORDER BY id
+LIMIT @max_rows;
+
+-- Moves updated_at too, so that open pages learn of the motion.
+-- name: SetPhotoMotion :exec
+UPDATE photos
+SET has_motion = true,
+    updated_at = now()
+WHERE id = @id AND status = 'ready' AND purged_at IS NULL;
+
+-- The video of a Live Photo, which plays as the photo's motion.
+-- name: GetLivePhotoVideo :one
+SELECT * FROM photos WHERE live_photo_id = @photo_id AND purged_at IS NULL;
+
+-- Purges the video of a Live Photo with its photo, like PurgePhoto. It does not
+-- ask for the video to be in the trash: a video paired while its photo was
+-- being moved there may have stayed out of it.
+-- name: PurgeLivePhotoVideo :one
+UPDATE photos
+SET purged_at = now(),
+    deleted_at = COALESCE(deleted_at, now()),
+    updated_at = now(),
+    visibility = 'private',
+    original_name = '',
+    width = NULL,
+    height = NULL,
+    taken_at = NULL,
+    exif = NULL,
+    error = NULL,
+    preview_format = NULL,
+    duration = NULL,
+    has_motion = false
+WHERE id = @id AND live_photo_id = @photo_id AND purged_at IS NULL
+RETURNING *;
+
+-- Serializes pairing, so that two workers that finish the two files of one
+-- Live Photo at once cannot pair either of them twice.
+-- name: LockLivePhotoPairing :exec
+SELECT pg_advisory_xact_lock(hashtextextended('live_photo_pairing', 0));
+
+-- Pairs the photos and videos of Live Photos that share a ContentIdentifier
+-- and have no pair yet, optionally only those of one owner and identifier.
+-- Each run pairs the oldest photo with the oldest video of each identifier, so
+-- it is run until it pairs nothing. Neither file may be in the trash: a video
+-- pairs with its photo when the photo is restored. The photo takes the video
+-- as its motion, and both move updated_at, so that open pages drop the video.
+-- name: PairLivePhotos :many
+WITH stills AS (
+    SELECT DISTINCT ON (s.owner_id, s.content_identifier) s.id, s.owner_id, s.content_identifier
+    FROM photos s
+    WHERE s.content_identifier IS NOT NULL
+      AND s.mime NOT LIKE 'video/%'
+      AND s.status = 'ready'
+      AND s.deleted_at IS NULL
+      AND s.live_photo_id IS NULL
+      AND NOT EXISTS (SELECT 1 FROM photos o WHERE o.live_photo_id = s.id)
+      AND (sqlc.narg(owner_id)::bigint IS NULL OR s.owner_id = sqlc.narg(owner_id)::bigint)
+      AND (sqlc.narg(content_identifier)::text IS NULL OR s.content_identifier = sqlc.narg(content_identifier)::text)
+    ORDER BY s.owner_id, s.content_identifier, s.id
+),
+videos AS (
+    SELECT DISTINCT ON (v.owner_id, v.content_identifier) v.id, v.owner_id, v.content_identifier
+    FROM photos v
+    WHERE v.content_identifier IS NOT NULL
+      AND v.mime LIKE 'video/%'
+      AND v.status = 'ready'
+      AND v.deleted_at IS NULL
+      AND v.live_photo_id IS NULL
+      AND (sqlc.narg(owner_id)::bigint IS NULL OR v.owner_id = sqlc.narg(owner_id)::bigint)
+      AND (sqlc.narg(content_identifier)::text IS NULL OR v.content_identifier = sqlc.narg(content_identifier)::text)
+    ORDER BY v.owner_id, v.content_identifier, v.id
+),
+pairs AS (
+    SELECT s.id AS still_id, v.id AS video_id
+    FROM stills s
+    JOIN videos v ON v.owner_id = s.owner_id AND v.content_identifier = s.content_identifier
+),
+stills_marked AS (
+    UPDATE photos p
+    SET has_motion = true, updated_at = now()
+    FROM pairs
+    WHERE p.id = pairs.still_id
+)
+UPDATE photos p
+SET live_photo_id = pairs.still_id, updated_at = now()
+FROM pairs
+WHERE p.id = pairs.video_id
+RETURNING p.id AS video_id, p.live_photo_id::bigint AS photo_id;
+
+-- Gives back the motion to paired photos that lost it: processing that waited
+-- for a pairing to commit writes the flag from what it saw before.
+-- name: RepairLivePhotoMotion :exec
+UPDATE photos p
+SET has_motion = true, updated_at = now()
+WHERE NOT p.has_motion
+  AND p.purged_at IS NULL
+  AND (sqlc.narg(owner_id)::bigint IS NULL OR p.owner_id = sqlc.narg(owner_id)::bigint)
+  AND (sqlc.narg(content_identifier)::text IS NULL OR p.content_identifier = sqlc.narg(content_identifier)::text)
+  AND EXISTS (SELECT 1 FROM photos v WHERE v.live_photo_id = p.id AND v.purged_at IS NULL);

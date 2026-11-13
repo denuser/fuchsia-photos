@@ -101,7 +101,7 @@ The photos are copied into the library, and the source folder stays as it was. Y
 
 A scan does not bring back photos that the owner moved to the trash or deleted permanently. To get one back, the owner restores it from the trash or uploads the file through the browser.
 
-Hidden files, symbolic links and folders whose name starts with `@` or `#`, such as `@eaDir` and `#recycle`, are left out.
+Hidden files, symbolic links and folders whose name starts with `@` or `#`, such as `@eaDir` and `#recycle`, are left out, and so are the `.aae` files in which Apple Photos keeps its edits next to an exported original.
 
 A scan first lists the files, waits for `IMPORT_STABLE_SECONDS`, and skips any file whose size or modification time has changed since. The report lists these files, and the next scan picks them up, so it is safe to start a scan while files are still being copied.
 
@@ -115,10 +115,20 @@ FolderSync needs HTTPS: given an `http://` address, it still tries TLS and repor
 
 1. In the web interface, open **Profile**. Under **Upload from a phone**, choose **New app password** and name the device.
 2. In the app, add a WebDAV server with the address, your login and the app password. The account password does not work there.
-3. Set the app to upload only, and to send photos only: videos and other files are refused.
+3. Set the app to upload only. Photos and videos are accepted, other files are refused. The video of an iPhone Live Photo is paired with its photo and plays as its motion, as long as the app keeps Apple's `ContentIdentifier` tag in both files.
 4. To sort uploads into albums, give each folder pair in the app its own server folder, such as `/Camera` and `/Telegram`. Then, under **Albums for folders** in the profile, choose **Link a folder** and pick the folder and the album. A folder can be linked before the app creates it, and `/` links the whole tree.
 
-Files deleted in the app, or by the app's sync, disappear from the WebDAV folder and stay in the library. Photos in the trash stay there when the app sends them again. A file can be up to 512 MiB.
+Files deleted in the app, or by the app's sync, disappear from the WebDAV folder and stay in the library. Photos in the trash stay there when the app sends them again. A photo can be up to 512 MiB and a video up to 4 GiB.
+
+## Live Photos
+
+A Live Photo plays its motion only when both of its files reach the library, the photo and the MOV video. They pair in either order, from any of the upload paths.
+
+- **From an iPhone,** upload over [WebDAV](#uploading-from-a-phone-over-webdav) with an app that sends a Live Photo as its photo and its video.
+- **From a Mac,** select the Live Photos in Photos and choose **File → Export → Export Unmodified Original**. This gives `IMG_0001.HEIC` and `IMG_0001.MOV`. Upload both through the browser, or import the folder.
+- **Uploading through the browser's file picker** brings only the photo. The picker on macOS and on the iPhone hands a web page the still image alone, often converted to JPEG. Such a photo pairs later if its MOV is uploaded too.
+
+The picker also exports a video anew each time it is chosen, with the export time written into the file. So the same video chosen twice from Photos is stored twice, as the two files differ. Videos chosen from the Finder, or exported once, are recognized as duplicates.
 
 Revoke a password in the profile if a device is lost. Whoever has it can upload photos as that user and download the originals uploaded over WebDAV, but not log in to the web interface.
 

@@ -3,7 +3,7 @@ import { computed, inject, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 
-import { api, type NameCount } from '../api/client'
+import { api, type MediaKind, type NameCount } from '../api/client'
 import AppAutocomplete from '../components/AppAutocomplete.vue'
 import EmptyState from '../components/EmptyState.vue'
 import FilterChips, { type FilterGroup } from '../components/FilterChips.vue'
@@ -46,12 +46,19 @@ async function setWithShared(value: boolean) {
   }
 }
 
-// On a phone the cameras, lenses and dates hide behind a button, so the filters take one row.
+// On a phone the types, cameras, lenses and dates hide behind a button, so the filters take one row.
 const { xs } = useDisplay()
 
-// The cameras and lenses of the photos the other filters keep, with how many photos each would add.
+// The types, cameras and lenses of the photos the other filters keep, with how many photos each would add.
+const kindList = shallowRef<NameCount[]>([])
 const cameraList = shallowRef<NameCount[]>([])
 const lensList = shallowRef<NameCount[]>([])
+
+// The order the types are offered in, rather than the server's alphabetical one.
+const kindOrder: MediaKind[] = ['photo', 'motion', 'video']
+function isKind(name: string): name is MediaKind {
+  return (kindOrder as string[]).includes(name)
+}
 
 // The address holds the filters, so that they survive a reload and a tag page can link to them.
 function queryList(key: string) {
@@ -62,6 +69,7 @@ function queryList(key: string) {
 const tagIds = computed(() => queryList('tag').map(Number).filter((id) => Number.isInteger(id)))
 const cameras = computed(() => queryList('camera'))
 const lenses = computed(() => queryList('lens'))
+const kinds = computed(() => queryList('kind').filter(isKind))
 const fromDate = computed(() => (typeof route.query.from === 'string' ? route.query.from : ''))
 const toDate = computed(() => (typeof route.query.to === 'string' ? route.query.to : ''))
 const dateFields = computed(() => [
@@ -69,22 +77,24 @@ const dateFields = computed(() => [
   { key: 'to', label: t('timeline.to'), value: toDate.value },
 ])
 // The filters a phone keeps behind the button.
-const moreFiltered = computed(() => cameras.value.length > 0 || lenses.value.length > 0 || Boolean(fromDate.value || toDate.value))
+const moreFiltered = computed(() => kinds.value.length > 0 || cameras.value.length > 0 || lenses.value.length > 0 || Boolean(fromDate.value || toDate.value))
 const filtered = computed(() => tagIds.value.length > 0 || moreFiltered.value)
 
 interface FilterChange {
   tag?: number[]
   camera?: string[]
   lens?: string[]
+  kind?: string[]
   from?: string | null
   to?: string | null
 }
 
 function setFilter(change: FilterChange) {
-  const next = { tag: tagIds.value, camera: cameras.value, lens: lenses.value, from: fromDate.value, to: toDate.value, ...change }
+  const next = { tag: tagIds.value, kind: kinds.value as string[], camera: cameras.value, lens: lenses.value, from: fromDate.value, to: toDate.value, ...change }
   void router.replace({
     query: {
       ...(next.tag.length > 0 ? { tag: next.tag.map(String) } : {}),
+      ...(next.kind.length > 0 ? { kind: next.kind } : {}),
       ...(next.camera.length > 0 ? { camera: next.camera } : {}),
       ...(next.lens.length > 0 ? { lens: next.lens } : {}),
       ...(next.from ? { from: next.from } : {}),
@@ -102,19 +112,33 @@ function withChosen(items: NameCount[], chosen: string[]) {
   return [...missing.map((name) => ({ name, count: 0 })), ...items]
 }
 
+function kindTitle(name: string) {
+  return isKind(name) ? t(`timeline.kind.${name}`) : name
+}
+
+// The filters with a count for each choice. A camera or a lens is its own title; a type is translated.
 const cameraFields = computed(() => [
+  {
+    key: 'kind',
+    label: t('timeline.anyKind'),
+    counted: t('timeline.kinds'),
+    items: withChosen(kindList.value, kinds.value)
+      .map((item) => ({ ...item, title: kindTitle(item.name) }))
+      .sort((a, b) => kindOrder.indexOf(a.name as MediaKind) - kindOrder.indexOf(b.name as MediaKind)),
+    value: kinds.value as string[],
+  },
   {
     key: 'camera',
     label: t('timeline.anyCamera'),
     counted: t('timeline.cameras'),
-    items: withChosen(cameraList.value, cameras.value),
+    items: withChosen(cameraList.value, cameras.value).map((item) => ({ ...item, title: item.name })),
     value: cameras.value,
   },
   {
     key: 'lens',
     label: t('timeline.anyLens'),
     counted: t('timeline.lenses'),
-    items: withChosen(lensList.value, lenses.value),
+    items: withChosen(lensList.value, lenses.value).map((item) => ({ ...item, title: item.name })),
     value: lenses.value,
   },
 ])
@@ -146,6 +170,7 @@ const filterGroups = computed<FilterGroup[]>(() => [
     label: t('browser.tags'),
     chips: tagIds.value.map((id) => ({ value: String(id), title: tags.tags.find((tag) => tag.id === id)?.name ?? `#${id}` })),
   },
+  { key: 'kind', label: t('timeline.kinds'), chips: kinds.value.map((name) => ({ value: name, title: kindTitle(name) })) },
   { key: 'camera', label: t('timeline.cameras'), chips: cameras.value.map((name) => ({ value: name, title: name })) },
   { key: 'lens', label: t('timeline.lenses'), chips: lenses.value.map((name) => ({ value: name, title: name })) },
   {
@@ -161,6 +186,8 @@ const filterGroups = computed<FilterGroup[]>(() => [
 function removeChip(key: string, value: string) {
   if (key === 'tag') {
     setFilter({ tag: tagIds.value.filter((id) => String(id) !== value) })
+  } else if (key === 'kind') {
+    setFilter({ kind: kinds.value.filter((name) => name !== value) })
   } else if (key === 'camera') {
     setFilter({ camera: cameras.value.filter((name) => name !== value) })
   } else if (key === 'lens') {
@@ -185,8 +212,16 @@ async function loadCameras(query: PhotoQuery) {
   const request = ++camerasRequest
   const { data } = await api.GET('/photos/cameras', { params: { query: { ...listFilters(query), from: query.from, to: query.to } } })
   if (data && request === camerasRequest) {
+    kindList.value = data.kinds
     cameraList.value = data.cameras
     lensList.value = data.lenses
+  }
+}
+
+// Uploads and processing change the counts after the lists were loaded, so a list opened again asks anew.
+function onFieldMenu(open: boolean) {
+  if (open) {
+    void loadCameras(currentQuery())
   }
 }
 
@@ -206,6 +241,7 @@ function currentQuery(): PhotoQuery {
     tags: tagIds.value,
     cameras: cameras.value,
     lenses: lenses.value,
+    kinds: kinds.value,
     from: fromDate.value ? dayStart(fromDate.value) : undefined,
     to: toDate.value ? dayStart(toDate.value, 1) : undefined,
   }
@@ -294,7 +330,7 @@ function onDrop(event: DragEvent) {
                 :key="field.key"
                 :model-value="field.value"
                 :items="field.items"
-                item-title="name"
+                item-title="title"
                 item-value="name"
                 :item-props="photoCount"
                 :placeholder="field.label"
@@ -304,6 +340,7 @@ function onDrop(event: DragEvent) {
                 clearable
                 hide-details
                 multiple
+                @update:menu="onFieldMenu"
                 @update:model-value="setFilter({ [field.key]: $event })"
               />
               <v-date-input
@@ -327,7 +364,7 @@ function onDrop(event: DragEvent) {
               :key="field.key"
               :model-value="field.value"
               :items="field.items"
-              item-title="name"
+              item-title="title"
               item-value="name"
               :item-props="photoCount"
               :placeholder="field.label"
@@ -337,6 +374,7 @@ function onDrop(event: DragEvent) {
               hide-details
               multiple
               class="camera-filter"
+              @update:menu="onFieldMenu"
               @update:model-value="setFilter({ [field.key]: $event })"
             />
             <v-date-input

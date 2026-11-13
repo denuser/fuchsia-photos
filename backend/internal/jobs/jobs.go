@@ -32,7 +32,7 @@ const (
 	tempFileMaxAge = 24 * time.Hour
 )
 
-// ProcessPhotoArgs queues the processing of an ingested photo.
+// ProcessPhotoArgs queues the processing of an ingested photo or video.
 type ProcessPhotoArgs struct {
 	PhotoID int64 `json:"photo_id"`
 }
@@ -47,6 +47,7 @@ func (ProcessPhotoArgs) InsertOpts() river.InsertOpts {
 
 type processPhotoWorker struct {
 	river.WorkerDefaults[ProcessPhotoArgs]
+	pool     *pgxpool.Pool
 	queries  *store.Queries
 	layout   storage.Layout
 	metadata *metadata.Reader
@@ -82,35 +83,52 @@ func (w *processPhotoWorker) Work(ctx context.Context, job *river.Job[ProcessPho
 
 func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) error {
 	path := w.layout.Original(photo.OwnerID, photo.Sha256, photo.Mime)
+	video := storage.IsVideo(photo.Mime)
 
-	meta, err := w.metadata.Read(path)
+	meta, err := w.metadata.Read(path, video)
 	if err != nil {
 		// The photo is still usable without its tags.
 		slog.Warn("read metadata", "photo", photo.ID, "error", err)
 		meta = metadata.Metadata{}
 	}
 
-	width, height, err := media.Dimensions(path)
-	if err != nil {
-		return &unreadableError{err}
-	}
-	settings, err := w.queries.GetPreviewSettings(ctx)
+	stored, err := w.queries.GetPreviewSettings(ctx)
 	if err != nil {
 		return fmt.Errorf("load preview settings: %w", err)
 	}
-	previews, err := media.Render(path, media.Settings{
-		Format:      media.Format(settings.Format),
-		WebPQuality: int(settings.WebpQuality),
-		WebPEffort:  int(settings.WebpEffort),
-		JPEGQuality: int(settings.JpegQuality),
-		GridEdge:    int(settings.GridEdge),
-		ViewerEdge:  int(settings.ViewerEdge),
-	})
-	if err != nil {
-		return &unreadableError{err}
+	settings := media.Settings{
+		Format:      media.Format(stored.Format),
+		WebPQuality: int(stored.WebpQuality),
+		WebPEffort:  int(stored.WebpEffort),
+		JPEGQuality: int(stored.JpegQuality),
+		GridEdge:    int(stored.GridEdge),
+		ViewerEdge:  int(stored.ViewerEdge),
 	}
 
-	format := settings.Format
+	var (
+		previews      media.Previews
+		width, height int
+		duration      *float64
+		hasMotion     bool
+	)
+	if video {
+		previews, width, height, duration, err = renderVideo(ctx, path, settings)
+		if err != nil {
+			return err
+		}
+	} else {
+		width, height, err = media.Dimensions(path)
+		if err != nil {
+			return &unreadableError{err}
+		}
+		previews, err = media.Render(path, settings)
+		if err != nil {
+			return &unreadableError{err}
+		}
+		hasMotion = w.extractMotion(ctx, photo.ID, path, meta.MotionTag)
+	}
+
+	format := stored.Format
 	for _, p := range []struct {
 		kind    string
 		preview media.Preview
@@ -131,11 +149,102 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) err
 		TakenAt:       meta.TakenAt,
 		Exif:          meta.Tags,
 		PreviewFormat: &format,
+		Duration:      duration,
+		HasMotion:     hasMotion,
 	})
 	if err != nil {
 		return fmt.Errorf("update photo: %w", err)
 	}
+
+	// The other file of a Live Photo may have come first.
+	if meta.ContentIdentifier != "" {
+		if _, err := PairLivePhotos(ctx, w.pool, &photo.OwnerID, &meta.ContentIdentifier); err != nil {
+			// The pair_live_photos job tries again.
+			slog.Warn("pair live photo", "photo", photo.ID, "error", err)
+		}
+	}
 	return nil
+}
+
+// PairLivePhotos pairs the photos and videos of Live Photos that have no pair
+// yet, those of one owner and identifier when they are given, and returns how
+// many pairs it made. Pairing runs under a lock of its own, so files that
+// finish processing at the same moment are paired once. It also gives back
+// the motion to paired photos whose processing overwrote it while a pairing
+// was being committed; processing calls it after every photo with the tag.
+func PairLivePhotos(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, contentIdentifier *string) (int, error) {
+	paired := 0
+	for {
+		var rows []store.PairLivePhotosRow
+		err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+			queries := store.New(tx)
+			if err := queries.LockLivePhotoPairing(ctx); err != nil {
+				return err
+			}
+			var err error
+			rows, err = queries.PairLivePhotos(ctx, store.PairLivePhotosParams{
+				OwnerID:           ownerID,
+				ContentIdentifier: contentIdentifier,
+			})
+			if err != nil || len(rows) > 0 {
+				return err
+			}
+			return queries.RepairLivePhotoMotion(ctx, store.RepairLivePhotoMotionParams{
+				OwnerID:           ownerID,
+				ContentIdentifier: contentIdentifier,
+			})
+		})
+		if err != nil {
+			return paired, fmt.Errorf("pair live photos: %w", err)
+		}
+		if len(rows) == 0 {
+			return paired, nil
+		}
+		paired += len(rows)
+	}
+}
+
+// renderVideo makes the previews of a video from its poster frame. A missing
+// ffmpeg or a cancelled job is worth a retry; anything else means the file
+// cannot be read.
+func renderVideo(ctx context.Context, path string, settings media.Settings) (media.Previews, int, int, *float64, error) {
+	unreadable := func(err error) error {
+		if media.ToolMissing(err) || ctx.Err() != nil {
+			return err
+		}
+		return &unreadableError{err}
+	}
+	video, err := media.ProbeVideo(ctx, path)
+	if err != nil {
+		return media.Previews{}, 0, 0, nil, unreadable(err)
+	}
+	previews, width, height, err := media.RenderVideo(ctx, path, video, settings)
+	if err != nil {
+		return media.Previews{}, 0, 0, nil, unreadable(err)
+	}
+	var duration *float64
+	if video.Duration > 0 {
+		duration = &video.Duration
+	}
+	return previews, width, height, duration, nil
+}
+
+// extractMotion keeps the video of a motion photo next to its previews and
+// tells whether there is one. The photo is still usable without it, so a
+// failure only leaves the motion out.
+func (w *processPhotoWorker) extractMotion(ctx context.Context, photoID int64, path, tag string) bool {
+	if tag == "" {
+		return false
+	}
+	data, err := metadata.ExtractMotion(ctx, path, tag)
+	if err == nil {
+		err = storage.WriteFileAtomic(w.layout.Motion(photoID), data)
+	}
+	if err != nil {
+		slog.Warn("extract motion photo video", "photo", photoID, "error", err)
+		return false
+	}
+	return true
 }
 
 func (w *processPhotoWorker) fail(ctx context.Context, photoID int64, cause error) error {
@@ -323,6 +432,81 @@ func (w *renderPreviewsWorker) Work(ctx context.Context, job *river.Job[RenderPr
 	return nil
 }
 
+// BackfillMotionArgs queues the extraction of the videos of motion photos
+// processed before the application kept them. It runs at every start and
+// once a day, and finds only photos still without their motion, so a photo
+// whose video cannot be extracted is tried again then.
+type BackfillMotionArgs struct{}
+
+// Kind implements river.JobArgs.
+func (BackfillMotionArgs) Kind() string { return "backfill_motion" }
+
+// InsertOpts implements river.JobArgsWithInsertOpts. New photos go first.
+func (BackfillMotionArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{Priority: 4}
+}
+
+type backfillMotionWorker struct {
+	river.WorkerDefaults[BackfillMotionArgs]
+	process *processPhotoWorker
+}
+
+// Timeout leaves room for a library with many motion photos. A job stopped
+// by a restart starts over with the photos still left.
+func (w *backfillMotionWorker) Timeout(*river.Job[BackfillMotionArgs]) time.Duration {
+	return time.Hour
+}
+
+func (w *backfillMotionWorker) Work(ctx context.Context, _ *river.Job[BackfillMotionArgs]) error {
+	queries, layout := w.process.queries, w.process.layout
+	var after int64
+	for {
+		photos, err := queries.ListPhotosMissingMotion(ctx, store.ListPhotosMissingMotionParams{AfterID: after, MaxRows: 100})
+		if err != nil {
+			return fmt.Errorf("list photos: %w", err)
+		}
+		if len(photos) == 0 {
+			return nil
+		}
+		for _, photo := range photos {
+			after = photo.ID
+			path := layout.Original(photo.OwnerID, photo.Sha256, photo.Mime)
+			if !w.process.extractMotion(ctx, photo.ID, path, metadata.MotionTag(photo.Exif)) {
+				continue
+			}
+			if err := queries.SetPhotoMotion(ctx, photo.ID); err != nil {
+				return fmt.Errorf("update photo: %w", err)
+			}
+		}
+	}
+}
+
+// PairLivePhotosArgs queues the pairing of Live Photos that processing did
+// not pair: files processed before the application paired them, and files
+// whose pairing failed. It runs at every start and once a day.
+type PairLivePhotosArgs struct{}
+
+// Kind implements river.JobArgs.
+func (PairLivePhotosArgs) Kind() string { return "pair_live_photos" }
+
+// InsertOpts implements river.JobArgsWithInsertOpts. New photos go first.
+func (PairLivePhotosArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{Priority: 4}
+}
+
+type pairLivePhotosWorker struct {
+	river.WorkerDefaults[PairLivePhotosArgs]
+	pool *pgxpool.Pool
+}
+
+func (w *pairLivePhotosWorker) Work(ctx context.Context, _ *river.Job[PairLivePhotosArgs]) error {
+	paired, err := PairLivePhotos(ctx, w.pool, nil, nil)
+	if paired > 0 {
+		slog.Info("paired live photos", "pairs", paired)
+	}
+	return err
+}
+
 // CleanupArgs queues routine housekeeping.
 type CleanupArgs struct{}
 
@@ -384,11 +568,13 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 	queries := store.New(pool)
 
 	workers := river.NewWorkers()
-	process := &processPhotoWorker{queries: queries, layout: cfg.Layout, metadata: cfg.Metadata}
+	process := &processPhotoWorker{pool: pool, queries: queries, layout: cfg.Layout, metadata: cfg.Metadata}
 	river.AddWorker(workers, process)
 	river.AddWorker(workers, &renderPreviewsWorker{process: process})
 	river.AddWorker(workers, &renderGridWorker{queries: queries, layout: cfg.Layout})
 	river.AddWorker(workers, &cleanupWorker{queries: queries, layout: cfg.Layout})
+	river.AddWorker(workers, &backfillMotionWorker{process: process})
+	river.AddWorker(workers, &pairLivePhotosWorker{pool: pool})
 	if cfg.Register != nil {
 		cfg.Register(workers)
 	}
@@ -402,6 +588,16 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 		river.NewPeriodicJob(
 			river.PeriodicInterval(24*time.Hour),
 			func() (river.JobArgs, *river.InsertOpts) { return CleanupArgs{}, nil },
+			&river.PeriodicJobOpts{RunOnStart: true},
+		),
+		river.NewPeriodicJob(
+			river.PeriodicInterval(24*time.Hour),
+			func() (river.JobArgs, *river.InsertOpts) { return BackfillMotionArgs{}, nil },
+			&river.PeriodicJobOpts{RunOnStart: true},
+		),
+		river.NewPeriodicJob(
+			river.PeriodicInterval(24*time.Hour),
+			func() (river.JobArgs, *river.InsertOpts) { return PairLivePhotosArgs{}, nil },
 			&river.PeriodicJobOpts{RunOnStart: true},
 		),
 	}, cfg.PeriodicJobs...)

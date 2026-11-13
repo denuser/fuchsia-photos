@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import { previewUrl, type Photo } from '../api/client'
+import { isVideo, previewUrl, type Photo } from '../api/client'
+import { formatDuration } from '../lib/duration'
 import { useGridEdge } from '../lib/gridEdge'
 import { visibleRows } from '../lib/justify'
 import { layoutTimeline, monthTitle, rowHeight, visibleSections, type SectionLayout } from '../lib/timeline'
@@ -256,9 +257,21 @@ onBeforeUnmount(() => {
             <v-progress-circular v-else-if="photo.status === 'pending'" indeterminate size="24" width="2" />
             <v-tooltip v-else :text="t('grid.failed', { name: photo.name })" location="top">
               <template #activator="{ props: tooltip }">
-                <v-icon v-bind="tooltip" icon="fa-triangle-exclamation" />
+                <v-icon v-bind="tooltip" icon="fa-triangle-exclamation" data-testid="tile-failed" />
               </template>
             </v-tooltip>
+            <span
+              v-if="isVideo(photo)"
+              class="badge"
+              data-testid="tile-video"
+              :title="t('grid.video', { duration: formatDuration(photo.duration ?? 0) })"
+            >
+              <v-icon icon="fa-play" size="small" />
+              <span v-if="photo.duration !== null">{{ formatDuration(photo.duration) }}</span>
+            </span>
+            <span v-else-if="photo.hasMotion" class="badge" data-testid="tile-motion" :title="t('grid.motion')">
+              <v-icon icon="fa-regular-circle-dot" size="small" />
+            </span>
           </button>
           <button
             v-if="selectable(photo)"
@@ -380,6 +393,23 @@ onBeforeUnmount(() => {
   height: 100%;
   object-fit: cover;
   transition: transform 0.1s;
+}
+
+/* A video's length or a motion photo's mark, in the corner a player puts it. */
+.badge {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 
 .check {
