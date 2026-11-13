@@ -221,4 +221,8 @@ With `HDR_TONEMAP=vaapi`, `tonemap_vaapi` failed on both HLG files with `Failed 
 
 **Size: the shorter side at 1080.** A copy at 1080p is made 1.5 to 2.2 times faster than one at the original 4K size, takes about half the space, and is enough for watching in a browser; the original stays available for download. A minute of 4K HDR takes about 32 seconds, a minute of 4K SDR about 21, and the copy takes 11 to 16 percent of the original's size.
 
-Not checked yet: how the tone mapped copies look next to the originals (`KEEP=1` keeps them), and phone videos with rotation and sound.
+**Driver.** Debian trixie's free `intel-media-va-driver` (25.2.3) encodes H.264 on the N150 only in the low-power mode (`VAEntrypointEncSliceLP`); the non-free one also offers `VAEntrypointEncSlice`. With Debian's ffmpeg, scaling 4K to 1080p and encoding to H.264 with no tone mapping and no audio took 12.9s for the SDR file and 12.8s for the HLG file with the free driver, and 10.6s and 11.5s with the non-free one: 10 to 20 percent slower. Measured on 2026-11-13. The Intel image takes the non-free driver: it differs only in prebuilt GPU kernels without published source, which Debian keeps out of main but which may be redistributed, and its 23 MB are small next to the OpenCL runtime.
+
+**Image size.** On amd64, libva with the free iHD driver adds 18 MB to the application image, with the non-free one 41 MB. Intel's OpenCL runtime is not in Debian trixie: the packages from Intel's compute-runtime and graphics compiler releases add 412 MB, almost all of it the compiler. libplacebo with Mesa's Vulkan drivers would add 240 MB, untested on the N150. Measured on 2026-11-13 by installing the packages over the runtime layer.
+
+The tone mapped copies, kept with `KEEP=1`, looked right next to the originals. Not checked yet: phone videos with rotation and sound.

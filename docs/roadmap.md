@@ -62,7 +62,9 @@ Decisions are in the [architecture](architecture.md).
     - Planned on 2026-11-13: hardware encoding with `h264_vaapi` only, with no libx264 fallback on the CPU. An administrator turns it on in the administration page, where the graphics allow it. Without `/dev/dri`, or with the setting off, videos the browser cannot play keep the poster and the download, as in step 1
     - [x] Benchmark on the NAS with `scripts/video-bench.sh`, as described under [Video transcoding](benchmark.md#video-transcoding): 1080p and 4K HEVC to H.264 through VAAPI, with libx264 for comparison
       - Measured on 2026-11-13 with Jellyfin's test files: `h264_vaapi` makes a 1080p copy of 4K HLG video, as an iPhone records it, at 1.9 times real time with about one core busy, and of 4K SDR at 2.9 times. HLG needs `tonemap_opencl`, as `tonemap_vaapi` fails on it. libx264 ran at about 0.14 times real time on HDR
-    - [ ] Check the tone mapped copies by eye, and with an iPhone video that has rotation and sound
+    - [x] Check the tone mapped copies by eye: on 2026-11-13 the copies of the HLG and PQ files looked right next to the originals
+    - [ ] Check with an iPhone video that has rotation and sound
+    - Decided on 2026-11-13: the hardware encoding ships in a separate amd64 image for Intel graphics, with a moving tag of its own next to `latest`, so the main image stays small and arm64 needs nothing. It carries libva, Debian's non-free iHD driver and Intel's OpenCL runtime, about 450 MB more. On arm64 videos stay as in step 1: no hardware encoder there works with upstream ffmpeg in a container
     - [ ] Depending on the result, a playable copy for videos the browser cannot play, made on a queue of its own with one worker and low priority, as folder scans are
 
 ## Later
