@@ -7,7 +7,8 @@
 # Usage: scripts/video-bench.sh <folder with videos> [folder for the copies]
 #
 # Environment:
-#   MODES    modes to run, default "vaapi vaapi-1080 x264-1080"
+#   MODES    modes to run, default "vaapi vaapi-1080"; add x264-1080 to
+#            compare with the CPU, which takes minutes for each video on a NAS
 #   LIMIT    maximum number of videos, default 0 (all)
 #   DEVICE   render node, default /dev/dri/renderD128
 #   IMAGE    image with jellyfin-ffmpeg, default jellyfin/jellyfin:10.11.11
@@ -22,7 +23,7 @@ export LC_ALL=C
 
 in=${1:?usage: video-bench.sh <folder with videos> [folder for the copies]}
 out=${2:-$(mktemp -d)}
-modes=${MODES:-vaapi vaapi-1080 x264-1080}
+modes=${MODES:-vaapi vaapi-1080}
 limit=${LIMIT:-0}
 device=${DEVICE:-/dev/dri/renderD128}
 image=${IMAGE:-jellyfin/jellyfin:10.11.11}

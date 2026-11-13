@@ -161,7 +161,7 @@ Use real videos from phones: 1080p and 4K HEVC from an iPhone, HDR included, and
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `MODES` | `vaapi vaapi-1080 x264-1080` | Modes to run, separated by spaces |
+| `MODES` | `vaapi vaapi-1080` | Modes to run, separated by spaces. Add `x264-1080` to compare with the CPU, which takes minutes for each video on the N150 |
 | `LIMIT` | `0` | Maximum number of videos, `0` means all |
 | `DEVICE` | `/dev/dri/renderD128` | Render node |
 | `IMAGE` | `jellyfin/jellyfin:10.11.11` | Image with jellyfin-ffmpeg |
@@ -197,4 +197,28 @@ To see whether the graphics are the limit during a run, run `intel_gpu_top` on t
 
 ### Video results
 
-Not measured yet.
+Measured on 2026-11-13 on the NAS (Intel N150, iHD driver 25.4.6) with four 30-second videos from [Jellyfin's test set](https://repo.jellyfin.org/test-videos/). The two `DV P8.4` files are HEVC Main 10 in HLG with Dolby Vision profile 8.4, the format an iPhone records. The driver offers the full H.264 encoder (`VAEntrypointEncSlice`), so the low-power mode was not needed.
+
+HDR tone mapped with `tonemap_opencl`:
+
+| Video | Source | Mode | Output | Time | Speed | CPU | Size | Source size |
+|---|---|---|---|---:|---:|---:|---:|---:|
+| 1080p DV P8.4 | HEVC 1920x1080, HLG | vaapi | 1920x1080 | 9.8s | 3.1x | 1.3 | 26.9 MB | 50.3 MB |
+| 4K DV P8.4 | HEVC 3840x2160, HLG | vaapi | 3840x2160 | 26.5s | 1.1x | 1.0 | 57.0 MB | 183.1 MB |
+| 4K DV P8.4 | HEVC 3840x2160, HLG | vaapi-1080 | 1920x1080 | 16.0s | 1.9x | 1.4 | 28.2 MB | 183.1 MB |
+| 4K HEVC 8bit 50M | HEVC 3840x2160, SDR | vaapi | 3840x2160 | 23.4s | 1.3x | 0.3 | 44.6 MB | 175.7 MB |
+| 4K HEVC 8bit 50M | HEVC 3840x2160, SDR | vaapi-1080 | 1920x1080 | 10.5s | 2.9x | 0.7 | 22.8 MB | 175.7 MB |
+| 4K HEVC HDR10 50M | HEVC 3840x2160, PQ | vaapi | 3840x2160 | 26.3s | 1.1x | 1.0 | 37.4 MB | 175.7 MB |
+| 4K HEVC HDR10 50M | HEVC 3840x2160, PQ | vaapi-1080 | 1920x1080 | 15.9s | 1.9x | 1.3 | 19.6 MB | 175.7 MB |
+
+With `HDR_TONEMAP=vaapi`, `tonemap_vaapi` failed on both HLG files with `Failed to start picture processing`. On the PQ file it worked at 0.8x for 4K and 0.9x for 1080p, slower than OpenCL, with 0.3 of a core. SDR rows matched the run above.
+
+`x264-1080` on the CPU was stopped after the first two files: the 1080p HLG file took about 3.5 minutes by the progress timestamps, about 0.14x real time, with every core busy.
+
+**Encoder: `h264_vaapi`.** Hardware encoding is about 20 times faster than libx264 on HDR and leaves the CPU almost free, so a CPU fallback is not worth having on this NAS.
+
+**HDR: `tonemap_opencl`.** It is the only path that handles HLG, which is what iPhones record, and it is faster than `tonemap_vaapi` on PQ too. The application image would need the OpenCL runtime for Intel graphics next to libva and the iHD driver.
+
+**Size: the shorter side at 1080.** A copy at 1080p is made 1.5 to 2.2 times faster than one at the original 4K size, takes about half the space, and is enough for watching in a browser; the original stays available for download. A minute of 4K HDR takes about 32 seconds, a minute of 4K SDR about 21, and the copy takes 11 to 16 percent of the original's size.
+
+Not checked yet: how the tone mapped copies look next to the originals (`KEEP=1` keeps them), and phone videos with rotation and sound.

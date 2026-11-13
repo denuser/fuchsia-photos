@@ -60,7 +60,9 @@ Decisions are in the [architecture](architecture.md).
     - [ ] Check on real devices: an iPhone library uploaded over WebDAV
   - [ ] Step 2, if needed: transcoding
     - Planned on 2026-11-13: hardware encoding with `h264_vaapi` only, with no libx264 fallback on the CPU. An administrator turns it on in the administration page, where the graphics allow it. Without `/dev/dri`, or with the setting off, videos the browser cannot play keep the poster and the download, as in step 1
-    - [ ] Benchmark on the NAS with `scripts/video-bench.sh`, as described under [Video transcoding](benchmark.md#video-transcoding): 1080p and 4K HEVC to H.264 through VAAPI, with libx264 for comparison
+    - [x] Benchmark on the NAS with `scripts/video-bench.sh`, as described under [Video transcoding](benchmark.md#video-transcoding): 1080p and 4K HEVC to H.264 through VAAPI, with libx264 for comparison
+      - Measured on 2026-11-13 with Jellyfin's test files: `h264_vaapi` makes a 1080p copy of 4K HLG video, as an iPhone records it, at 1.9 times real time with about one core busy, and of 4K SDR at 2.9 times. HLG needs `tonemap_opencl`, as `tonemap_vaapi` fails on it. libx264 ran at about 0.14 times real time on HDR
+    - [ ] Check the tone mapped copies by eye, and with an iPhone video that has rotation and sound
     - [ ] Depending on the result, a playable copy for videos the browser cannot play, made on a queue of its own with one worker and low priority, as folder scans are
 
 ## Later
