@@ -65,6 +65,7 @@ Decisions are in the [architecture](architecture.md).
     - [x] Check the tone mapped copies by eye: on 2026-11-13 the copies of the HLG and PQ files looked right next to the originals
     - [ ] Check with an iPhone video that has rotation and sound
     - Decided on 2026-11-13: the hardware encoding ships in a separate amd64 image for Intel graphics, with a moving tag of its own next to `latest`, so the main image stays small and arm64 needs nothing. It carries libva, Debian's non-free iHD driver and Intel's OpenCL runtime, about 450 MB more. On arm64 videos stay as in step 1: no hardware encoder there works with upstream ffmpeg in a container
+    - [x] Run the benchmark with the Intel image: on 2026-11-13 `latest-intel` matched the Jellyfin image on every file
     - [ ] Depending on the result, a playable copy for videos the browser cannot play, made on a queue of its own with one worker and low priority, as folder scans are
 
 ## Later

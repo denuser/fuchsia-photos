@@ -233,4 +233,6 @@ With `HDR_TONEMAP=vaapi`, `tonemap_vaapi` failed on both HLG files with `Failed 
 
 **Image size.** On amd64, libva with the free iHD driver adds 18 MB to the application image, with the non-free one 41 MB. Intel's OpenCL runtime is not in Debian trixie: the packages from Intel's compute-runtime and graphics compiler releases add 412 MB, almost all of it the compiler. libplacebo with Mesa's Vulkan drivers would add 240 MB, untested on the N150. Measured on 2026-11-13 by installing the packages over the runtime layer.
 
+**The Intel image.** `ghcr.io/denuser/fuchsia-photos:latest-intel`, run with `TOOLS=/usr/local/bin` on 2026-11-13 over the same four files, matched the Jellyfin image: the same speed and size on every row, times within 0.2 seconds: its own ffmpeg build, the non-free iHD driver and Intel's OpenCL runtime work on the N150, HLG included.
+
 The tone mapped copies, kept with `KEEP=1`, looked right next to the originals. Not checked yet: phone videos with rotation and sound.
