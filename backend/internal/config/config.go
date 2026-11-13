@@ -28,6 +28,9 @@ type Config struct {
 	// MLModel is the model whose vectors the application uses, as the service
 	// names it, with the version of its preprocessing.
 	MLModel string
+	// VAAPIDevice is the render node of the graphics that make H.264 copies
+	// of videos, when the image has the drivers for them.
+	VAAPIDevice string
 }
 
 // Load reads the settings from the environment.
@@ -42,6 +45,7 @@ func Load() (Config, error) {
 		MLURL:        os.Getenv("ML_URL"),
 		MLToken:      os.Getenv("ML_TOKEN"),
 		MLModel:      getenv("ML_MODEL", "google/siglip2-base-patch16-384@1"),
+		VAAPIDevice:  getenv("VAAPI_DEVICE", "/dev/dri/renderD128"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")

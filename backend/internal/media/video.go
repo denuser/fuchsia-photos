@@ -21,6 +21,10 @@ type Video struct {
 	// HDR means the video uses an HDR transfer function, such as the HLG of
 	// an iPhone, whose frames look grey unless they are tone mapped.
 	HDR bool
+	// Codec is ffprobe's name of the video codec, such as h264 or hevc.
+	Codec string
+	// Width and Height are the coded size, before any rotation.
+	Width, Height int
 }
 
 // CheckVideoTools reports whether ffmpeg and ffprobe can be found. Without
@@ -40,11 +44,12 @@ func ToolMissing(err error) bool {
 	return errors.Is(err, exec.ErrNotFound)
 }
 
-// ProbeVideo reads the duration and the colour transfer of the video at path.
+// ProbeVideo reads the duration, codec, size and colour transfer of the video
+// at path.
 func ProbeVideo(ctx context.Context, path string) (Video, error) {
 	cmd := exec.CommandContext(ctx, "ffprobe", "-v", "error",
 		"-select_streams", "v:0",
-		"-show_entries", "stream=color_transfer:format=duration",
+		"-show_entries", "stream=codec_name,width,height,color_transfer:format=duration",
 		"-of", "json", path)
 	out, err := run(cmd)
 	if err != nil {
@@ -52,6 +57,9 @@ func ProbeVideo(ctx context.Context, path string) (Video, error) {
 	}
 	var probe struct {
 		Streams []struct {
+			CodecName     string `json:"codec_name"`
+			Width         int    `json:"width"`
+			Height        int    `json:"height"`
 			ColorTransfer string `json:"color_transfer"`
 		} `json:"streams"`
 		Format struct {
@@ -64,8 +72,9 @@ func ProbeVideo(ctx context.Context, path string) (Video, error) {
 	if len(probe.Streams) == 0 {
 		return Video{}, fmt.Errorf("probe %s: no video stream", path)
 	}
-	video := Video{}
-	switch probe.Streams[0].ColorTransfer {
+	stream := probe.Streams[0]
+	video := Video{Codec: stream.CodecName, Width: stream.Width, Height: stream.Height}
+	switch stream.ColorTransfer {
 	case "arib-std-b67", "smpte2084":
 		video.HDR = true
 	}

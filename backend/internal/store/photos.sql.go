@@ -141,7 +141,7 @@ func (q *Queries) DeletePurgedPhoto(ctx context.Context, id int64) error {
 }
 
 const getLivePhotoVideo = `-- name: GetLivePhotoVideo :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id FROM photos WHERE live_photo_id = $1 AND purged_at IS NULL
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id, video_copy FROM photos WHERE live_photo_id = $1 AND purged_at IS NULL
 `
 
 // The video of a Live Photo, which plays as the photo's motion.
@@ -175,12 +175,13 @@ func (q *Queries) GetLivePhotoVideo(ctx context.Context, photoID *int64) (Photo,
 		&i.HasMotion,
 		&i.ContentIdentifier,
 		&i.LivePhotoID,
+		&i.VideoCopy,
 	)
 	return i, err
 }
 
 const getPhoto = `-- name: GetPhoto :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id FROM photos WHERE id = $1
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id, video_copy FROM photos WHERE id = $1
 `
 
 func (q *Queries) GetPhoto(ctx context.Context, id int64) (Photo, error) {
@@ -213,12 +214,13 @@ func (q *Queries) GetPhoto(ctx context.Context, id int64) (Photo, error) {
 		&i.HasMotion,
 		&i.ContentIdentifier,
 		&i.LivePhotoID,
+		&i.VideoCopy,
 	)
 	return i, err
 }
 
 const getPhotoByHash = `-- name: GetPhotoByHash :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id FROM photos WHERE owner_id = $1 AND sha256 = $2
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id, video_copy FROM photos WHERE owner_id = $1 AND sha256 = $2
 `
 
 type GetPhotoByHashParams struct {
@@ -256,12 +258,13 @@ func (q *Queries) GetPhotoByHash(ctx context.Context, arg GetPhotoByHashParams) 
 		&i.HasMotion,
 		&i.ContentIdentifier,
 		&i.LivePhotoID,
+		&i.VideoCopy,
 	)
 	return i, err
 }
 
 const getTrashedPhoto = `-- name: GetTrashedPhoto :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id FROM photos
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id, video_copy FROM photos
 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL AND purged_at IS NULL AND live_photo_id IS NULL
 `
 
@@ -301,12 +304,13 @@ func (q *Queries) GetTrashedPhoto(ctx context.Context, arg GetTrashedPhotoParams
 		&i.HasMotion,
 		&i.ContentIdentifier,
 		&i.LivePhotoID,
+		&i.VideoCopy,
 	)
 	return i, err
 }
 
 const getVisiblePhoto = `-- name: GetVisiblePhoto :one
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id, p.video_copy
 FROM photos p
 WHERE p.id = $1
   AND p.purged_at IS NULL
@@ -350,6 +354,7 @@ func (q *Queries) GetVisiblePhoto(ctx context.Context, arg GetVisiblePhotoParams
 		&i.HasMotion,
 		&i.ContentIdentifier,
 		&i.LivePhotoID,
+		&i.VideoCopy,
 	)
 	return i, err
 }
@@ -357,7 +362,7 @@ func (q *Queries) GetVisiblePhoto(ctx context.Context, arg GetVisiblePhotoParams
 const insertPhoto = `-- name: InsertPhoto :one
 INSERT INTO photos (owner_id, sha256, mime, size, original_name)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id, video_copy
 `
 
 type InsertPhotoParams struct {
@@ -404,6 +409,7 @@ func (q *Queries) InsertPhoto(ctx context.Context, arg InsertPhotoParams) (Photo
 		&i.HasMotion,
 		&i.ContentIdentifier,
 		&i.LivePhotoID,
+		&i.VideoCopy,
 	)
 	return i, err
 }
@@ -480,7 +486,7 @@ func (q *Queries) ListCameras(ctx context.Context, arg ListCamerasParams) ([]Lis
 }
 
 const listChangedPhotos = `-- name: ListChangedPhotos :many
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id, video_copy
 FROM photos
 WHERE owner_id = $1 AND updated_at > $2 AND purged_at IS NULL
 ORDER BY updated_at
@@ -530,6 +536,7 @@ func (q *Queries) ListChangedPhotos(ctx context.Context, arg ListChangedPhotosPa
 			&i.HasMotion,
 			&i.ContentIdentifier,
 			&i.LivePhotoID,
+			&i.VideoCopy,
 		); err != nil {
 			return nil, err
 		}
@@ -674,6 +681,47 @@ func (q *Queries) ListLenses(ctx context.Context, arg ListLensesParams) ([]ListL
 	return items, nil
 }
 
+const listPhotosMissingCopy = `-- name: ListPhotosMissingCopy :many
+SELECT id
+FROM photos
+WHERE status = 'ready'
+  AND purged_at IS NULL
+  AND deleted_at IS NULL
+  AND video_copy IS NULL
+  AND ((mime LIKE 'video/%' AND live_photo_id IS NULL) OR has_motion)
+  AND id > $1
+ORDER BY id
+LIMIT $2
+`
+
+type ListPhotosMissingCopyParams struct {
+	AfterID int64
+	MaxRows int32
+}
+
+// Items whose copy the transcode job has not looked at yet: videos that are
+// not the video of a Live Photo, and photos with motion. Items in the trash
+// wait until they are restored.
+func (q *Queries) ListPhotosMissingCopy(ctx context.Context, arg ListPhotosMissingCopyParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listPhotosMissingCopy, arg.AfterID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPhotosMissingMotion = `-- name: ListPhotosMissingMotion :many
 SELECT id, owner_id, sha256, mime, exif
 FROM photos
@@ -754,7 +802,7 @@ func (q *Queries) ListReadyPhotoIDs(ctx context.Context) ([]int64, error) {
 }
 
 const listTimeline = `-- name: ListTimeline :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id, p.video_copy
 FROM photos p
 WHERE (p.owner_id = $1
        OR ($2::boolean AND p.status = 'ready'
@@ -847,6 +895,7 @@ func (q *Queries) ListTimeline(ctx context.Context, arg ListTimelineParams) ([]P
 			&i.HasMotion,
 			&i.ContentIdentifier,
 			&i.LivePhotoID,
+			&i.VideoCopy,
 		); err != nil {
 			return nil, err
 		}
@@ -859,7 +908,7 @@ func (q *Queries) ListTimeline(ctx context.Context, arg ListTimelineParams) ([]P
 }
 
 const listTrash = `-- name: ListTrash :many
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id, video_copy
 FROM photos
 WHERE owner_id = $1
   AND deleted_at IS NOT NULL
@@ -919,6 +968,7 @@ func (q *Queries) ListTrash(ctx context.Context, arg ListTrashParams) ([]Photo, 
 			&i.HasMotion,
 			&i.ContentIdentifier,
 			&i.LivePhotoID,
+			&i.VideoCopy,
 		); err != nil {
 			return nil, err
 		}
@@ -1143,9 +1193,10 @@ SET purged_at = now(),
     error = NULL,
     preview_format = NULL,
     duration = NULL,
-    has_motion = false
+    has_motion = false,
+    video_copy = NULL
 WHERE id = $1 AND live_photo_id = $2 AND purged_at IS NULL
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id, video_copy
 `
 
 type PurgeLivePhotoVideoParams struct {
@@ -1186,6 +1237,7 @@ func (q *Queries) PurgeLivePhotoVideo(ctx context.Context, arg PurgeLivePhotoVid
 		&i.HasMotion,
 		&i.ContentIdentifier,
 		&i.LivePhotoID,
+		&i.VideoCopy,
 	)
 	return i, err
 }
@@ -1203,9 +1255,10 @@ SET purged_at = now(),
     error = NULL,
     preview_format = NULL,
     duration = NULL,
-    has_motion = false
+    has_motion = false,
+    video_copy = NULL
 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL AND purged_at IS NULL
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id, video_copy
 `
 
 type PurgePhotoParams struct {
@@ -1244,6 +1297,7 @@ func (q *Queries) PurgePhoto(ctx context.Context, arg PurgePhotoParams) (Photo, 
 		&i.HasMotion,
 		&i.ContentIdentifier,
 		&i.LivePhotoID,
+		&i.VideoCopy,
 	)
 	return i, err
 }
@@ -1279,7 +1333,7 @@ WITH video_restored AS (
 UPDATE photos p
 SET deleted_at = NULL, updated_at = now()
 WHERE p.id = $1 AND p.purged_at IS NULL
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, live_photo_id, video_copy
 `
 
 func (q *Queries) RestorePhoto(ctx context.Context, id int64) (Photo, error) {
@@ -1312,6 +1366,7 @@ func (q *Queries) RestorePhoto(ctx context.Context, id int64) (Photo, error) {
 		&i.HasMotion,
 		&i.ContentIdentifier,
 		&i.LivePhotoID,
+		&i.VideoCopy,
 	)
 	return i, err
 }
@@ -1345,6 +1400,24 @@ WHERE id = $1 AND status = 'ready' AND purged_at IS NULL
 // Moves updated_at too, so that open pages learn of the motion.
 func (q *Queries) SetPhotoMotion(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, setPhotoMotion, id)
+	return err
+}
+
+const setPhotoVideoCopy = `-- name: SetPhotoVideoCopy :exec
+UPDATE photos
+SET video_copy = $1,
+    updated_at = now()
+WHERE id = $2 AND purged_at IS NULL
+`
+
+type SetPhotoVideoCopyParams struct {
+	VideoCopy *string
+	ID        int64
+}
+
+// Moves updated_at too, so that open pages learn of the copy.
+func (q *Queries) SetPhotoVideoCopy(ctx context.Context, arg SetPhotoVideoCopyParams) error {
+	_, err := q.db.Exec(ctx, setPhotoVideoCopy, arg.VideoCopy, arg.ID)
 	return err
 }
 

@@ -19,6 +19,7 @@ export type MetadataSettings = components['schemas']['MetadataSettings']
 export type MLStatus = components['schemas']['MLStatus']
 export type PhotoEvent = components['schemas']['PhotoEvent']
 export type PreviewSettings = components['schemas']['PreviewSettings']
+export type VideoSettings = components['schemas']['VideoSettings']
 export type QueueStats = components['schemas']['QueueStats']
 export type Role = components['schemas']['Role']
 export type Tag = components['schemas']['Tag']
@@ -73,6 +74,12 @@ export function videoUrl(id: number) {
 export function motionUrl(id: number, version = 0) {
   const url = `${API_BASE}/photos/${id}/motion`
   return version ? `${url}?v=${version}` : url
+}
+
+// The H.264 copy of a video, or of the motion of a photo, for browsers that
+// cannot play the original, such as HEVC in some of them.
+export function copyUrl(id: number) {
+  return `${API_BASE}/photos/${id}/copy`
 }
 
 export function isVideo(photo: Pick<Photo, 'mime'>) {

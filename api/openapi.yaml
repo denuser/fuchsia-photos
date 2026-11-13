@@ -992,6 +992,42 @@ paths:
                 format: binary
         "404":
           $ref: "#/components/responses/Error"
+  /photos/{id}/copy:
+    get:
+      operationId: getVideoCopy
+      summary: The H.264 copy of a video, or of the motion of a photo
+      description: Exists when the item's videoCopy is ready. The shorter side is at most 1080 and HDR is tone mapped to SDR. Supports range requests
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The copy
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: requestVideoCopy
+      summary: Ask for the copy of an item someone has opened, before the other items waiting
+      description: The item's videoCopy changes when the copy is made or found not needed, which events report
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Whether a copy was queued. False when copies are not made, or the item has been looked at already
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queued]
+                properties:
+                  queued:
+                    type: boolean
+        "404":
+          $ref: "#/components/responses/Error"
   /photos/{id}/similar:
     get:
       operationId: listSimilarPhotos
@@ -1477,6 +1513,44 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /settings/video:
+    get:
+      operationId: getVideoSettings
+      summary: When H.264 copies of videos are made, and whether the graphics can make them (administrators only)
+      responses:
+        "200":
+          description: The current settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoSettings"
+        "403":
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: updateVideoSettings
+      summary: Change when H.264 copies of videos are made. Choosing upload queues copies of the videos uploaded before (administrators only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transcode]
+              properties:
+                transcode:
+                  type: string
+                  enum: [off, upload, view]
+      responses:
+        "200":
+          description: The saved settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoSettings"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
   /queue:
     get:
       operationId: getQueue
@@ -1631,6 +1705,35 @@ components:
       properties:
         showLocation:
           description: Whether photos include where they were taken, for everyone who may see them
+          type: boolean
+    VideoSettings:
+      type: object
+      required: [transcode, hardware]
+      properties:
+        transcode:
+          description: When H.264 copies of videos are made, on graphics that can make them. upload makes them after processing, and for videos uploaded before; view makes them when someone opens the video
+          type: string
+          enum: [off, upload, view]
+        hardware:
+          description: The graphics that make the copies. Null when there are none, and unavailable then says why
+          oneOf:
+            - $ref: "#/components/schemas/VideoHardware"
+            - type: "null"
+        unavailable:
+          description: Why the graphics cannot make copies
+          type: string
+    VideoHardware:
+      type: object
+      required: [device, driver, lowPower]
+      properties:
+        device:
+          description: The render node
+          type: string
+        driver:
+          description: The VAAPI driver, as it describes itself
+          type: string
+        lowPower:
+          description: Whether H.264 is encoded in the low-power mode, the only one these graphics offer
           type: boolean
     PreviewSettings:
       type: object
@@ -1833,7 +1936,7 @@ components:
     Photo:
       type: object
       description: A photo or a video, which the MIME type tells apart
-      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, duration, hasMotion, livePhotoId, camera, location]
+      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, duration, hasMotion, livePhotoId, videoCopy, camera, location]
       properties:
         id:
           type: integer
@@ -1881,6 +1984,10 @@ components:
           description: Set on the video of a Live Photo to the photo it plays as the motion of. Lists leave such videos out; only events carry them, so that pages drop them
           type: [integer, "null"]
           format: int64
+        videoCopy:
+          description: The H.264 copy of what the item plays, the video or the motion, served from /photos/{id}/copy when ready. not_needed when the video plays as it is or the graphics cannot decode it. Null while no copy has been tried
+          type: [string, "null"]
+          enum: [ready, not_needed, failed, null]
         camera:
           description: Shooting details from EXIF. Null when the photo has none
           oneOf:

@@ -99,6 +99,7 @@ type Photo struct {
 	HasMotion         bool
 	ContentIdentifier *string
 	LivePhotoID       *int64
+	VideoCopy         *string
 }
 
 type PhotoEmbedding struct {
@@ -165,6 +166,11 @@ type User struct {
 	GridSquares              bool
 	TimelineIncludesShared   bool
 	Language                 string
+}
+
+type VideoSetting struct {
+	ID        int16
+	Transcode string
 }
 
 type WebdavAlbum struct {

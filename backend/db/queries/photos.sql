@@ -233,7 +233,8 @@ SET purged_at = now(),
     error = NULL,
     preview_format = NULL,
     duration = NULL,
-    has_motion = false
+    has_motion = false,
+    video_copy = NULL
 WHERE id = @id AND owner_id = @owner_id AND deleted_at IS NOT NULL AND purged_at IS NULL
 RETURNING *;
 
@@ -312,7 +313,8 @@ SET purged_at = now(),
     error = NULL,
     preview_format = NULL,
     duration = NULL,
-    has_motion = false
+    has_motion = false,
+    video_copy = NULL
 WHERE id = @id AND live_photo_id = @photo_id AND purged_at IS NULL
 RETURNING *;
 
@@ -380,3 +382,25 @@ WHERE NOT p.has_motion
   AND (sqlc.narg(owner_id)::bigint IS NULL OR p.owner_id = sqlc.narg(owner_id)::bigint)
   AND (sqlc.narg(content_identifier)::text IS NULL OR p.content_identifier = sqlc.narg(content_identifier)::text)
   AND EXISTS (SELECT 1 FROM photos v WHERE v.live_photo_id = p.id AND v.purged_at IS NULL);
+
+-- Items whose copy the transcode job has not looked at yet: videos that are
+-- not the video of a Live Photo, and photos with motion. Items in the trash
+-- wait until they are restored.
+-- name: ListPhotosMissingCopy :many
+SELECT id
+FROM photos
+WHERE status = 'ready'
+  AND purged_at IS NULL
+  AND deleted_at IS NULL
+  AND video_copy IS NULL
+  AND ((mime LIKE 'video/%' AND live_photo_id IS NULL) OR has_motion)
+  AND id > @after_id
+ORDER BY id
+LIMIT @max_rows;
+
+-- Moves updated_at too, so that open pages learn of the copy.
+-- name: SetPhotoVideoCopy :exec
+UPDATE photos
+SET video_copy = @video_copy,
+    updated_at = now()
+WHERE id = @id AND purged_at IS NULL;

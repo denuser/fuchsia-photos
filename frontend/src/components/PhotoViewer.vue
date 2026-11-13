@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
-import { isVideo, motionUrl, originalUrl, previewUrl, videoUrl, type Camera, type Photo, type ViewerField } from '../api/client'
+import { api, copyUrl, isVideo, motionUrl, originalUrl, previewUrl, videoUrl, type Camera, type Photo, type ViewerField } from '../api/client'
 import { formatDateTime, intlLocale, t } from '../i18n'
 import { formatDuration } from '../lib/duration'
 import { useAuthStore } from '../stores/auth'
@@ -116,19 +116,81 @@ function canShowOriginal(photo: Photo) {
   return !isVideo(photo) && !undecodable.has(photo.mime)
 }
 
-// A video plays in place of the photo, from its original, once the user starts
-// it: stepping through a library must not download every video on the way.
-// When the browser cannot play it, such as HEVC in some browsers, the viewer
-// shows the poster and offers the download.
+// A video plays in place of the photo once the user starts it: stepping
+// through a library must not download every video on the way. It plays its
+// H.264 copy when there is one, and its original until then. When the browser
+// cannot play the original, such as HEVC in some browsers, the viewer shows
+// the poster and offers the download, and waits for the copy if one is coming.
 const video = computed(() => isVideo(props.photo))
 const videoElement = ref<HTMLVideoElement | null>(null)
 const unplayable = ref(false)
+
+// The state of the copy, which the viewer learns again while it waits.
+const videoCopy = ref(props.photo.videoCopy)
+const copyReady = computed(() => videoCopy.value === 'ready')
+// What the video element plays, chosen when the item opens, so that a copy
+// made meanwhile does not interrupt the original playing.
+const videoSource = ref(playSource())
+function playSource() {
+  return props.photo.videoCopy === 'ready' ? copyUrl(props.photo.id) : videoUrl(props.photo.id)
+}
+// Whether a copy was asked for and is still being made.
+const copyComing = ref(false)
+let copyPoll = 0
+
+// Asks for the copy once the user starts the video or the motion, which puts
+// it before the other items waiting. Copies are made only where the
+// graphics allow, so the answer may be that none is coming.
+let copyAsked = 0
+async function askForCopy() {
+  const id = props.photo.id
+  if (videoCopy.value !== null || copyAsked === id) {
+    return
+  }
+  copyAsked = id
+  const { data } = await api.POST('/photos/{id}/copy', { params: { path: { id } } })
+  if (id === props.photo.id && data?.queued) {
+    copyComing.value = true
+    pollCopy(id)
+  }
+}
+
+function pollCopy(id: number) {
+  clearTimeout(copyPoll)
+  copyPoll = window.setTimeout(async () => {
+    const { data } = await api.GET('/photos/{id}', { params: { path: { id } } })
+    if (id !== props.photo.id) {
+      return
+    }
+    if (data?.videoCopy == null) {
+      pollCopy(id)
+      return
+    }
+    copyArrived(data.videoCopy)
+  }, 3000)
+}
+
+// Switches to the copy where the original could not play.
+function copyArrived(state: NonNullable<Photo['videoCopy']>) {
+  copyComing.value = false
+  clearTimeout(copyPoll)
+  videoCopy.value = state
+  if (state === 'ready' && unplayable.value) {
+    videoSource.value = copyUrl(props.photo.id)
+    unplayable.value = false
+  }
+}
+
+function onVideoUnplayable() {
+  unplayable.value = true
+  askForCopy()
+}
 
 // Some browsers play the sound of a video they cannot decode over a black
 // picture, without an error; the picture's size then stays zero.
 function onVideoMetadata(event: Event) {
   if ((event.target as HTMLVideoElement).videoWidth === 0) {
-    unplayable.value = true
+    onVideoUnplayable()
   }
 }
 
@@ -136,6 +198,8 @@ function onVideoMetadata(event: Event) {
 // the photo comes back at its end.
 const motionPlaying = ref(false)
 const motionFailed = ref(false)
+// Chosen when the motion starts, like the video's source.
+const motionSource = ref('')
 let motionFailedTimer = 0
 
 function toggleMotion() {
@@ -144,7 +208,9 @@ function toggleMotion() {
     return
   }
   resetView()
+  motionSource.value = copyReady.value ? copyUrl(props.photo.id) : motionUrl(props.photo.id, props.photo.previewVersion)
   motionPlaying.value = true
+  askForCopy()
 }
 
 const motionElement = ref<HTMLVideoElement | null>(null)
@@ -162,6 +228,9 @@ watch(motionElement, (element) => {
 })
 
 function onMotionFailed() {
+  if (!copyReady.value) {
+    askForCopy()
+  }
   motionPlaying.value = false
   motionFailed.value = true
   clearTimeout(motionFailedTimer)
@@ -180,10 +249,27 @@ watch(
     unplayable.value = false
     motionPlaying.value = false
     motionFailed.value = false
+    videoCopy.value = props.photo.videoCopy
+    videoSource.value = playSource()
+    copyComing.value = false
+    clearTimeout(copyPoll)
   },
 )
 
-onBeforeUnmount(() => clearTimeout(motionFailedTimer))
+// Events bring the copy too, for the owner's own items.
+watch(
+  () => props.photo.videoCopy,
+  (state) => {
+    if (state !== null && videoCopy.value === null) {
+      copyArrived(state)
+    }
+  },
+)
+
+onBeforeUnmount(() => {
+  clearTimeout(motionFailedTimer)
+  clearTimeout(copyPoll)
+})
 
 // The original replaces the preview only once it has been decoded, so the
 // preview stays on the screen while a large file loads.
@@ -598,7 +684,7 @@ onBeforeUnmount(() => {
             v-if="!unplayable"
             ref="videoElement"
             :key="photo.id"
-            :src="videoUrl(photo.id)"
+            :src="videoSource"
             :poster="previewUrl(photo.id, 'viewer')"
             :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
             class="image"
@@ -606,8 +692,9 @@ onBeforeUnmount(() => {
             controls
             playsinline
             preload="none"
-            @error="unplayable = true"
+            @error="onVideoUnplayable"
             @loadedmetadata="onVideoMetadata"
+            @play="askForCopy"
           />
           <template v-else>
             <img
@@ -619,7 +706,10 @@ onBeforeUnmount(() => {
             />
             <div class="unplayable" data-testid="video-unplayable">
               <div>{{ t('viewer.videoUnsupported') }}</div>
-              <div class="details">{{ t('viewer.videoUnsupportedText') }}</div>
+              <div v-if="copyComing" class="details" data-testid="video-copy-coming">
+                <v-progress-circular indeterminate size="16" width="2" class="mr-2" />{{ t('viewer.videoCopyComing') }}
+              </div>
+              <div v-else class="details">{{ t('viewer.videoUnsupportedText') }}</div>
               <v-btn :href="originalUrl(photo.id)" prepend-icon="fa-download" variant="flat" class="mt-3" :text="t('viewer.download')" />
             </div>
           </template>
@@ -628,7 +718,7 @@ onBeforeUnmount(() => {
           <video
             v-if="motionPlaying"
             :key="`motion-${photo.id}`"
-            :src="motionUrl(photo.id, photo.previewVersion)"
+            :src="motionSource"
             :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
             class="image motion"
             ref="motionElement"
@@ -698,7 +788,9 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="motionFailed" class="notice" role="status">{{ t('viewer.motionUnsupported') }}</div>
+    <div v-if="motionFailed" class="notice" role="status">
+      {{ t(copyComing ? 'viewer.motionCopyComing' : 'viewer.motionUnsupported') }}
+    </div>
 
     <v-btn
       v-if="previous"

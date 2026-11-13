@@ -655,6 +655,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/photos/{id}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The H.264 copy of a video, or of the motion of a photo
+         * @description Exists when the item's videoCopy is ready. The shorter side is at most 1080 and HDR is tone mapped to SDR. Supports range requests
+         */
+        get: operations["getVideoCopy"];
+        put?: never;
+        /**
+         * Ask for the copy of an item someone has opened, before the other items waiting
+         * @description The item's videoCopy changes when the copy is made or found not needed, which events report
+         */
+        post: operations["requestVideoCopy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/photos/{id}/similar": {
         parameters: {
             query?: never;
@@ -1036,6 +1060,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** When H.264 copies of videos are made, and whether the graphics can make them (administrators only) */
+        get: operations["getVideoSettings"];
+        /** Change when H.264 copies of videos are made. Choosing upload queues copies of the videos uploaded before (administrators only) */
+        put: operations["updateVideoSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/queue": {
         parameters: {
             query?: never;
@@ -1131,6 +1173,25 @@ export interface components {
         MetadataSettings: {
             /** @description Whether photos include where they were taken, for everyone who may see them */
             showLocation: boolean;
+        };
+        VideoSettings: {
+            /**
+             * @description When H.264 copies of videos are made, on graphics that can make them. upload makes them after processing, and for videos uploaded before; view makes them when someone opens the video
+             * @enum {string}
+             */
+            transcode: "off" | "upload" | "view";
+            /** @description The graphics that make the copies. Null when there are none, and unavailable then says why */
+            hardware: components["schemas"]["VideoHardware"] | null;
+            /** @description Why the graphics cannot make copies */
+            unavailable?: string;
+        };
+        VideoHardware: {
+            /** @description The render node */
+            device: string;
+            /** @description The VAAPI driver, as it describes itself */
+            driver: string;
+            /** @description Whether H.264 is encoded in the low-power mode, the only one these graphics offer */
+            lowPower: boolean;
         };
         PreviewSettings: {
             /** @enum {string} */
@@ -1300,6 +1361,11 @@ export interface components {
              * @description Set on the video of a Live Photo to the photo it plays as the motion of. Lists leave such videos out; only events carry them, so that pages drop them
              */
             livePhotoId: number | null;
+            /**
+             * @description The H.264 copy of what the item plays, the video or the motion, served from /photos/{id}/copy when ready. not_needed when the video plays as it is or the graphics cannot decode it. Null while no copy has been tried
+             * @enum {string|null}
+             */
+            videoCopy: "ready" | "not_needed" | "failed" | null;
             /** @description Shooting details from EXIF. Null when the photo has none */
             camera: components["schemas"]["Camera"] | null;
             /** @description Where the photo was taken. Null when it has no location or an administrator hides locations */
@@ -2545,6 +2611,54 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    getVideoCopy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The copy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp4": string;
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    requestVideoCopy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Whether a copy was queued. False when copies are not made, or the item has been looked at already */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        queued: boolean;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
     listSimilarPhotos: {
         parameters: {
             query?: {
@@ -3220,6 +3334,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MetadataSettings"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    getVideoSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoSettings"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    updateVideoSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    transcode: "off" | "upload" | "view";
+                };
+            };
+        };
+        responses: {
+            /** @description The saved settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoSettings"];
                 };
             };
             400: components["responses"]["Error"];

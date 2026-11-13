@@ -22,6 +22,7 @@ import (
 	"github.com/denuser/fuchsia-photos/backend/internal/scan"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/fuchsia-photos/backend/internal/transcode"
 )
 
 // Pinger reports whether the database is reachable.
@@ -39,7 +40,9 @@ type Deps struct {
 	Scan    *scan.Service
 	Layout  storage.Layout
 	// ML embeds search texts. Its monitor tells whether the service is up.
-	ML           *ml.Service
+	ML *ml.Service
+	// Transcode makes H.264 copies of videos, where the graphics allow.
+	Transcode    *transcode.Service
 	CookieSecure bool
 	// WebDAV serves the WebDAV tree under /webdav, if set.
 	WebDAV http.Handler
@@ -55,6 +58,9 @@ type server struct {
 func NewHandler(deps Deps) http.Handler {
 	if deps.ML == nil {
 		deps.ML = &ml.Service{Monitor: ml.NewMonitor(nil, "")}
+	}
+	if deps.Transcode == nil {
+		deps.Transcode = &transcode.Service{Queries: deps.Queries, Layout: deps.Layout, Unavailable: "not configured"}
 	}
 	s := &server{deps}
 	mux := http.NewServeMux()
@@ -102,6 +108,8 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/photos/{id}/original", s.authenticated(s.getOriginal))
 	mux.HandleFunc("GET /api/v1/photos/{id}/video", s.authenticated(s.getVideo))
 	mux.HandleFunc("GET /api/v1/photos/{id}/motion", s.authenticated(s.getMotion))
+	mux.HandleFunc("GET /api/v1/photos/{id}/copy", s.authenticated(s.getVideoCopy))
+	mux.HandleFunc("POST /api/v1/photos/{id}/copy", s.authenticated(s.requestVideoCopy))
 	mux.HandleFunc("GET /api/v1/photos/{id}/similar", s.authenticated(s.listSimilarPhotos))
 
 	mux.HandleFunc("GET /api/v1/search", s.authenticated(s.searchPhotos))
@@ -136,6 +144,8 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("PUT /api/v1/settings/previews", s.admin(s.updatePreviewSettings))
 	mux.HandleFunc("GET /api/v1/settings/metadata", s.admin(s.getMetadataSettings))
 	mux.HandleFunc("PUT /api/v1/settings/metadata", s.admin(s.updateMetadataSettings))
+	mux.HandleFunc("GET /api/v1/settings/video", s.admin(s.getVideoSettings))
+	mux.HandleFunc("PUT /api/v1/settings/video", s.admin(s.updateVideoSettings))
 
 	mux.HandleFunc("GET /api/v1/queue", s.admin(s.getQueue))
 	mux.HandleFunc("GET /api/v1/queue/events", s.admin(s.queueEvents))

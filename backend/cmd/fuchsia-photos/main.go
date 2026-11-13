@@ -30,6 +30,7 @@ import (
 	"github.com/denuser/fuchsia-photos/backend/internal/scan"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/fuchsia-photos/backend/internal/transcode"
 	"github.com/denuser/fuchsia-photos/backend/internal/web"
 	"github.com/denuser/fuchsia-photos/backend/internal/webdav"
 )
@@ -153,6 +154,17 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 	}
 	defer reader.Close()
 
+	transcoder := &transcode.Service{Queries: store.New(pool), Layout: layout}
+	detectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	if hw, err := media.DetectHardware(detectCtx, cfg.VAAPIDevice); err != nil {
+		transcoder.Unavailable = err.Error()
+		slog.Info("videos get no H.264 copies", "reason", err)
+	} else {
+		transcoder.Hardware = &hw
+		slog.Info("videos can get H.264 copies", "device", hw.Device, "driver", hw.Driver, "low_power", hw.LowPower)
+	}
+	cancel()
+
 	ingester := &ingest.Service{Pool: pool, Layout: layout}
 	scanner := &scan.Service{Ingest: ingester, Dir: cfg.ImportDir, Stable: cfg.ImportStable}
 	var mlClient *ml.Client
@@ -173,14 +185,20 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		Register: func(workers *river.Workers) {
 			scanner.Register(workers)
 			embedder.Register(workers)
+			transcoder.Register(workers)
 		},
-		Queues:       map[string]river.QueueConfig{ml.QueueML: {MaxWorkers: 1}},
-		PeriodicJobs: []*river.PeriodicJob{ml.PeriodicJob()},
+		Queues: map[string]river.QueueConfig{
+			ml.QueueML:      {MaxWorkers: 1},
+			transcode.Queue: {MaxWorkers: 1},
+		},
+		PeriodicJobs: []*river.PeriodicJob{ml.PeriodicJob(), transcode.PeriodicJob()},
+		Processed:    transcoder.Processed,
 	})
 	if err != nil {
 		return fmt.Errorf("create job client: %w", err)
 	}
 	ingester.Jobs = jobClient
+	transcoder.Jobs = jobClient
 	if err := jobClient.Start(ctx); err != nil {
 		return fmt.Errorf("start jobs: %w", err)
 	}
@@ -213,6 +231,7 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		Scan:         scanner,
 		Layout:       layout,
 		ML:           embedder,
+		Transcode:    transcoder,
 		CookieSecure: cfg.CookieSecure,
 		WebDAV:       &webdav.Handler{Queries: store.New(pool), Ingest: ingester, Layout: layout},
 		Static:       static,

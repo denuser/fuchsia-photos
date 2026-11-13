@@ -18,3 +18,11 @@ SELECT * FROM metadata_settings;
 UPDATE metadata_settings
 SET show_location = @show_location
 RETURNING *;
+
+-- name: GetVideoSettings :one
+SELECT * FROM video_settings;
+
+-- name: UpdateVideoSettings :one
+UPDATE video_settings
+SET transcode = @transcode
+RETURNING *;

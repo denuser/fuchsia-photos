@@ -39,6 +39,17 @@ func (q *Queries) GetPreviewSettings(ctx context.Context) (PreviewSetting, error
 	return i, err
 }
 
+const getVideoSettings = `-- name: GetVideoSettings :one
+SELECT id, transcode FROM video_settings
+`
+
+func (q *Queries) GetVideoSettings(ctx context.Context) (VideoSetting, error) {
+	row := q.db.QueryRow(ctx, getVideoSettings)
+	var i VideoSetting
+	err := row.Scan(&i.ID, &i.Transcode)
+	return i, err
+}
+
 const updateMetadataSettings = `-- name: UpdateMetadataSettings :one
 UPDATE metadata_settings
 SET show_location = $1
@@ -91,5 +102,18 @@ func (q *Queries) UpdatePreviewSettings(ctx context.Context, arg UpdatePreviewSe
 		&i.GridEdge,
 		&i.ViewerEdge,
 	)
+	return i, err
+}
+
+const updateVideoSettings = `-- name: UpdateVideoSettings :one
+UPDATE video_settings
+SET transcode = $1
+RETURNING id, transcode
+`
+
+func (q *Queries) UpdateVideoSettings(ctx context.Context, transcode string) (VideoSetting, error) {
+	row := q.db.QueryRow(ctx, updateVideoSettings, transcode)
+	var i VideoSetting
+	err := row.Scan(&i.ID, &i.Transcode)
 	return i, err
 }

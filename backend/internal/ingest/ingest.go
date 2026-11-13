@@ -254,7 +254,7 @@ func (s *Service) Purge(ctx context.Context, ownerID, photoID int64) error {
 
 	// A stray preview is harmless: photo ids are never reused.
 	for _, p := range purged {
-		files := []string{s.Layout.Motion(p.ID)}
+		files := []string{s.Layout.Motion(p.ID), s.Layout.Copy(p.ID)}
 		if p.PreviewFormat != nil {
 			for _, kind := range []string{storage.PreviewGrid, storage.PreviewViewer} {
 				files = append(files, s.Layout.Preview(p.ID, kind, *p.PreviewFormat))

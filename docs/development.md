@@ -80,6 +80,7 @@ The server reads its settings from environment variables:
 | `ML_URL` | unset | Address of the ML service, such as `http://mac.local:8090`. Without it search by description is off. `make dev-backend` sets `http://127.0.0.1:8090` |
 | `ML_TOKEN` | unset | Bearer token the ML service requires, if it was started with one |
 | `ML_MODEL` | `google/siglip2-base-patch16-384@1` | The model whose vectors the application uses, as the service's `/health` names it. A service with another model is not used. Changing it makes the application embed all photos again |
+| `VAAPI_DEVICE` | `/dev/dri/renderD128` | Render node of the graphics that make H.264 copies of videos. Used only by the image for Intel graphics; elsewhere copies are off |
 
 ### Database and migrations
 

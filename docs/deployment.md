@@ -224,7 +224,7 @@ It uses the image that CI publishes to `ghcr.io/denuser/fuchsia-photos`, for `li
 - `X.Y.Z`, for example `0.1.0`, a release, which never changes;
 - `X.Y`, the newest release of that minor version.
 
-The image for Intel graphics is built by hand, for `linux/amd64` only, and adds about 460 MB to the image: VAAPI with Intel's iHD driver and Intel's OpenCL runtime, for hardware transcoding of videos, which is being built under stage 8 of the [roadmap](roadmap.md). Until that lands, it works as the main image does. Its tags are `latest-intel`, moved when it is built from `master`, and `X.Y.Z-intel` for a release.
+The image for Intel graphics is built by hand, for `linux/amd64` only, and adds about 460 MB to the image: VAAPI with Intel's iHD driver and Intel's OpenCL runtime, which make H.264 copies of videos as described in [Video copies on Intel graphics](#video-copies-on-intel-graphics). Its tags are `latest-intel`, moved when it is built from `master`, and `X.Y.Z-intel` for a release.
 
 Release notes are on the GitHub releases page and in `CHANGELOG.md`.
 
@@ -254,11 +254,33 @@ docker compose up -d
 
 To run a specific release or build, set `IMAGE_TAG=0.1.0` or `IMAGE_TAG=sha-<commit>` in `.env`. Going back to an older build is safe only if no migrations were added since: migrations run forward only, so after a new one an older build may not start against the database.
 
+### Video copies on Intel graphics
+
+Phones record HEVC, which some browsers cannot play: the viewer then shows the poster and offers the download. On Intel graphics the application can make an H.264 copy that every browser plays, with the shorter side at 1080 and HDR tone mapped to SDR. The copy is made on the graphics, leaves the CPU almost free, and goes into the cache next to the previews, at about a seventh of the original's size. On the N150 a minute of 4K HDR from an iPhone takes about 32 seconds, as measured in the [benchmark](benchmark.md#video-results). Copies are made for HEVC, VP9 and AV1 videos and for the motion of motion photos and Live Photos; H.264 needs none.
+
+It needs the image for Intel graphics, the render node of the graphics in the container, and the group that may open it:
+
+1. Find the group of the render node on the NAS: `stat -c %g /dev/dri/renderD128`.
+2. In the application's service, use the `latest-intel` tag (`IMAGE_TAG=latest-intel` in `.env`, or the image line on TrueNAS) and add the device and the group, with the number from step 1:
+
+   ```yaml
+   app:
+     image: ghcr.io/denuser/fuchsia-photos:latest-intel
+     devices:
+       - /dev/dri/renderD128:/dev/dri/renderD128
+     group_add:
+       - '107'
+   ```
+
+3. After `docker compose up -d`, the application's log says `videos can get H.264 copies`, with the driver, or why it cannot. The administration page shows the same under **Videos**.
+
+The setting there decides when copies are made. **When someone plays the video**, the default, makes the copy of a video the first time someone starts it and the browser asks for it; until then the original plays where the browser can, and otherwise the viewer waits for the copy. **After upload** makes copies in the background as videos come in, and of the videos uploaded before. Either way, copies are made one at a time, and a video someone is waiting for goes first. Turning copies off keeps the ones already made. A different render node can be set with `VAAPI_DEVICE`.
+
 ## Running on TrueNAS
 
 On TrueNAS, the setup from [Running from an image](#running-from-an-image) runs as a custom app. TrueNAS does not read a `.env` file, so the values go into the YAML itself.
 
-Both containers run as the TrueNAS `apps` user and group, UID and GID 568. Create a dataset for the application, and inside it a dataset or folder for each of `library`, `cache`, `import`, `postgres`, `backups` and `caddy`. Separate datasets for `library` and `backups` can be snapshotted on their own, as described in [Backups](#backups). In **Datasets**, select the parent dataset and choose **Edit** on the **Permissions** card. Set the owner and the owning group to `apps`, give `owner@` full control and `group@` modify, and apply the permissions to the child datasets. The application only reads `import`, so files copied there by other users need to be readable by `apps`.
+Both containers run as the TrueNAS `apps` user and group, UID and GID 568. For H.264 copies of videos on Intel graphics, change the application's image and add the device and the group as described in [Video copies on Intel graphics](#video-copies-on-intel-graphics). Create a dataset for the application, and inside it a dataset or folder for each of `library`, `cache`, `import`, `postgres`, `backups` and `caddy`. Separate datasets for `library` and `backups` can be snapshotted on their own, as described in [Backups](#backups). In **Datasets**, select the parent dataset and choose **Edit** on the **Permissions** card. Set the owner and the owning group to `apps`, give `owner@` full control and `group@` modify, and apply the permissions to the child datasets. The application only reads `import`, so files copied there by other users need to be readable by `apps`.
 
 In **Apps**, choose **Discover Apps**, then **Install via YAML** from the menu, and paste this, with your paths and password:
 

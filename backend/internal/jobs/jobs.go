@@ -51,6 +51,8 @@ type processPhotoWorker struct {
 	queries  *store.Queries
 	layout   storage.Layout
 	metadata *metadata.Reader
+	// processed is Config.Processed.
+	processed func(ctx context.Context, photoID int64, video, motion bool)
 }
 
 func (w *processPhotoWorker) Timeout(*river.Job[ProcessPhotoArgs]) time.Duration {
@@ -162,6 +164,9 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) err
 			// The pair_live_photos job tries again.
 			slog.Warn("pair live photo", "photo", photo.ID, "error", err)
 		}
+	}
+	if w.processed != nil {
+		w.processed(ctx, photo.ID, video, hasMotion || meta.ContentIdentifier != "")
 	}
 	return nil
 }
@@ -557,6 +562,9 @@ type Config struct {
 	PeriodicJobs []*river.PeriodicJob
 	// Queues are added to the default and import queues, such as the ML queue.
 	Queues map[string]river.QueueConfig
+	// Processed is called after processing has made an item ready: a video,
+	// or a photo that has or may get motion, such as one of a Live Photo.
+	Processed func(ctx context.Context, photoID int64, video, motion bool)
 }
 
 // QueueImport runs folder scans. It is separate so that a scan takes no worker
@@ -568,7 +576,7 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 	queries := store.New(pool)
 
 	workers := river.NewWorkers()
-	process := &processPhotoWorker{pool: pool, queries: queries, layout: cfg.Layout, metadata: cfg.Metadata}
+	process := &processPhotoWorker{pool: pool, queries: queries, layout: cfg.Layout, metadata: cfg.Metadata, processed: cfg.Processed}
 	river.AddWorker(workers, process)
 	river.AddWorker(workers, &renderPreviewsWorker{process: process})
 	river.AddWorker(workers, &renderGridWorker{queries: queries, layout: cfg.Layout})
