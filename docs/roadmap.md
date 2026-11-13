@@ -59,7 +59,8 @@ Decisions are in the [architecture](architecture.md).
     - The motion checked on 2026-11-12 in Safari and in Firefox
     - [ ] Check on real devices: an iPhone library uploaded over WebDAV
   - [ ] Step 2, if needed: transcoding
-    - [ ] Benchmark on the NAS: software transcoding of 1080p and 4K HEVC to H.264 against hardware transcoding through VAAPI, which needs `/dev/dri` in the container
+    - Planned on 2026-11-13: hardware encoding with `h264_vaapi` only, with no libx264 fallback on the CPU. An administrator turns it on in the administration page, where the graphics allow it. Without `/dev/dri`, or with the setting off, videos the browser cannot play keep the poster and the download, as in step 1
+    - [ ] Benchmark on the NAS with `scripts/video-bench.sh`, as described under [Video transcoding](benchmark.md#video-transcoding): 1080p and 4K HEVC to H.264 through VAAPI, with libx264 for comparison
     - [ ] Depending on the result, a playable copy for videos the browser cannot play, made on a queue of its own with one worker and low priority, as folder scans are
 
 ## Later

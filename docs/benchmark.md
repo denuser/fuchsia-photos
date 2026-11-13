@@ -2,6 +2,8 @@
 
 `imgbench` measures how fast a machine processes a folder of photos. Its results decide the preview format and the worker count, and give the performance figures in the README.
 
+Video transcoding has a script of its own, described under [Video transcoding](#video-transcoding).
+
 It reads the originals without changing them. For each photo it computes the SHA-256 hash, generates the previews and writes them to `/out`. It deletes the previews at the end of each run.
 
 EXIF extraction and database writes are not included, so the real pipeline will be somewhat slower. It uses the default preview settings, not the ones saved on the administration page.
@@ -140,3 +142,59 @@ Measured on 2026-11-02 on the NAS (Intel N150) with 475 JPEG photos and `/out` o
 **Workers: 3.** Throughput grows almost linearly up to 3 workers, which is about 40% faster than 2, so the limit is the CPU rather than the disk. This still leaves a core for the UI.
 
 HEIC photos were left out, because they are not currently relevant, and originals on the HDD were not compared with the SSD. Previews are kept on the SSD in any case.
+
+## Video transcoding
+
+`scripts/video-bench.sh` measures how fast the NAS makes H.264 copies of videos that some browsers cannot play, such as HEVC from phones. Its results decide step 2 of stage 8 in the [roadmap](roadmap.md). The plan is hardware encoding with `h264_vaapi`, turned on in the administration page where the graphics allow it; libx264 on the CPU is measured for comparison.
+
+The script runs the ffmpeg build of the Jellyfin image (`jellyfin/jellyfin:10.11.11`), which has VAAPI, Intel's iHD driver, `tonemap_vaapi` and libx264, so the application image stays as it is until the results are in. It needs bash and Docker on the NAS, and the render node `/dev/dri/renderD128`. It reads the originals without changing them, and deletes each copy after measuring it.
+
+### Running videos
+
+Copy the script to the NAS, or clone the repository there, and point it at a folder with videos and a folder for the copies on the SSD:
+
+```sh
+scripts/video-bench.sh /path/to/videos /path/on/ssd/video-bench > video-results.md
+```
+
+Use real videos from phones: 1080p and 4K HEVC from an iPhone, HDR included, and H.264 from Android. A dozen files of 10 to 60 seconds is enough. Each video runs in every mode, one after another, so the total time is several times their length on a slow mode.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MODES` | `vaapi vaapi-1080 x264-1080` | Modes to run, separated by spaces |
+| `LIMIT` | `0` | Maximum number of videos, `0` means all |
+| `DEVICE` | `/dev/dri/renderD128` | Render node |
+| `IMAGE` | `jellyfin/jellyfin:10.11.11` | Image with jellyfin-ffmpeg |
+| `KEEP` | `0` | `1` keeps the copies, to compare them by eye |
+| `HDR_TONEMAP` | `opencl` | How the VAAPI modes tone map HDR: `opencl`, or `vaapi` for Intel's video processing |
+
+| Mode | What it does |
+|---|---|
+| `vaapi` | Decoding, scaling and H.264 encoding on the graphics, at the size of the original |
+| `vaapi-1080` | The same, with the shorter side brought down to 1080. Skipped for videos that are 1080p or smaller already |
+| `x264-1080` | Decoding and libx264 (`veryfast`, CRF 23) on the CPU, with the shorter side at 1080 |
+
+HDR videos are tone mapped to SDR. The VAAPI modes use `tonemap_opencl` on the same graphics by default, as Jellyfin does on Intel. `tonemap_vaapi`, Intel's video processing, needs no OpenCL runtime but takes HDR10 (PQ) only, while iPhones record HDR as HLG with Dolby Vision; run once more with `HDR_TONEMAP=vaapi` to see how it does with them. The CPU mode uses the same `zscale` and `tonemap` chain as the posters.
+
+HDR from an iPhone is the case to watch. If the graphics cannot tone map it, hardware transcoding without a CPU fallback leaves those videos as they are in step 1, and the plan for step 2 has to change. The application image would also need the OpenCL runtime for Intel graphics, which is large, next to libva and the iHD driver.
+
+Before the first video, the script runs `vainfo` and stops if VAAPI does not work or offers no H.264 encoding. Newer Intel graphics, the N150 among them, encode H.264 only in the low-power mode, which the script turns on when `vainfo` shows only `VAEntrypointEncSliceLP`.
+
+### Reading the video results
+
+The table has one row per video and mode. Progress goes to stderr; the log of a failed run stays in `logs/` in the folder for the copies, and its last lines are printed.
+
+| Column | Meaning |
+|---|---|
+| Source | Codec, size, HDR transfer and duration of the original |
+| Output | Width and height of the copy |
+| Time | Wall time of the encoding, without starting the container |
+| **Speed** | Multiples of real time: `4.0x` makes a minute of video in 15 seconds. The main number to compare |
+| CPU | Cores kept busy on average. With VAAPI it shows what is left for the application and the other services |
+| Size | Size of the copy, against the size of the original in the last column |
+
+To see whether the graphics are the limit during a run, run `intel_gpu_top` on the NAS if it is installed.
+
+### Video results
+
+Not measured yet.
