@@ -166,6 +166,7 @@ Use real videos from phones: 1080p and 4K HEVC from an iPhone, HDR included, and
 | `DEVICE` | `/dev/dri/renderD128` | Render node |
 | `IMAGE` | `jellyfin/jellyfin:10.11.11` | Image with jellyfin-ffmpeg |
 | `KEEP` | `0` | `1` keeps the copies, to compare them by eye |
+| `TOOLS` | `/usr/lib/jellyfin-ffmpeg` | Where `IMAGE` keeps ffmpeg, ffprobe and vainfo |
 | `HDR_TONEMAP` | `opencl` | How the VAAPI modes tone map HDR: `opencl`, or `vaapi` for Intel's video processing |
 
 | Mode | What it does |
@@ -177,6 +178,13 @@ Use real videos from phones: 1080p and 4K HEVC from an iPhone, HDR included, and
 HDR videos are tone mapped to SDR. The VAAPI modes use `tonemap_opencl` on the same graphics by default, as Jellyfin does on Intel. `tonemap_vaapi`, Intel's video processing, needs no OpenCL runtime but takes HDR10 (PQ) only, while iPhones record HDR as HLG with Dolby Vision; run once more with `HDR_TONEMAP=vaapi` to see how it does with them. The CPU mode uses the same `zscale` and `tonemap` chain as the posters.
 
 HDR from an iPhone is the case to watch. If the graphics cannot tone map it, hardware transcoding without a CPU fallback leaves those videos as they are in step 1, and the plan for step 2 has to change. The application image would also need the OpenCL runtime for Intel graphics, which is large, next to libva and the iHD driver.
+
+The application's image for Intel graphics, described in [Running from an image](deployment.md#running-from-an-image), runs the VAAPI modes too, which checks its own ffmpeg build and drivers:
+
+```sh
+IMAGE=ghcr.io/denuser/fuchsia-photos:latest-intel TOOLS=/usr/local/bin \
+  scripts/video-bench.sh /path/to/videos /path/on/ssd/video-bench > video-results.md
+```
 
 Before the first video, the script runs `vainfo` and stops if VAAPI does not work or offers no H.264 encoding. Newer Intel graphics, the N150 among them, encode H.264 only in the low-power mode, which the script turns on when `vainfo` shows only `VAEntrypointEncSliceLP`.
 

@@ -20,4 +20,4 @@ The first release.
 - JPEG, PNG, WebP and HEIC photos, and MP4 and MOV videos up to 4 GiB, which play in the viewer, with a download when the browser cannot play the codec
 - The motion of Google and Samsung motion photos, played in the viewer by a button, including for photos uploaded before
 - iPhone Live Photos as one item: the video, uploaded before or after its photo, plays as the photo's motion and leaves the lists
-- Images for `linux/amd64` and `linux/arm64`
+- Images for `linux/amd64` and `linux/arm64`, and an `amd64` image for Intel graphics, `latest-intel`, built by hand, with VAAPI and OpenCL for the coming hardware transcoding of videos

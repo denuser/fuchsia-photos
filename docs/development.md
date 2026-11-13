@@ -197,6 +197,8 @@ On failure it prints the failed step and saves a screenshot to `frontend/e2e/res
 - a push to `master` tags it `latest` and `sha-<commit>`;
 - a tag `vX.Y.Z` tags it `X.Y.Z`, `X.Y` and `sha-<commit>`, leaves `latest` alone and creates a GitHub release.
 
+The image for Intel graphics, the `intel` target of `deploy/Dockerfile`, is built only by hand, so that pushes do not make a large image each time. It is `linux/amd64` only. Start it with `gh workflow run ci.yml` or "Run workflow" in the Actions tab: from `master` it moves `latest-intel`, and from a tag (`gh workflow run ci.yml --ref v0.1.0`) it adds `0.1.0-intel`. Started from any other branch, it fails before building. To build it locally, run `docker build --platform linux/amd64 --target intel -f deploy/Dockerfile .`.
+
 Only the publishing jobs can write packages, and only the release job can write to the repository.
 
 Tests do not run in CI, so run `make test` and, for interface changes, `make e2e` before pushing. On an Apple Silicon Mac, `make e2e` builds and runs the `linux/arm64` image.

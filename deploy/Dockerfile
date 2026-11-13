@@ -8,11 +8,11 @@ RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
 RUN pnpm build
 
-# ffmpeg and ffprobe with only what the application uses: reading MP4 and MOV,
-# decoding a frame, tone mapping HDR with zscale and writing a PNG. Debian's
-# ffmpeg package would add about 360 MB of libraries the application never
-# loads. The version follows Debian trixie's.
-FROM debian:trixie-slim AS ffmpeg
+# ffmpeg source and the configure options both builds share: reading MP4
+# and MOV, decoding a frame, tone mapping HDR with zscale and writing a PNG.
+# Debian's ffmpeg package would add about 360 MB of libraries the
+# application never loads. The version follows Debian trixie's.
+FROM debian:trixie-slim AS ffmpeg-source
 ARG FFMPEG_VERSION=7.1.5
 ARG FFMPEG_SHA256=de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f
 RUN apt-get update \
@@ -24,19 +24,39 @@ WORKDIR /src
 RUN curl -fsSLo ffmpeg.tar.xz "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
     && echo "${FFMPEG_SHA256}  ffmpeg.tar.xz" | sha256sum -c - \
     && tar -xJf ffmpeg.tar.xz --strip-components=1 \
-    && ./configure --prefix=/opt/ffmpeg \
-        --disable-everything --disable-autodetect --disable-doc --disable-debug \
-        --disable-ffplay --disable-avdevice --disable-network \
-        --enable-zlib --enable-libzimg --enable-libdav1d \
-        --enable-protocol=file,pipe \
-        --enable-demuxer=mov \
-        --enable-parser=h264,hevc,vp9,av1,mpeg4video,mjpeg,aac \
-        --enable-decoder=h264,hevc,vp9,libdav1d,mpeg4,mjpeg,prores,aac \
-        --enable-filter=scale,format,null,transpose,hflip,vflip,zscale,tonemap \
-        --enable-encoder=png \
-        --enable-muxer=image2 \
-    && make -j"$(nproc)" \
-    && make install
+    && rm ffmpeg.tar.xz
+ENV FFMPEG_OPTIONS="--prefix=/opt/ffmpeg \
+    --disable-everything --disable-autodetect --disable-doc --disable-debug \
+    --disable-ffplay --disable-avdevice --disable-network \
+    --enable-zlib --enable-libzimg --enable-libdav1d \
+    --enable-protocol=file,pipe \
+    --enable-demuxer=mov \
+    --enable-parser=h264,hevc,vp9,av1,mpeg4video,mjpeg,aac \
+    --enable-decoder=h264,hevc,vp9,libdav1d,mpeg4,mjpeg,prores,aac \
+    --enable-filter=scale,format,null,transpose,hflip,vflip,zscale,tonemap \
+    --enable-encoder=png \
+    --enable-muxer=image2"
+
+FROM ffmpeg-source AS ffmpeg
+RUN ./configure $FFMPEG_OPTIONS && make -j"$(nproc)" && make install
+
+# The same build with what the copies of videos need on Intel graphics:
+# decoding, scaling and H.264 encoding through VAAPI, tone mapping HDR with
+# OpenCL on frames shared with VAAPI, AAC sound and the MP4 muxer.
+FROM ffmpeg-source AS ffmpeg-intel
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends libva-dev ocl-icd-opencl-dev opencl-c-headers \
+    && rm -rf /var/lib/apt/lists/*
+RUN ./configure $FFMPEG_OPTIONS \
+        --enable-vaapi --enable-opencl \
+        --enable-hwaccel=h264_vaapi,hevc_vaapi,vp9_vaapi,av1_vaapi \
+        --enable-filter=scale_vaapi,tonemap_opencl,hwmap,hwupload,hwdownload,aformat,aresample,anull \
+        --enable-decoder=alac,pcm_s16le,pcm_s24le \
+        --enable-encoder=h264_vaapi,aac \
+        --enable-muxer=mp4 \
+    && grep -q '^#define HAVE_VAAPI_DRM 1' config.h \
+    && grep -q '^#define HAVE_OPENCL_VAAPI_INTEL_MEDIA 1' config.h \
+    && make -j"$(nproc)" && make install
 
 FROM golang:1.27-trixie AS backend
 RUN apt-get update \
@@ -67,13 +87,48 @@ FROM backend AS build
 COPY --from=frontend /src/frontend/dist/ internal/web/dist/
 RUN mkdir /out && go build -trimpath -ldflags='-s -w' -o /out/ ./cmd/...
 
-FROM debian:trixie-slim
+FROM debian:trixie-slim AS runtime
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         libvips42t64 libheif-plugin-libde265 libimage-exiftool-perl libdav1d7 libzimg2 \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=ffmpeg /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe /usr/local/bin/
 COPY --from=build /out/ /usr/local/bin/
-USER 1000:1000
 EXPOSE 8080
 CMD ["fuchsia-photos", "serve"]
+
+# The image for Intel graphics, amd64 only: VAAPI with Debian's non-free iHD
+# driver, whose prebuilt GPU kernels encode faster than the free build, and
+# Intel's OpenCL runtime, which Debian trixie does not package, from Intel's
+# releases. Built with `--target intel`.
+FROM runtime AS intel
+ARG COMPUTE_RUNTIME=26.40.40196.8
+ARG GMMLIB=22.10.2
+ARG IGC=2.42.6+23070
+RUN sed -i 's/^Components: main$/Components: main non-free/' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates curl \
+    && mkdir /tmp/intel && cd /tmp/intel \
+    && cr="https://github.com/intel/compute-runtime/releases/download/${COMPUTE_RUNTIME}" \
+    && igc="https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC%+*}" \
+    && curl -fsSLO "$cr/intel-opencl-icd_${COMPUTE_RUNTIME}-0_amd64.deb" \
+    && curl -fsSLO "$cr/libigdgmm12_${GMMLIB}_amd64.deb" \
+    && curl -fsSLO "$igc/intel-igc-core-2_${IGC}_amd64.deb" \
+    && curl -fsSLO "$igc/intel-igc-opencl-2_${IGC}_amd64.deb" \
+    && printf '%s  %s\n' \
+        96046069e94680b761df6e83ddc64244721178b826e3e1f8af3ca104cfd0c7c2 "intel-opencl-icd_${COMPUTE_RUNTIME}-0_amd64.deb" \
+        053fceadb84a1d2f9a30a0d1bc9b16424b3f1a90cc49900fcd80aadcf25c8a4d "libigdgmm12_${GMMLIB}_amd64.deb" \
+        e20539632f2d99875d8f8b225d5da58b31f98baa54bb47c6328aa98ec473ab9d "intel-igc-core-2_${IGC}_amd64.deb" \
+        7f5593cf828503ffb8450967768bde9209e22753bc576296e846b5a751011fa3 "intel-igc-opencl-2_${IGC}_amd64.deb" \
+        | sha256sum -c - \
+    && apt-get install --yes --no-install-recommends \
+        libva2 libva-drm2 intel-media-va-driver-non-free vainfo ocl-icd-libopencl1 ./*.deb \
+    && apt-get purge --yes --auto-remove curl \
+    && cd / && rm -rf /tmp/intel /var/lib/apt/lists/*
+COPY --from=ffmpeg-intel /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe /usr/local/bin/
+ENV LIBVA_DRIVER_NAME=iHD
+USER 1000:1000
+
+# The default image, for every platform.
+FROM runtime
+COPY --from=ffmpeg /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe /usr/local/bin/
+USER 1000:1000

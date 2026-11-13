@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Measures how fast the NAS turns videos into H.264 copies that every browser
-# plays: hardware encoding through VAAPI against libx264 on the CPU. It uses
-# the ffmpeg build of the Jellyfin image, which has VAAPI, Intel's iHD driver
-# and libx264, so the application image stays as it is. See docs/benchmark.md.
+# plays: hardware encoding through VAAPI against libx264 on the CPU. By
+# default it uses the ffmpeg build of the Jellyfin image, which has VAAPI,
+# Intel's iHD driver and libx264. The application's image for Intel graphics
+# runs it too, without the CPU mode. See docs/benchmark.md.
 #
 # Usage: scripts/video-bench.sh <folder with videos> [folder for the copies]
 #
@@ -11,7 +12,10 @@
 #            compare with the CPU, which takes minutes for each video on a NAS
 #   LIMIT    maximum number of videos, default 0 (all)
 #   DEVICE   render node, default /dev/dri/renderD128
-#   IMAGE    image with jellyfin-ffmpeg, default jellyfin/jellyfin:10.11.11
+#   IMAGE    image with ffmpeg, default jellyfin/jellyfin:10.11.11
+#   TOOLS    where IMAGE keeps ffmpeg, ffprobe and vainfo, default
+#            /usr/lib/jellyfin-ffmpeg; /usr/local/bin for the application's
+#            image, which has vainfo in /usr/bin
 #   KEEP     1 keeps the copies instead of deleting each one after measuring it
 #   HDR_TONEMAP  how VAAPI modes tone map HDR: opencl (default), which takes
 #            HDR10 and HLG, or vaapi, Intel's video processing for HDR10 only
@@ -27,6 +31,7 @@ modes=${MODES:-vaapi vaapi-1080}
 limit=${LIMIT:-0}
 device=${DEVICE:-/dev/dri/renderD128}
 image=${IMAGE:-jellyfin/jellyfin:10.11.11}
+tools=${TOOLS:-/usr/lib/jellyfin-ffmpeg}
 keep=${KEEP:-0}
 hdr_tonemap=${HDR_TONEMAP:-opencl}
 
@@ -44,13 +49,17 @@ for m in $modes; do [[ $m == vaapi* ]] && needs_vaapi=1; done
 gpu=()
 ((needs_vaapi)) && gpu=(--device "$device" -e LIBVA_DRIVER_NAME=iHD)
 
-# run <tool> <args...> runs a jellyfin-ffmpeg tool with the videos read-only.
+# run <tool> <args...> runs an ffmpeg tool with the videos read-only, as root
+# so that it can open the render node and write the copies whatever user the
+# image runs as.
 run() {
-  local tool=$1
+  local tool=$1 path
   shift
-  docker run --rm ${gpu[@]+"${gpu[@]}"} \
+  path=$tools/$tool
+  [[ $tool == vainfo && ! $tools == */jellyfin-ffmpeg ]] && path=/usr/bin/vainfo
+  docker run --rm --user 0:0 ${gpu[@]+"${gpu[@]}"} \
     -v "$in:/in:ro" -v "$out:/out" \
-    --entrypoint "/usr/lib/jellyfin-ffmpeg/$tool" "$image" "$@"
+    --entrypoint "$path" "$image" "$@"
 }
 
 lp=()

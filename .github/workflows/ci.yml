@@ -5,6 +5,7 @@ on:
     branches: [master]
     tags: ['v*']
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -108,6 +109,53 @@ jobs:
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf "$IMAGE@sha256:%s " *)
       - run: docker buildx imagetools inspect "$IMAGE:sha-${GITHUB_SHA::7}"
+
+  # Builds the image for Intel graphics, amd64 only, when started by hand:
+  # `gh workflow run ci.yml` or "Run workflow" in the Actions tab. From master
+  # it moves `latest-intel`; from a tag vX.Y.Z (`--ref vX.Y.Z`) it adds
+  # `X.Y.Z-intel`. Pushes and tags never build it, so each image is made on
+  # purpose.
+  intel:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: |
+            latest=false
+            suffix=-intel
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+      - if: steps.meta.outputs.tags == ''
+        run: |
+          echo "Start it from master or from a tag vX.Y.Z" >&2
+          exit 1
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          target: intel
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          push: true
+          cache-from: |
+            type=gha,scope=intel
+            type=gha,scope=amd64
+          cache-to: type=gha,mode=max,scope=intel
 
   # Publishes a GitHub release for a tag vX.Y.Z, with the section "## X.Y.Z"
   # of CHANGELOG.md as its notes. A tag with a hyphen, such as v0.2.0-rc.1,

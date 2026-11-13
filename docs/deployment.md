@@ -224,6 +224,8 @@ It uses the image that CI publishes to `ghcr.io/denuser/fuchsia-photos`, for `li
 - `X.Y.Z`, for example `0.1.0`, a release, which never changes;
 - `X.Y`, the newest release of that minor version.
 
+The image for Intel graphics is built by hand, for `linux/amd64` only, and adds about 460 MB to the image: VAAPI with Intel's iHD driver and Intel's OpenCL runtime, for hardware transcoding of videos, which is being built under stage 8 of the [roadmap](roadmap.md). Until that lands, it works as the main image does. Its tags are `latest-intel`, moved when it is built from `master`, and `X.Y.Z-intel` for a release.
+
 Release notes are on the GitHub releases page and in `CHANGELOG.md`.
 
 Copy `deploy/compose.image.yaml` to a folder on the NAS as `docker-compose.yml`. Next to it, create a `.env` file with `POSTGRES_PASSWORD`, `SITE_ADDRESS` and any of the other variables from [First start](#first-start), apart from `HTTP_PORT`. Some of them differ here:
