@@ -66,7 +66,9 @@ Decisions are in the [architecture](architecture.md).
     - [ ] Check with an iPhone video that has rotation and sound
     - Decided on 2026-11-13: the hardware encoding ships in a separate amd64 image for Intel graphics, with a moving tag of its own next to `latest`, so the main image stays small and arm64 needs nothing. It carries libva, Debian's non-free iHD driver and Intel's OpenCL runtime, about 450 MB more. On arm64 videos stay as in step 1: no hardware encoder there works with upstream ffmpeg in a container
     - [x] Run the benchmark with the Intel image: on 2026-11-13 `latest-intel` matched the Jellyfin image on every file
-    - [ ] Depending on the result, a playable copy for videos the browser cannot play, made on a queue of its own with one worker and low priority, as folder scans are
+    - Decided with the user on 2026-11-13: a copy is made for videos in HEVC, VP9 and AV1, which the graphics decode, and for the motion of motion photos and Live Photos by the same rule. H.264 needs none; ProRes, MPEG-4 Part 2 and MJPEG stay as in step 1, as decoding them on the CPU is slow. The viewer always plays the copy when there is one, with the original still available for download. Turning the setting off keeps the copies made so far
+    - Decided with the user on 2026-11-13: the setting has three values, off, on upload and on first view, with on first view as the default once transcoding is turned on. On upload also makes copies of the videos uploaded before. In both modes, a video opened without its copy goes to the front of the queue; until the copy is made, the viewer plays the original if the browser can, and otherwise shows that the copy is being made and switches to it when it is ready
+    - [ ] A playable copy, with the shorter side at 1080 and HDR tone mapped, made on a queue of its own with one worker and low priority, as folder scans are, and for videos uploaded before the setting was turned on
 
 ## Later
 
