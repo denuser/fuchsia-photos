@@ -170,18 +170,25 @@ function pollCopy(id: number) {
   }, 3000)
 }
 
-// Switches to the copy where the original could not play.
+// Switches to the copy where the original could not play or has not started.
 function copyArrived(state: NonNullable<Photo['videoCopy']>) {
   copyComing.value = false
   clearTimeout(copyPoll)
   videoCopy.value = state
-  if (state === 'ready' && unplayable.value) {
+  const element = videoElement.value
+  const started = element !== null && (!element.paused || element.currentTime > 0)
+  if (state === 'ready' && (unplayable.value || !started)) {
     videoSource.value = copyUrl(props.photo.id)
     unplayable.value = false
   }
 }
 
 function onVideoUnplayable() {
+  // A copy made since the item opened plays instead.
+  if (copyReady.value && videoSource.value !== copyUrl(props.photo.id)) {
+    videoSource.value = copyUrl(props.photo.id)
+    return
+  }
   unplayable.value = true
   askForCopy()
 }
