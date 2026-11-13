@@ -1176,7 +1176,7 @@ export interface components {
         };
         VideoSettings: {
             /**
-             * @description When H.264 copies of videos are made, on graphics that can make them. upload makes them after processing, and for videos uploaded before; view makes them when someone opens the video
+             * @description When H.264 copies of videos are made, on graphics that can make them. upload makes them after processing, and for videos uploaded before; view makes them when someone first plays the video or the motion
              * @enum {string}
              */
             transcode: "off" | "upload" | "view";

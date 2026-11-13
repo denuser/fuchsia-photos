@@ -1,7 +1,7 @@
 -- +goose Up
 
 -- When the application makes H.264 copies of videos that some browsers cannot
--- play: never, after processing (upload), or when someone opens the video
+-- play: never, after processing (upload), or when someone first plays it
 -- (view). It takes effect only where the graphics can encode H.264. The table
 -- holds exactly one row.
 CREATE TABLE video_settings (
