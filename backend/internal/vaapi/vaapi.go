@@ -55,7 +55,7 @@ func DetectHardware(ctx context.Context, device string) (Hardware, error) {
 	// needed to tell what went wrong.
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return Hardware{}, fmt.Errorf("vainfo on %s: %w: %s", device, err, lastLine(strings.TrimSpace(string(out))))
+		return Hardware{}, fmt.Errorf("vainfo on %s: %w: %s", device, err, lastLines(strings.TrimSpace(string(out)), 1))
 	}
 	return parseVAInfo(device, string(out))
 }
@@ -150,21 +150,31 @@ func Transcode(ctx context.Context, in, out string, video Source, hw Hardware) e
 	return nil
 }
 
-// run runs a command and returns its output, or an error with the last line
-// it wrote to stderr.
+// run runs a command and returns its output, or an error with the last lines
+// it wrote to stderr: ffmpeg ends with a general line, such as "Error opening
+// output files", and names the cause in the lines before it.
 func run(cmd *exec.Cmd) ([]byte, error) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return nil, fmt.Errorf("%w: %s", err, lastLine(msg))
+			return nil, fmt.Errorf("%w: %s", err, lastLines(msg, 5))
 		}
 		return nil, err
 	}
 	return stdout.Bytes(), nil
 }
 
-func lastLine(s string) string {
-	return s[strings.LastIndexByte(s, '\n')+1:]
+// lastLines returns the last n lines of s, joined by " | " to stay on one
+// line of the log.
+func lastLines(s string, n int) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	for i, line := range lines {
+		lines[i] = strings.TrimSpace(line)
+	}
+	return strings.Join(lines, " | ")
 }
