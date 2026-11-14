@@ -371,9 +371,9 @@ const steps = {
     await page.goto(`${BASE}/import`)
     await page.getByLabel('Owner').click()
     await page.getByRole('option', { name: 'guest' }).click()
-    // The fixtures hold two photos and three videos more than the upload uses.
-    await scanFolder(1, 'added', PHOTOS.length + 5)
-    await scanFolder(2, 'duplicates', PHOTOS.length + 5)
+    // The fixtures hold four photos and three videos more than the upload uses.
+    await scanFolder(1, 'added', PHOTOS.length + 7)
+    await scanFolder(2, 'duplicates', PHOTOS.length + 7)
   },
   'an administrator shows where photos were taken': async () => {
     const location = page.getByTestId('viewer').getByRole('link', { name: '59.93000, 30.33000' })

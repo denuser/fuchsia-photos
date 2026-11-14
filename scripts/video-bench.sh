@@ -2,8 +2,8 @@
 # Measures how fast the NAS turns videos into H.264 copies that every browser
 # plays: hardware encoding through VAAPI against libx264 on the CPU. By
 # default it uses the ffmpeg build of the Jellyfin image, which has VAAPI,
-# Intel's iHD driver and libx264. The application's image for Intel graphics
-# runs it too, without the CPU mode. See docs/benchmark.md.
+# Intel's iHD driver, Mesa's drivers for AMD and libx264. The transcoder's
+# images run it too, without the CPU mode. See docs/benchmark.md.
 #
 # Usage: scripts/video-bench.sh <folder with videos> [folder for the copies]
 #
@@ -14,11 +14,19 @@
 #   DEVICE   render node, default /dev/dri/renderD128
 #   IMAGE    image with ffmpeg, default jellyfin/jellyfin:10.11.11
 #   TOOLS    where IMAGE keeps ffmpeg, ffprobe and vainfo, default
-#            /usr/lib/jellyfin-ffmpeg; /usr/local/bin for the application's
-#            image, which has vainfo in /usr/bin
+#            /usr/lib/jellyfin-ffmpeg; /usr/local/bin for the transcoder's
+#            images, which have vainfo in /usr/bin
+#   DRIVER   VAAPI driver, default iHD for Intel; radeonsi for AMD
 #   KEEP     1 keeps the copies instead of deleting each one after measuring it
-#   HDR_TONEMAP  how VAAPI modes tone map HDR: opencl (default), which takes
-#            HDR10 and HLG, or vaapi, Intel's video processing for HDR10 only
+#   HDR_TONEMAP  how VAAPI modes tone map HDR, one run for each listed:
+#            opencl (default)  OpenCL sharing frames with VAAPI, Intel only;
+#                              takes HDR10 and HLG
+#            vaapi   the driver's video processing (Intel's, or VPE on newer
+#                    AMD), HDR10 only
+#            vulkan  libplacebo on Vulkan, as Jellyfin does on AMD
+#            cpu     frames copied to memory, tone mapped on the CPU as the
+#                    posters are, and copied back for the encoder
+#            AMD: HDR_TONEMAP="vaapi vulkan cpu"
 #
 # The table goes to stdout, progress and errors to stderr. The log of a failed
 # run is kept in <folder for the copies>/logs.
@@ -33,7 +41,11 @@ device=${DEVICE:-/dev/dri/renderD128}
 image=${IMAGE:-jellyfin/jellyfin:10.11.11}
 tools=${TOOLS:-/usr/lib/jellyfin-ffmpeg}
 keep=${KEEP:-0}
-hdr_tonemap=${HDR_TONEMAP:-opencl}
+driver=${DRIVER:-iHD}
+hdr_tonemaps=${HDR_TONEMAP:-opencl}
+for t in $hdr_tonemaps; do
+  case $t in opencl | vaapi | vulkan | cpu) ;; *) echo "unknown HDR_TONEMAP $t" >&2; exit 1 ;; esac
+done
 
 in=$(cd "$in" && pwd)
 mkdir -p "$out/logs"
@@ -47,7 +59,7 @@ for m in $modes; do [[ $m == vaapi* ]] && needs_vaapi=1; done
 # The render node goes into the containers only when a mode uses it, so the
 # CPU mode also runs on a machine without one.
 gpu=()
-((needs_vaapi)) && gpu=(--device "$device" -e LIBVA_DRIVER_NAME=iHD)
+((needs_vaapi)) && gpu=(--device "$device" -e "LIBVA_DRIVER_NAME=$driver")
 
 # run <tool> <args...> runs an ffmpeg tool with the videos read-only, as root
 # so that it can open the render node and write the copies whatever user the
@@ -132,7 +144,20 @@ while IFS= read -r -d '' path; do
   read -r fw fh < <(fit "$w" "$h")
   size_in=$(stat -c %s "$path" 2>/dev/null || stat -f %z "$path")
 
+  # Each VAAPI mode runs once for SDR, and once for each tone mapping for HDR.
+  runs=()
   for mode in $modes; do
+    if [[ $mode == vaapi* ]] && ((hdr)); then
+      for t in $hdr_tonemaps; do runs+=("$mode/$t"); done
+    else
+      runs+=("$mode")
+    fi
+  done
+
+  for run_mode in "${runs[@]}"; do
+    mode=${run_mode%%/*}
+    tonemap=
+    [[ $run_mode == */* ]] && tonemap=${run_mode#*/}
     case $mode in
       vaapi) tw=$((w / 2 * 2)) th=$((h / 2 * 2)) ;;
       vaapi-1080 | x264-1080)
@@ -143,23 +168,41 @@ while IFS= read -r -d '' path; do
       *) echo "unknown mode $mode" >&2; exit 1 ;;
     esac
 
-    name="bench-$n-$mode.mp4"
+    name="bench-$n-$mode${tonemap:+-$tonemap}.mp4"
     args=(-hide_banner -nostdin -y -benchmark -noautorotate)
     case $mode in
       vaapi*)
         args+=(-init_hw_device "vaapi=va:$device")
         vf="scale_vaapi=w=$tw:h=$th:format=nv12"
-        if ((hdr)) && [[ $hdr_tonemap == vaapi ]]; then
-          # Intel's video processing, which takes HDR10 (PQ) only.
-          vf="tonemap_vaapi=format=nv12:t=bt709:m=bt709:p=bt709,$vf"
-        elif ((hdr)); then
-          # OpenCL on the same graphics, which takes HLG too, as iPhones
-          # write it. Frames are shared with VAAPI, not copied.
-          args+=(-init_hw_device opencl=ocl@va -filter_hw_device ocl)
-          vf="scale_vaapi=w=$tw:h=$th:format=p010,hwmap=derive_device=opencl:mode=read"
-          vf+=",tonemap_opencl=format=nv12:t=bt709:m=bt709:p=bt709:tonemap=bt2390:desat=0"
-          vf+=",hwmap=derive_device=vaapi:mode=write:reverse=1,format=vaapi"
-        fi
+        case $tonemap in
+          vaapi)
+            # The driver's video processing, which takes HDR10 (PQ) only.
+            vf="tonemap_vaapi=format=nv12:t=bt709:m=bt709:p=bt709,$vf"
+            ;;
+          opencl)
+            # OpenCL on the same graphics, which takes HLG too, as iPhones
+            # write it. Frames are shared with VAAPI, not copied, which needs
+            # Intel's media driver and OpenCL runtime.
+            args+=(-init_hw_device opencl=ocl@va -filter_hw_device ocl)
+            vf="scale_vaapi=w=$tw:h=$th:format=p010,hwmap=derive_device=opencl:mode=read"
+            vf+=",tonemap_opencl=format=nv12:t=bt709:m=bt709:p=bt709:tonemap=bt2390:desat=0"
+            vf+=",hwmap=derive_device=vaapi:mode=write:reverse=1,format=vaapi"
+            ;;
+          vulkan)
+            # libplacebo on Vulkan, which takes HLG too. Frames are shared
+            # with VAAPI through DMA-BUF, not copied.
+            args+=(-init_hw_device vulkan=vk@va -filter_hw_device vk)
+            vf="scale_vaapi=w=$tw:h=$th:format=p010,hwmap=derive_device=vulkan,format=vulkan"
+            vf+=",libplacebo=format=nv12:colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv:tonemapping=bt.2390:peak_detect=0"
+            vf+=",hwmap=derive_device=vaapi,format=vaapi"
+            ;;
+          cpu)
+            # Decoding, scaling and encoding stay on the graphics; the
+            # scaled frames go through memory for the tone mapping.
+            args+=(-filter_hw_device va)
+            vf="scale_vaapi=w=$tw:h=$th:format=p010,hwdownload,format=p010le,$sw_tonemap,format=nv12,hwupload"
+            ;;
+        esac
         args+=(-hwaccel vaapi -hwaccel_device va -hwaccel_output_format vaapi
           -i "/in/$rel" -vf "$vf" -c:v h264_vaapi ${lp[@]+"${lp[@]}"} -profile:v high -rc_mode CQP -qp 24)
         ;;
@@ -171,13 +214,13 @@ while IFS= read -r -d '' path; do
     esac
     args+=(-map 0:v:0 -map '0:a:0?' -c:a aac -b:a 128k -movflags +faststart "/out/$name")
 
-    log "$n $rel: $mode"
-    logfile="$out/logs/$n-$mode.log"
+    log "$n $rel: $run_mode"
+    logfile="$out/logs/$n-$mode${tonemap:+-$tonemap}.log"
     if ! run ffmpeg "${args[@]}" >"$logfile" 2>&1; then
       failed=$((failed + 1))
-      log "failed: $rel, $mode, see $logfile"
+      log "failed: $rel, $run_mode, see $logfile"
       tail -n 5 "$logfile" >&2
-      echo "| $rel | $src | $mode | ${tw}x${th} | failed | | | | $(human "$size_in") |"
+      echo "| $rel | $src | $run_mode | ${tw}x${th} | failed | | | | $(human "$size_in") |"
       rm -f "$out/$name"
       continue
     fi
@@ -185,14 +228,14 @@ while IFS= read -r -d '' path; do
     if ! read -r utime stime rtime < <(sed -n 's/.*bench: utime=\([0-9.]*\)s stime=\([0-9.]*\)s rtime=\([0-9.]*\)s.*/\1 \2 \3/p' "$logfile" | tail -n1); then
       failed=$((failed + 1))
       log "no timing in $logfile"
-      echo "| $rel | $src | $mode | ${tw}x${th} | no timing | | | | $(human "$size_in") |"
+      echo "| $rel | $src | $run_mode | ${tw}x${th} | no timing | | | | $(human "$size_in") |"
       continue
     fi
     size_out=$(stat -c %s "$out/$name" 2>/dev/null || stat -f %z "$out/$name")
     # Speed in multiples of real time; CPU in cores kept busy on average.
     speed=$(awk -v d="$duration" -v r="$rtime" 'BEGIN { printf "%.1fx", d / r }')
     cpu=$(awk -v u="$utime" -v s="$stime" -v r="$rtime" 'BEGIN { printf "%.1f", (u + s) / r }')
-    echo "| $rel | $src | $mode | ${tw}x${th} | ${rtime}s | $speed | $cpu | $(human "$size_out") | $(human "$size_in") |"
+    echo "| $rel | $src | $run_mode | ${tw}x${th} | ${rtime}s | $speed | $cpu | $(human "$size_out") | $(human "$size_in") |"
     total=$((total + 1))
     rm -f "$logfile"
     ((keep)) || rm -f "$out/$name"

@@ -147,7 +147,7 @@ HEIC photos were left out, because they are not currently relevant, and original
 
 `scripts/video-bench.sh` measures how fast the NAS makes H.264 copies of videos that some browsers cannot play, such as HEVC from phones. Its results decide step 2 of stage 8 in the [roadmap](roadmap.md). The plan is hardware encoding with `h264_vaapi`, turned on in the administration page where the graphics allow it; libx264 on the CPU is measured for comparison.
 
-The script runs the ffmpeg build of the Jellyfin image (`jellyfin/jellyfin:10.11.11`), which has VAAPI, Intel's iHD driver, `tonemap_vaapi` and libx264, so the application image stays as it is until the results are in. It needs bash and Docker on the NAS, and the render node `/dev/dri/renderD128`. It reads the originals without changing them, and deletes each copy after measuring it.
+The script runs the ffmpeg build of the Jellyfin image (`jellyfin/jellyfin:10.11.11`), which has VAAPI, Intel's iHD driver, Mesa's drivers for AMD, `tonemap_vaapi`, libplacebo and libx264, so the application image stays as it is until the results are in. It needs bash and Docker on the NAS, and the render node `/dev/dri/renderD128`. It reads the originals without changing them, and deletes each copy after measuring it.
 
 ### Running videos
 
@@ -167,7 +167,8 @@ Use real videos from phones: 1080p and 4K HEVC from an iPhone, HDR included, and
 | `IMAGE` | `jellyfin/jellyfin:10.11.11` | Image with jellyfin-ffmpeg |
 | `KEEP` | `0` | `1` keeps the copies, to compare them by eye |
 | `TOOLS` | `/usr/lib/jellyfin-ffmpeg` | Where `IMAGE` keeps ffmpeg, ffprobe and vainfo |
-| `HDR_TONEMAP` | `opencl` | How the VAAPI modes tone map HDR: `opencl`, or `vaapi` for Intel's video processing |
+| `DRIVER` | `iHD` | VAAPI driver: `iHD` for Intel, `radeonsi` for AMD |
+| `HDR_TONEMAP` | `opencl` | How the VAAPI modes tone map HDR, separated by spaces; each HDR video runs once for each. See below |
 
 | Mode | What it does |
 |---|---|
@@ -175,18 +176,32 @@ Use real videos from phones: 1080p and 4K HEVC from an iPhone, HDR included, and
 | `vaapi-1080` | The same, with the shorter side brought down to 1080. Skipped for videos that are 1080p or smaller already |
 | `x264-1080` | Decoding and libx264 (`veryfast`, CRF 23) on the CPU, with the shorter side at 1080 |
 
-HDR videos are tone mapped to SDR. The VAAPI modes use `tonemap_opencl` on the same graphics by default, as Jellyfin does on Intel. `tonemap_vaapi`, Intel's video processing, needs no OpenCL runtime but takes HDR10 (PQ) only, while iPhones record HDR as HLG with Dolby Vision; run once more with `HDR_TONEMAP=vaapi` to see how it does with them. The CPU mode uses the same `zscale` and `tonemap` chain as the posters.
+HDR videos are tone mapped to SDR. The CPU mode uses the same `zscale` and `tonemap` chain as the posters. The VAAPI modes tone map in each way `HDR_TONEMAP` lists, and the Mode column names it, such as `vaapi-1080/vulkan`:
+
+| Tone mapping | What it does |
+|---|---|
+| `opencl` | `tonemap_opencl` on the same graphics, as Jellyfin does on Intel. Takes HDR10 and HLG. Frames are shared between VAAPI and OpenCL, which works with Intel's media driver and OpenCL runtime only |
+| `vaapi` | `tonemap_vaapi`, the driver's video processing: Intel's, or the VPE block of newer AMD graphics. Needs nothing more, but takes HDR10 (PQ) only, while iPhones record HDR as HLG with Dolby Vision |
+| `vulkan` | `libplacebo` on Vulkan, as Jellyfin does on AMD. Takes HLG too. Frames are shared with VAAPI through DMA-BUF |
+| `cpu` | Decoding, scaling and encoding on the graphics; the scaled frames are copied to memory, tone mapped on the CPU with the posters' chain and copied back. Works with any driver, at the cost of CPU |
 
 HDR from an iPhone is the case to watch. If the graphics cannot tone map it, hardware transcoding without a CPU fallback leaves those videos as they are in step 1, and the plan for step 2 has to change. The application image would also need the OpenCL runtime for Intel graphics, which is large, next to libva and the iHD driver.
 
-The application's image for Intel graphics, described in [Running from an image](deployment.md#running-from-an-image), runs the VAAPI modes too, which checks its own ffmpeg build and drivers:
+On AMD graphics, the Jellyfin image runs as it is with Mesa's driver:
 
 ```sh
-IMAGE=ghcr.io/denuser/fuchsia-photos:latest-intel TOOLS=/usr/local/bin \
+DRIVER=radeonsi HDR_TONEMAP="vaapi vulkan cpu" \
   scripts/video-bench.sh /path/to/videos /path/on/ssd/video-bench > video-results.md
 ```
 
-Before the first video, the script runs `vainfo` and stops if VAAPI does not work or offers no H.264 encoding. Newer Intel graphics, the N150 among them, encode H.264 only in the low-power mode, which the script turns on when `vainfo` shows only `VAEntrypointEncSliceLP`.
+The transcoder's images, described in [Video copies](deployment.md#video-copies), run the VAAPI modes too, which checks their own ffmpeg build and drivers:
+
+```sh
+IMAGE=ghcr.io/denuser/fuchsia-photos-transcoder:latest-intel TOOLS=/usr/local/bin \
+  scripts/video-bench.sh /path/to/videos /path/on/ssd/video-bench > video-results.md
+```
+
+Before the first video, the script runs `vainfo` and stops if VAAPI does not work or offers no H.264 encoding. Newer Intel graphics, the N150 among them, encode H.264 only in the low-power mode, which the script turns on when `vainfo` shows only `VAEntrypointEncSliceLP`. The first line of the progress names the driver `vainfo` found.
 
 ### Reading the video results
 
@@ -201,7 +216,7 @@ The table has one row per video and mode. Progress goes to stderr; the log of a 
 | CPU | Cores kept busy on average. With VAAPI it shows what is left for the application and the other services |
 | Size | Size of the copy, against the size of the original in the last column |
 
-To see whether the graphics are the limit during a run, run `intel_gpu_top` on the NAS if it is installed.
+To see whether the graphics are the limit during a run, run `intel_gpu_top` on Intel, or `amdgpu_top` or `radeontop` on AMD, if it is installed.
 
 ### Video results
 
@@ -232,5 +247,7 @@ With `HDR_TONEMAP=vaapi`, `tonemap_vaapi` failed on both HLG files with `Failed 
 **Driver.** Debian trixie's free `intel-media-va-driver` (25.2.3) encodes H.264 on the N150 only in the low-power mode (`VAEntrypointEncSliceLP`); the non-free one also offers `VAEntrypointEncSlice`. With Debian's ffmpeg, scaling 4K to 1080p and encoding to H.264 with no tone mapping and no audio took 12.9s for the SDR file and 12.8s for the HLG file with the free driver, and 10.6s and 11.5s with the non-free one: 10 to 20 percent slower. Measured on 2026-11-13. The Intel image takes the non-free driver: it differs only in prebuilt GPU kernels without published source, which Debian keeps out of main but which may be redistributed, and its 23 MB are small next to the OpenCL runtime.
 
 **Image size.** On amd64, libva with the free iHD driver adds 18 MB to the application image, with the non-free one 41 MB. Intel's OpenCL runtime is not in Debian trixie: the packages from Intel's compute-runtime and graphics compiler releases add 412 MB, almost all of it the compiler. libplacebo with Mesa's Vulkan drivers would add 240 MB, untested on the N150. Measured on 2026-11-13 by installing the packages over the runtime layer.
+
+**The Intel image.** `ghcr.io/denuser/fuchsia-photos:latest-intel`, run with `TOOLS=/usr/local/bin` on 2026-11-13 over the same four files, matched the Jellyfin image: the same speed and size on every row, times within 0.2 seconds: its own ffmpeg build, the non-free iHD driver and Intel's OpenCL runtime work on the N150, HLG included.
 
 The tone mapped copies, kept with `KEEP=1`, looked right next to the originals. Not checked yet: phone videos with rotation and sound.

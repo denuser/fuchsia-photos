@@ -63,6 +63,13 @@ func (l Layout) Motion(photoID int64) string {
 	return filepath.Join(l.Cache, "previews", fmt.Sprintf("%02x", photoID%256), fmt.Sprintf("%d-motion.mp4", photoID))
 }
 
+// Copy returns the path of the H.264 copy of what an item plays: a video, or
+// the motion of a motion photo or a Live Photo. It is made from the original
+// on graphics that can, and is not backed up.
+func (l Layout) Copy(photoID int64) string {
+	return filepath.Join(l.Cache, "previews", fmt.Sprintf("%02x", photoID%256), fmt.Sprintf("%d-copy.mp4", photoID))
+}
+
 // IsVideo tells whether a MIME type of the library is a video.
 func IsVideo(mime string) bool {
 	return strings.HasPrefix(mime, "video/")

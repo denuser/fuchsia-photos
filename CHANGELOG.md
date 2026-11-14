@@ -20,4 +20,5 @@ The first release.
 - JPEG, PNG, WebP and HEIC photos, and MP4 and MOV videos up to 4 GiB, which play in the viewer, with a download when the browser cannot play the codec
 - The motion of Google and Samsung motion photos, played in the viewer by a button, including for photos uploaded before
 - iPhone Live Photos as one item: the video, uploaded before or after its photo, plays as the photo's motion and leaves the lists
-- Images for `linux/amd64` and `linux/arm64`, and an `amd64` image for Intel graphics, `latest-intel`, built by hand, with VAAPI and OpenCL for the coming hardware transcoding of videos
+- H.264 copies of HEVC, VP9 and AV1 videos and of the motion of photos, made on Intel graphics by a transcoder service so that every browser plays them, at 1080p with HDR tone mapped, when the video is first played or after upload, as the administrator chooses
+- Images for `linux/amd64` and `linux/arm64`, and `amd64` images of the transcoder, `fuchsia-photos-transcoder:latest-intel` with VAAPI and OpenCL, and `latest-amd` with Mesa's driver for SDR videos, built by hand

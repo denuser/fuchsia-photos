@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { api, type MetadataSettings, type PreviewSettings } from '../api/client'
+import { api, type MetadataSettings, type PreviewSettings, type VideoSettings } from '../api/client'
 import { apiError } from '../i18n/apiErrors'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
@@ -19,6 +19,11 @@ const notices = useNoticesStore()
 
 const settings = ref<PreviewSettings | null>(null)
 const metadata = ref<MetadataSettings | null>(null)
+const video = ref<VideoSettings | null>(null)
+
+const transcodeModes = computed(() =>
+  (['view', 'upload', 'off'] as const).map((value) => ({ value, title: t(`admin.transcode.${value}`) })),
+)
 const error = ref('')
 const saving = ref(false)
 
@@ -52,24 +57,30 @@ const valid = computed(() => {
 })
 
 onMounted(async () => {
-  const [previews, meta] = await Promise.all([api.GET('/settings/previews'), api.GET('/settings/metadata')])
-  const failure = previews.error ?? meta.error
+  const [previews, meta, videos] = await Promise.all([
+    api.GET('/settings/previews'),
+    api.GET('/settings/metadata'),
+    api.GET('/settings/video'),
+  ])
+  const failure = previews.error ?? meta.error ?? videos.error
   if (failure) {
     error.value = apiError(failure)
     return
   }
   settings.value = previews.data!
   metadata.value = meta.data!
+  video.value = videos.data!
 })
 
 async function save() {
   saving.value = true
-  const [previews, meta] = await Promise.all([
+  const [previews, meta, videos] = await Promise.all([
     api.PUT('/settings/previews', { body: settings.value! }),
     api.PUT('/settings/metadata', { body: metadata.value! }),
+    api.PUT('/settings/video', { body: { transcode: video.value!.transcode } }),
   ])
   saving.value = false
-  const failure = previews.error ?? meta.error
+  const failure = previews.error ?? meta.error ?? videos.error
   error.value = failure ? apiError(failure) : ''
   if (previews.data) {
     settings.value = previews.data
@@ -77,7 +88,10 @@ async function save() {
   if (meta.data) {
     metadata.value = meta.data
   }
-  if (previews.data && meta.data) {
+  if (videos.data) {
+    video.value = videos.data
+  }
+  if (previews.data && meta.data && videos.data) {
     notices.notify(t('admin.saved'))
   }
 }
@@ -90,7 +104,7 @@ async function save() {
 
       <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
-      <v-form v-if="settings && metadata" class="settings" @submit.prevent="save">
+      <v-form v-if="settings && metadata && video" class="settings" @submit.prevent="save">
         <h2 class="mb-2">{{ t('admin.previews') }}</h2>
         <v-alert
           type="info"
@@ -172,6 +186,38 @@ async function save() {
           density="compact"
           class="mb-4"
         />
+
+        <h2 class="mb-2">{{ t('admin.video') }}</h2>
+        <v-alert
+          v-if="video.hardware"
+          type="info"
+          density="compact"
+          class="mb-6"
+          data-testid="video-hardware"
+          :title="t('admin.videoHardware', { device: video.hardware.device })"
+          :text="video.hardware.driver + (video.hardware.lowPower ? ` · ${t('admin.videoLowPower')}` : '')"
+        />
+        <v-alert
+          v-else
+          type="warning"
+          density="compact"
+          class="mb-6"
+          data-testid="video-hardware"
+          :title="t('admin.videoNoHardware')"
+          :text="video.unavailable"
+        />
+        <AppFormGroup v-slot="field" :label="t('admin.transcodeLabel')" required>
+          <v-select
+            v-bind="field"
+            v-model="video.transcode"
+            variant="outlined"
+            :items="transcodeModes"
+            :hint="t('admin.transcodeHint')"
+            persistent-hint
+            density="compact"
+            data-testid="transcode"
+          />
+        </AppFormGroup>
 
         <v-btn type="submit" color="primary" :text="t('common.save')" :disabled="!valid" :loading="saving" />
       </v-form>

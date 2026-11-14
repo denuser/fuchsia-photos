@@ -60,6 +60,9 @@ type photoJSON struct {
 	// Set on the video of a Live Photo, which plays as the motion of that
 	// photo. Only events carry such videos, so that pages drop them.
 	LivePhotoID *int64 `json:"livePhotoId"`
+	// The H.264 copy of what the item plays: ready, not_needed, failed, or
+	// null while no copy has been tried.
+	VideoCopy *string `json:"videoCopy"`
 
 	Camera   *metadata.Camera   `json:"camera"`
 	Location *metadata.Location `json:"location"`
@@ -97,6 +100,7 @@ func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 		Duration:       p.Duration,
 		HasMotion:      p.HasMotion,
 		LivePhotoID:    p.LivePhotoID,
+		VideoCopy:      p.VideoCopy,
 	}
 }
 

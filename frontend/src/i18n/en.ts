@@ -110,6 +110,7 @@ export default {
     flash: 'Flash',
     mm: '{value} mm',
     motionUnsupported: 'This browser cannot play the motion of this photo',
+    motionCopyComing: 'This browser cannot play the motion of this photo. A copy it can play is being made; try again in a moment',
     next: 'Next photo',
     playMotion: 'Play the motion',
     previous: 'Previous photo',
@@ -119,6 +120,7 @@ export default {
     stopMotion: 'Stop the motion',
     videoUnsupported: 'This browser cannot play this video',
     videoUnsupportedText: 'Download the original to watch it.',
+    videoCopyComing: 'A copy it can play is being made, and it appears here when ready.',
   },
   viewerFields: {
     camera: 'Camera',
@@ -376,6 +378,18 @@ export default {
     showLocationHint:
       'Shows the GPS location in the viewer to everyone who can see the photo, including users it is shared with. Downloaded originals always keep it.',
     saved: 'Settings saved',
+    video: 'Videos',
+    videoHardware: 'Graphics on {device} make H.264 copies',
+    videoLowPower: 'low-power encoder',
+    videoNoHardware: 'No graphics for H.264 copies',
+    transcodeLabel: 'H.264 copies',
+    transcodeHint:
+      'Copies let every browser play HEVC, VP9 and AV1 videos and the motion of photos, at 1080p and in SDR. Downloads stay the originals.',
+    transcode: {
+      view: 'When someone plays the video',
+      upload: 'After upload, and for videos uploaded before',
+      off: 'Off',
+    },
   },
   ml: {
     title: 'Machine learning',
