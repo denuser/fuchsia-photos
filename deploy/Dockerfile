@@ -87,8 +87,14 @@ COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
 
-# Runs the tests against libvips from the same Debian release as production.
+# Runs the tests against libvips from the same Debian release as production,
+# with the transcoder's Intel ffmpeg as ffmpeg-intel, so that its filter
+# options are checked against the build that runs them.
 FROM backend AS test
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends libva2 libva-drm2 ocl-icd-libopencl1 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=ffmpeg-intel /opt/ffmpeg/bin/ffmpeg /usr/local/bin/ffmpeg-intel
 CMD ["sh", "-c", "go vet ./... && go test ./..."]
 
 # Regenerates the fixtures of internal/media. Making the sample videos needs

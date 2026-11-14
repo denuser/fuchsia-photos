@@ -185,7 +185,7 @@ while IFS= read -r -d '' path; do
             # Intel's media driver and OpenCL runtime.
             args+=(-init_hw_device opencl=ocl@va -filter_hw_device ocl)
             vf="scale_vaapi=w=$tw:h=$th:format=p010,hwmap=derive_device=opencl:mode=read"
-            vf+=",tonemap_opencl=format=nv12:t=bt709:m=bt709:p=bt709:tonemap=bt2390:desat=0"
+            vf+=",tonemap_opencl=format=nv12:t=bt709:m=bt709:p=bt709:tonemap=hable:desat=0"
             vf+=",hwmap=derive_device=vaapi:mode=write:reverse=1,format=vaapi"
             ;;
           vulkan)
