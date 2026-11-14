@@ -40,7 +40,8 @@ ENV FFMPEG_OPTIONS="--prefix=/opt/ffmpeg \
 FROM ffmpeg-source AS ffmpeg
 RUN ./configure $FFMPEG_OPTIONS && make -j"$(nproc)" && make install
 
-# The same build with what the copies of videos need on Intel graphics:
+# The same build for the transcoder on Intel graphics, with what the copies of
+# videos need:
 # decoding, scaling and H.264 encoding through VAAPI, tone mapping HDR with
 # OpenCL on frames shared with VAAPI, AAC sound and the MP4 muxer.
 FROM ffmpeg-source AS ffmpeg-intel
@@ -56,6 +57,23 @@ RUN ./configure $FFMPEG_OPTIONS \
         --enable-muxer=mp4 \
     && grep -q '^#define HAVE_VAAPI_DRM 1' config.h \
     && grep -q '^#define HAVE_OPENCL_VAAPI_INTEL_MEDIA 1' config.h \
+    && make -j"$(nproc)" && make install
+
+# The same build for the transcoder on AMD graphics, without OpenCL: decoding, scaling and H.264
+# encoding through VAAPI, AAC sound and the MP4 muxer. It makes no copies of
+# HDR videos yet.
+FROM ffmpeg-source AS ffmpeg-amd
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends libva-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN ./configure $FFMPEG_OPTIONS \
+        --enable-vaapi \
+        --enable-hwaccel=h264_vaapi,hevc_vaapi,vp9_vaapi,av1_vaapi \
+        --enable-filter=scale_vaapi,hwmap,hwupload,hwdownload,aformat,aresample,anull \
+        --enable-decoder=alac,pcm_s16le,pcm_s24le \
+        --enable-encoder=h264_vaapi,aac \
+        --enable-muxer=mp4 \
+    && grep -q '^#define HAVE_VAAPI_DRM 1' config.h \
     && make -j"$(nproc)" && make install
 
 FROM golang:1.27-trixie AS backend
@@ -85,7 +103,15 @@ CMD ["sh", "generate.sh"]
 
 FROM backend AS build
 COPY --from=frontend /src/frontend/dist/ internal/web/dist/
-RUN mkdir /out && go build -trimpath -ldflags='-s -w' -o /out/ ./cmd/...
+RUN mkdir /out && go build -trimpath -ldflags='-s -w' -o /out/ ./cmd/fuchsia-photos ./cmd/imgbench
+
+# The transcoder needs no cgo, and so neither libvips nor the frontend.
+FROM golang:1.27-trixie AS transcoder-build
+WORKDIR /src/backend
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ ./
+RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/fuchsia-photos-transcoder ./cmd/fuchsia-photos-transcoder
 
 FROM debian:trixie-slim AS runtime
 RUN apt-get update \
@@ -96,11 +122,22 @@ COPY --from=build /out/ /usr/local/bin/
 EXPOSE 8080
 CMD ["fuchsia-photos", "serve"]
 
-# The image for Intel graphics, amd64 only: VAAPI with Debian's non-free iHD
-# driver, whose prebuilt GPU kernels encode faster than the free build, and
-# Intel's OpenCL runtime, which Debian trixie does not package, from Intel's
-# releases. Built with `--target intel`.
-FROM runtime AS intel
+# The base of the transcoder's images: the service, and ffmpeg's libraries
+# from Debian, without libvips. It runs as the application does, so that it
+# can write the copies into the cache.
+FROM debian:trixie-slim AS transcoder
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends libdav1d7 libzimg2 libva2 libva-drm2 vainfo \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=transcoder-build /out/fuchsia-photos-transcoder /usr/local/bin/
+EXPOSE 8091
+CMD ["fuchsia-photos-transcoder"]
+
+# The transcoder for Intel graphics, amd64 only, published as
+# fuchsia-photos-transcoder:latest-intel: Debian's non-free iHD driver, whose
+# prebuilt GPU kernels encode faster than the free build, and Intel's OpenCL
+# runtime, which Debian trixie does not package, from Intel's releases.
+FROM transcoder AS transcoder-intel
 ARG COMPUTE_RUNTIME=26.40.40196.8
 ARG GMMLIB=22.10.2
 ARG IGC=2.42.6+23070
@@ -121,11 +158,22 @@ RUN sed -i 's/^Components: main$/Components: main non-free/' /etc/apt/sources.li
         7f5593cf828503ffb8450967768bde9209e22753bc576296e846b5a751011fa3 "intel-igc-opencl-2_${IGC}_amd64.deb" \
         | sha256sum -c - \
     && apt-get install --yes --no-install-recommends \
-        libva2 libva-drm2 intel-media-va-driver-non-free vainfo ocl-icd-libopencl1 ./*.deb \
+        intel-media-va-driver-non-free ocl-icd-libopencl1 ./*.deb \
     && apt-get purge --yes --auto-remove curl \
     && cd / && rm -rf /tmp/intel /var/lib/apt/lists/*
 COPY --from=ffmpeg-intel /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe /usr/local/bin/
 ENV LIBVA_DRIVER_NAME=iHD
+USER 1000:1000
+
+# The transcoder for AMD graphics, amd64 only, published as
+# fuchsia-photos-transcoder:latest-amd: Mesa's radeonsi driver. It makes no
+# copies of HDR videos yet.
+FROM transcoder AS transcoder-amd
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends mesa-va-drivers \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=ffmpeg-amd /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe /usr/local/bin/
+ENV LIBVA_DRIVER_NAME=radeonsi
 USER 1000:1000
 
 # The default image, for every platform.

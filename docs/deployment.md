@@ -224,7 +224,7 @@ It uses the image that CI publishes to `ghcr.io/denuser/fuchsia-photos`, for `li
 - `X.Y.Z`, for example `0.1.0`, a release, which never changes;
 - `X.Y`, the newest release of that minor version.
 
-The image for Intel graphics is built by hand, for `linux/amd64` only, and adds about 460 MB to the image: VAAPI with Intel's iHD driver and Intel's OpenCL runtime, which make H.264 copies of videos as described in [Video copies on Intel graphics](#video-copies-on-intel-graphics). Its tags are `latest-intel`, moved when it is built from `master`, and `X.Y.Z-intel` for a release.
+The transcoder, which makes H.264 copies of videos on the graphics as described in [Video copies](#video-copies), has an image of its own for each maker of graphics, `ghcr.io/denuser/fuchsia-photos-transcoder`, built by hand for `linux/amd64` only. The tags are `latest-intel` and `latest-amd`, moved when they are built from `master`, and `X.Y.Z-intel` and `X.Y.Z-amd` for a release.
 
 Release notes are on the GitHub releases page and in `CHANGELOG.md`.
 
@@ -254,33 +254,65 @@ docker compose up -d
 
 To run a specific release or build, set `IMAGE_TAG=0.1.0` or `IMAGE_TAG=sha-<commit>` in `.env`. Going back to an older build is safe only if no migrations were added since: migrations run forward only, so after a new one an older build may not start against the database.
 
-### Video copies on Intel graphics
+### Video copies
 
-Phones record HEVC, which some browsers cannot play: the viewer then shows the poster and offers the download. On Intel graphics the application can make an H.264 copy that every browser plays, with the shorter side at 1080 and HDR tone mapped to SDR. The copy is made on the graphics, leaves the CPU almost free, and goes into the cache next to the previews, at about a seventh of the original's size. On the N150 a minute of 4K HDR from an iPhone takes about 32 seconds, as measured in the [benchmark](benchmark.md#video-results). Copies are made for HEVC, VP9 and AV1 videos and for the motion of motion photos and Live Photos; H.264 needs none.
+Phones record HEVC, which some browsers cannot play: the viewer then shows the poster and offers the download. With graphics that encode H.264, the application can make an H.264 copy that every browser plays, with the shorter side at 1080 and HDR tone mapped to SDR. The copy is made on the graphics, leaves the CPU almost free, and goes into the cache next to the previews, at about a seventh of the original's size. On the N150 a minute of 4K HDR from an iPhone takes about 32 seconds, as measured in the [benchmark](benchmark.md#video-results). Copies are made for HEVC, VP9 and AV1 videos and for the motion of motion photos and Live Photos; H.264 needs none.
 
-It needs the image for Intel graphics, the render node of the graphics in the container, and the group that may open it:
+The copies are made by the transcoder, a service next to the application whose image carries the drivers for the graphics:
+
+| Image | Graphics |
+|---|---|
+| `ghcr.io/denuser/fuchsia-photos-transcoder:latest-intel` | Intel, with Intel's iHD driver and OpenCL runtime |
+| `ghcr.io/denuser/fuchsia-photos-transcoder:latest-amd` | AMD, with Mesa's radeonsi driver. It makes no copies of HDR videos yet: they keep the poster and the download |
+
+The transcoder reads the videos from the library and the cache, and writes the copies into the cache, at the same paths as the application. It runs as the same user, as it writes into files the application made, and it needs the render node of the graphics and the group that may open it:
 
 1. Find the group of the render node on the NAS: `stat -c %g /dev/dri/renderD128`.
-2. In the application's service, use the `latest-intel` tag (`IMAGE_TAG=latest-intel` in `.env`, or the image line on TrueNAS) and add the device and the group, with the number from step 1:
+2. Choose a token, such as the output of `openssl rand -hex 32`.
+3. Add the transcoder to the compose file, with the image for your graphics, the group from step 1 and the token, and give the application its address and the same token:
 
    ```yaml
-   app:
-     image: ghcr.io/denuser/fuchsia-photos:latest-intel
-     devices:
-       - /dev/dri/renderD128:/dev/dri/renderD128
-     group_add:
-       - '107'
+   services:
+     app:
+       environment:
+         TRANSCODER_URL: http://transcoder:8091
+         TRANSCODER_TOKEN: change-me
+
+     transcoder:
+       image: ghcr.io/denuser/fuchsia-photos-transcoder:latest-intel
+       restart: unless-stopped
+       environment:
+         TRANSCODER_TOKEN: change-me
+       devices:
+         - /dev/dri/renderD128:/dev/dri/renderD128
+       group_add:
+         - '107'
+       volumes:
+         - ${LIBRARY_DIR:-./data/library}:/data/library:ro
+         - ${CACHE_DIR:-./data/cache}:/data/cache
    ```
 
-3. After `docker compose up -d`, the application's log says `videos can get H.264 copies`, with the driver, or why it cannot. The administration page shows the same under **Videos**.
+   Give the transcoder the same `user:` as the application, if it has one, and the same folders. Its port is not published: only the application calls it.
 
-The setting there decides when copies are made. **When someone plays the video**, the default, makes the copy of a video the first time someone starts it and the browser asks for it; until then the original plays where the browser can, and otherwise the viewer waits for the copy. **After upload** makes copies in the background as videos come in, and of the videos uploaded before. Either way, copies are made one at a time, and a video someone is waiting for goes first. Turning copies off keeps the ones already made. A different render node can be set with `VAAPI_DEVICE`.
+4. After `docker compose up -d`, the transcoder's log says `graphics can make H.264 copies`, with the driver, or why they cannot. The application asks it every 30 seconds; its log and the administration page, under **Videos**, say whether copies can be made.
+
+The setting there decides when copies are made. **When someone plays the video**, the default, makes the copy of a video the first time someone starts it and the browser asks for it; until then the original plays where the browser can, and otherwise the viewer waits for the copy. **After upload** makes copies in the background as videos come in, and of the videos uploaded before. Either way, copies are made one at a time, and a video someone is waiting for goes first. Turning copies off keeps the ones already made. While the transcoder is stopped, no copies are made and none fail; those that waited for it are made when it is back, on upload, or the next time someone plays the video.
+
+The transcoder's settings:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `TRANSCODER_TOKEN` | required | Bearer token the application sends |
+| `VAAPI_DEVICE` | `/dev/dri/renderD128` | Render node of the graphics |
+| `LIBRARY_DIR`, `CACHE_DIR` | `/data/library`, `/data/cache` | The application's folders, at the same paths as in its container |
+| `TRANSCODER_ADDR` | `:8091` | Address it listens on |
+| `LOG_LEVEL`, `LOG_FORMAT` | `info`, `text` | As for the application |
 
 ## Running on TrueNAS
 
 On TrueNAS, the setup from [Running from an image](#running-from-an-image) runs as a custom app. TrueNAS does not read a `.env` file, so the values go into the YAML itself.
 
-Both containers run as the TrueNAS `apps` user and group, UID and GID 568. For H.264 copies of videos on Intel graphics, change the application's image and add the device and the group as described in [Video copies on Intel graphics](#video-copies-on-intel-graphics). Create a dataset for the application, and inside it a dataset or folder for each of `library`, `cache`, `import`, `postgres`, `backups` and `caddy`. Separate datasets for `library` and `backups` can be snapshotted on their own, as described in [Backups](#backups). In **Datasets**, select the parent dataset and choose **Edit** on the **Permissions** card. Set the owner and the owning group to `apps`, give `owner@` full control and `group@` modify, and apply the permissions to the child datasets. The application only reads `import`, so files copied there by other users need to be readable by `apps`.
+Both containers run as the TrueNAS `apps` user and group, UID and GID 568. For H.264 copies of videos, add the transcoder as described [below](#video-copies-on-truenas). Create a dataset for the application, and inside it a dataset or folder for each of `library`, `cache`, `import`, `postgres`, `backups` and `caddy`. Separate datasets for `library` and `backups` can be snapshotted on their own, as described in [Backups](#backups). In **Datasets**, select the parent dataset and choose **Edit** on the **Permissions** card. Set the owner and the owning group to `apps`, give `owner@` full control and `group@` modify, and apply the permissions to the child datasets. The application only reads `import`, so files copied there by other users need to be readable by `apps`.
 
 In **Apps**, choose **Discover Apps**, then **Install via YAML** from the menu, and paste this, with your paths and password:
 
@@ -402,6 +434,35 @@ Replace `192.168.0.101, 10.8.1.7` with the addresses that browsers and phones us
 An app installed from the earlier YAML, which served plain HTTP on port 10303, changes over when you edit its YAML to this one. The session cookie then needs HTTPS, so log in again at the new address.
 
 The password appears three times, in `POSTGRES_PASSWORD`, `DATABASE_URL` and `PGPASSWORD`, and all must match. Set `TZ` to your time zone for the nightly dump at `BACKUP_TIME`. In the `backup` script, `$$` stands for `$`, as Compose would otherwise fill in the variables itself. Use only URL-safe characters.
+
+### Video copies on TrueNAS
+
+To make H.264 copies as described in [Video copies](#video-copies), add two lines to the `environment` of `app` in the YAML:
+
+```yaml
+      TRANSCODER_URL: http://transcoder:8091
+      TRANSCODER_TOKEN: change-me-too
+```
+
+and the transcoder under `services`, with the image for your graphics, the group of the render node from `stat -c %g /dev/dri/renderD128`, the same token and the datasets of the application:
+
+```yaml
+  transcoder:
+    image: ghcr.io/denuser/fuchsia-photos-transcoder:latest-intel
+    restart: unless-stopped
+    user: '568:568'
+    group_add:
+      - '107'
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    environment:
+      TRANSCODER_TOKEN: change-me-too
+    volumes:
+      - /mnt/pool/fuchsia/library:/data/library:ro
+      - /mnt/pool/fuchsia/cache:/data/cache
+```
+
+If the transcoder cannot open the files, because a path differs from the application's or it runs as another user, no copies are made and none fail: the administration page shows the reason under **Videos**.
 
 Create the first administrator from the TrueNAS shell. Docker names the container after the app, so look it up first:
 

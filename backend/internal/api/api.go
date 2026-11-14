@@ -60,7 +60,7 @@ func NewHandler(deps Deps) http.Handler {
 		deps.ML = &ml.Service{Monitor: ml.NewMonitor(nil, "")}
 	}
 	if deps.Transcode == nil {
-		deps.Transcode = &transcode.Service{Queries: deps.Queries, Layout: deps.Layout, Unavailable: "not configured"}
+		deps.Transcode = &transcode.Service{Queries: deps.Queries, Layout: deps.Layout}
 	}
 	s := &server{deps}
 	mux := http.NewServeMux()

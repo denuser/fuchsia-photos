@@ -7,11 +7,18 @@ import (
 	"testing"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/auth"
-	"github.com/denuser/fuchsia-photos/backend/internal/media"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 	"github.com/denuser/fuchsia-photos/backend/internal/transcode"
+	"github.com/denuser/fuchsia-photos/backend/internal/vaapi"
 )
+
+// graphics is a transcoder that only reports its graphics.
+type graphics struct{ hw vaapi.Hardware }
+
+func (g graphics) Hardware(context.Context) (vaapi.Hardware, error) { return g.hw, nil }
+
+func (g graphics) Transcode(context.Context, string, string, vaapi.Source) error { return nil }
 
 func TestVideoSettings(t *testing.T) {
 	e := setup(t)
@@ -40,10 +47,11 @@ func TestVideoSettings(t *testing.T) {
 func TestVideoSettingsShowHardware(t *testing.T) {
 	e := setupWith(t, func(d *Deps) {
 		d.Transcode = &transcode.Service{
-			Queries:  d.Queries,
-			Layout:   d.Layout,
-			Hardware: &media.Hardware{Device: "/dev/dri/renderD128", Driver: "Intel iHD driver 25.4.6", LowPower: true},
+			Queries: d.Queries,
+			Layout:  d.Layout,
+			Backend: graphics{vaapi.Hardware{Device: "/dev/dri/renderD128", Driver: "Intel iHD driver 25.4.6", LowPower: true, Vendor: vaapi.VendorIntel}},
 		}
+		d.Transcode.Check(context.Background())
 	})
 	e.addUser("root", auth.RoleAdmin)
 	got := decode[videoSettingsJSON](t, e.loggedIn("root").get("/api/v1/settings/video"))

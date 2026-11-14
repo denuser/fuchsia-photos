@@ -68,3 +68,34 @@ func TestProbeBrokenVideo(t *testing.T) {
 		t.Errorf("missing file: err = %v", err)
 	}
 }
+
+func TestNeedsCopy(t *testing.T) {
+	tests := []struct {
+		video Video
+		want  bool
+	}{
+		{Video{Codec: "hevc", Width: 3840, Height: 2160}, true},
+		{Video{Codec: "vp9", Width: 1920, Height: 1080}, true},
+		{Video{Codec: "av1", Width: 1920, Height: 1080}, true},
+		{Video{Codec: "h264", Width: 3840, Height: 2160}, false},
+		{Video{Codec: "prores", Width: 3840, Height: 2160}, false},
+		{Video{Codec: "mpeg4", Width: 640, Height: 480}, false},
+		{Video{Codec: "hevc"}, false},
+	}
+	for _, tt := range tests {
+		if got := NeedsCopy(tt.video); got != tt.want {
+			t.Errorf("NeedsCopy(%+v) = %v, want %v", tt.video, got, tt.want)
+		}
+	}
+}
+
+// The fixtures are H.264, which needs no copy.
+func TestProbeCodec(t *testing.T) {
+	video, err := ProbeVideo(context.Background(), filepath.Join("testdata", "video.mov"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if video.Codec != "h264" || video.Width != 320 || video.Height != 240 || NeedsCopy(video) {
+		t.Errorf("probe = %+v", video)
+	}
+}

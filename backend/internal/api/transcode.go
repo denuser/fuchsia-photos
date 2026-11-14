@@ -65,10 +65,10 @@ type videoHardwareJSON struct {
 }
 
 func (s *server) videoSettingsJSON(settings store.VideoSetting) videoSettingsJSON {
-	out := videoSettingsJSON{Transcode: settings.Transcode, Unavailable: s.Transcode.Unavailable}
-	if hw := s.Transcode.Hardware; hw != nil {
+	hw, unavailable := s.Transcode.Status()
+	out := videoSettingsJSON{Transcode: settings.Transcode, Unavailable: unavailable}
+	if hw != nil {
 		out.Hardware = &videoHardwareJSON{Device: hw.Device, Driver: hw.Driver, LowPower: hw.LowPower}
-		out.Unavailable = ""
 	}
 	return out
 }
@@ -101,7 +101,7 @@ func (s *server) updateVideoSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Copies on upload cover the videos uploaded before too.
-	if settings.Transcode == transcode.ModeUpload && s.Transcode.Hardware != nil && s.Transcode.Jobs != nil {
+	if settings.Transcode == transcode.ModeUpload && s.Transcode.Jobs != nil {
 		if _, err := s.Transcode.Jobs.Insert(r.Context(), transcode.QueueMissingArgs{}, nil); err != nil {
 			internalError(w, r, err)
 			return

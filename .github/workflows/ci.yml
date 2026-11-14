@@ -110,13 +110,17 @@ jobs:
             $(printf "$IMAGE@sha256:%s " *)
       - run: docker buildx imagetools inspect "$IMAGE:sha-${GITHUB_SHA::7}"
 
-  # Builds the image for Intel graphics, amd64 only, when started by hand:
-  # `gh workflow run ci.yml` or "Run workflow" in the Actions tab. From master
-  # it moves `latest-intel`; from a tag vX.Y.Z (`--ref vX.Y.Z`) it adds
-  # `X.Y.Z-intel`. Pushes and tags never build it, so each image is made on
-  # purpose.
-  intel:
+  # Builds the transcoder's images, one for each maker of graphics, amd64
+  # only, when started by hand: `gh workflow run ci.yml` or "Run workflow" in
+  # the Actions tab. From master it moves `latest-intel` and `latest-amd` of
+  # fuchsia-photos-transcoder; from a tag vX.Y.Z (`--ref vX.Y.Z`) it adds
+  # `X.Y.Z-intel` and `X.Y.Z-amd`. Pushes and tags never build them, so each
+  # image is made on purpose.
+  transcoder:
     if: github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        vendor: [intel, amd]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -126,10 +130,10 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.IMAGE }}
+          images: ${{ env.IMAGE }}-transcoder
           flavor: |
             latest=false
-            suffix=-intel
+            suffix=-${{ matrix.vendor }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
@@ -147,15 +151,13 @@ jobs:
         with:
           context: .
           file: deploy/Dockerfile
-          target: intel
+          target: transcoder-${{ matrix.vendor }}
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           push: true
-          cache-from: |
-            type=gha,scope=intel
-            type=gha,scope=amd64
-          cache-to: type=gha,mode=max,scope=intel
+          cache-from: type=gha,scope=transcoder-${{ matrix.vendor }}
+          cache-to: type=gha,mode=max,scope=transcoder-${{ matrix.vendor }}
 
   # Publishes a GitHub release for a tag vX.Y.Z, with the section "## X.Y.Z"
   # of CHANGELOG.md as its notes. A tag with a hyphen, such as v0.2.0-rc.1,

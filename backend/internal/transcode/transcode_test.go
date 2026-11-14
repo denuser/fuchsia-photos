@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +23,8 @@ import (
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 	"github.com/denuser/fuchsia-photos/backend/internal/testdb"
 	"github.com/denuser/fuchsia-photos/backend/internal/transcode"
+	"github.com/denuser/fuchsia-photos/backend/internal/transcoder"
+	"github.com/denuser/fuchsia-photos/backend/internal/vaapi"
 )
 
 func TestMain(m *testing.M) {
@@ -31,17 +34,37 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// fake stands for the graphics: it records what it was asked to transcode,
+// fake stands for the transcoder: it records what it was asked to transcode,
 // and the sample videos, which are H.264, probe as HEVC.
 type fake struct {
 	mu     sync.Mutex
 	inputs []string
 	fail   bool
+	// down makes the transcoder unreachable.
+	down bool
 }
 
-func (f *fake) transcode(_ context.Context, in, out string, video media.Video, _ media.Hardware) error {
+func (f *fake) setDown(down bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.down = down
+}
+
+func (f *fake) Hardware(context.Context) (vaapi.Hardware, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.down {
+		return vaapi.Hardware{}, fmt.Errorf("%w: connection refused", transcoder.ErrUnavailable)
+	}
+	return vaapi.Hardware{Device: "/dev/dri/renderD128", Vendor: vaapi.VendorIntel}, nil
+}
+
+func (f *fake) Transcode(_ context.Context, in, out string, _ vaapi.Source) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.down {
+		return fmt.Errorf("%w: connection refused", transcoder.ErrUnavailable)
+	}
 	f.inputs = append(f.inputs, in)
 	if f.fail {
 		return errors.New("graphics on fire")
@@ -90,13 +113,8 @@ func setup(t *testing.T, mode string, hardware bool) env {
 	}
 	t.Cleanup(func() { reader.Close() })
 
-	f := &fake{}
-	service := &transcode.Service{Queries: queries, Layout: layout, Transcode: f.transcode, Probe: probeAsHEVC}
-	if hardware {
-		service.Hardware = &media.Hardware{Device: "/dev/dri/renderD128"}
-	} else {
-		service.Unavailable = "no render node"
-	}
+	f := &fake{down: !hardware}
+	service := &transcode.Service{Queries: queries, Layout: layout, Backend: f, Probe: probeAsHEVC}
 	client, err := jobs.NewClient(pool, jobs.Config{
 		Layout: layout, Metadata: reader, Workers: 2,
 		Register:  service.Register,
@@ -110,6 +128,7 @@ func setup(t *testing.T, mode string, hardware bool) env {
 	if err := client.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
+	service.Check(ctx)
 	t.Cleanup(func() {
 		if err := client.Stop(ctx); err != nil {
 			t.Error(err)
@@ -229,9 +248,12 @@ func TestCopyOnView(t *testing.T) {
 	}
 }
 
-// Without graphics nothing is queued, whatever the setting says.
+// Without the transcoder nothing is queued, whatever the setting says.
 func TestNoHardware(t *testing.T) {
 	e := setup(t, transcode.ModeUpload, false)
+	if hw, why := e.service.Status(); hw != nil || why == "" {
+		t.Errorf("status = %v, %q", hw, why)
+	}
 	video := waitFor(t, e, upload(t, e, "video.mov", nil).ID, "processing", ready)
 	queued, err := e.service.Request(context.Background(), video.ID)
 	if err != nil || queued {
@@ -323,4 +345,31 @@ func TestLivePhotoCopy(t *testing.T) {
 	if photo, _ := e.queries.GetPhoto(ctx, video.ID); photo.VideoCopy != nil {
 		t.Errorf("the video itself has copy %s", *photo.VideoCopy)
 	}
+}
+
+// A transcoder that goes away does not fail the copies: they wait, and are
+// made once it is back.
+func TestTranscoderDown(t *testing.T) {
+	e := setup(t, transcode.ModeUpload, true)
+	ctx := context.Background()
+	e.fake.setDown(true)
+	video := waitFor(t, e, upload(t, e, "video.mov", nil).ID, "processing", ready)
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if hw, _ := e.service.Status(); hw == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the transcoder is still available")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if photo, _ := e.queries.GetPhoto(ctx, video.ID); photo.VideoCopy != nil {
+		t.Fatalf("copy = %s while the transcoder is down", *photo.VideoCopy)
+	}
+
+	e.fake.setDown(false)
+	e.service.Check(ctx)
+	waitFor(t, e, video.ID, "copy", copyIs(transcode.CopyReady))
 }

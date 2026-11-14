@@ -28,27 +28,32 @@ type Config struct {
 	// MLModel is the model whose vectors the application uses, as the service
 	// names it, with the version of its preprocessing.
 	MLModel string
-	// VAAPIDevice is the render node of the graphics that make H.264 copies
-	// of videos, when the image has the drivers for them.
-	VAAPIDevice string
+	// TranscoderURL is the address of the transcoder, which makes H.264
+	// copies of videos on the graphics. Without it no copies are made.
+	TranscoderURL   string
+	TranscoderToken string
 }
 
 // Load reads the settings from the environment.
 func Load() (Config, error) {
 	cfg := Config{
-		HTTPAddr:     getenv("HTTP_ADDR", ":8080"),
-		DatabaseURL:  os.Getenv("DATABASE_URL"),
-		LibraryDir:   getenv("LIBRARY_DIR", "/data/library"),
-		CacheDir:     getenv("CACHE_DIR", "/data/cache"),
-		ImportDir:    getenv("IMPORT_DIR", "/data/import"),
-		CookieSecure: os.Getenv("COOKIE_INSECURE") != "true",
-		MLURL:        os.Getenv("ML_URL"),
-		MLToken:      os.Getenv("ML_TOKEN"),
-		MLModel:      getenv("ML_MODEL", "google/siglip2-base-patch16-384@1"),
-		VAAPIDevice:  getenv("VAAPI_DEVICE", "/dev/dri/renderD128"),
+		HTTPAddr:        getenv("HTTP_ADDR", ":8080"),
+		DatabaseURL:     os.Getenv("DATABASE_URL"),
+		LibraryDir:      getenv("LIBRARY_DIR", "/data/library"),
+		CacheDir:        getenv("CACHE_DIR", "/data/cache"),
+		ImportDir:       getenv("IMPORT_DIR", "/data/import"),
+		CookieSecure:    os.Getenv("COOKIE_INSECURE") != "true",
+		MLURL:           os.Getenv("ML_URL"),
+		MLToken:         os.Getenv("ML_TOKEN"),
+		MLModel:         getenv("ML_MODEL", "google/siglip2-base-patch16-384@1"),
+		TranscoderURL:   os.Getenv("TRANSCODER_URL"),
+		TranscoderToken: os.Getenv("TRANSCODER_TOKEN"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
+	}
+	if cfg.TranscoderURL != "" && cfg.TranscoderToken == "" {
+		return Config{}, errors.New("TRANSCODER_TOKEN is required with TRANSCODER_URL")
 	}
 	workers, err := strconv.Atoi(getenv("WORKERS", "3"))
 	if err != nil || workers < 1 {

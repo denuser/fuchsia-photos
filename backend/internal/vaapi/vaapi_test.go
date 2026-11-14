@@ -1,32 +1,10 @@
-package media
+package vaapi
 
 import (
-	"context"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 )
-
-func TestNeedsCopy(t *testing.T) {
-	tests := []struct {
-		video Video
-		want  bool
-	}{
-		{Video{Codec: "hevc", Width: 3840, Height: 2160}, true},
-		{Video{Codec: "vp9", Width: 1920, Height: 1080}, true},
-		{Video{Codec: "av1", Width: 1920, Height: 1080}, true},
-		{Video{Codec: "h264", Width: 3840, Height: 2160}, false},
-		{Video{Codec: "prores", Width: 3840, Height: 2160}, false},
-		{Video{Codec: "mpeg4", Width: 640, Height: 480}, false},
-		{Video{Codec: "hevc"}, false},
-	}
-	for _, tt := range tests {
-		if got := NeedsCopy(tt.video); got != tt.want {
-			t.Errorf("NeedsCopy(%+v) = %v, want %v", tt.video, got, tt.want)
-		}
-	}
-}
 
 func TestCopySize(t *testing.T) {
 	tests := []struct{ w, h, wantW, wantH int }{
@@ -45,8 +23,12 @@ func TestCopySize(t *testing.T) {
 }
 
 func TestTranscodeArgs(t *testing.T) {
-	hw := Hardware{Device: "/dev/dri/renderD128"}
-	sdr := strings.Join(TranscodeArgs("in.mov", "out.mp4", Video{Codec: "hevc", Width: 3840, Height: 2160}, hw), " ")
+	hw := Hardware{Device: "/dev/dri/renderD128", Vendor: VendorIntel}
+	sdrArgs, err := TranscodeArgs("in.mov", "out.mp4", Source{Width: 3840, Height: 2160}, hw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sdr := strings.Join(sdrArgs, " ")
 	for _, want := range []string{
 		"-noautorotate -init_hw_device vaapi=va:/dev/dri/renderD128 -hwaccel vaapi",
 		"-i in.mov",
@@ -66,7 +48,10 @@ func TestTranscodeArgs(t *testing.T) {
 	}
 
 	hw.LowPower = true
-	hdr := TranscodeArgs("in.mov", "out.mp4", Video{Codec: "hevc", HDR: true, Width: 2160, Height: 3840}, hw)
+	hdr, err := TranscodeArgs("in.mov", "out.mp4", Source{HDR: true, Width: 2160, Height: 3840}, hw)
+	if err != nil {
+		t.Fatal(err)
+	}
 	joined := strings.Join(hdr, " ")
 	for _, want := range []string{
 		"-init_hw_device opencl=ocl@va -filter_hw_device ocl",
@@ -81,6 +66,20 @@ func TestTranscodeArgs(t *testing.T) {
 	if slices.Index(hdr, "-filter_hw_device") > slices.Index(hdr, "-i") {
 		t.Errorf("-filter_hw_device after the input:\n%s", joined)
 	}
+
+	if _, err := TranscodeArgs("in.mov", "out.mp4", Source{Width: 3840, Height: 2160}, Hardware{Device: "/dev/dri/renderD128"}); err == nil {
+		t.Error("no vendor: no error")
+	}
+
+	// AMD makes SDR copies the same way, and no HDR ones yet.
+	amdHW := Hardware{Device: "/dev/dri/renderD128", Vendor: VendorAMD}
+	amdArgs, err := TranscodeArgs("in.mov", "out.mp4", Source{Width: 3840, Height: 2160}, amdHW)
+	if err != nil || !strings.Contains(strings.Join(amdArgs, " "), "-vf scale_vaapi=w=1920:h=1080:format=nv12 -c:v h264_vaapi") {
+		t.Errorf("AMD SDR: %v, %v", amdArgs, err)
+	}
+	if _, err := TranscodeArgs("in.mov", "out.mp4", Source{HDR: true, Width: 3840, Height: 2160}, amdHW); err == nil {
+		t.Error("AMD HDR: no error")
+	}
 }
 
 func TestParseVAInfo(t *testing.T) {
@@ -90,7 +89,7 @@ func TestParseVAInfo(t *testing.T) {
 	full, err := parseVAInfo("/dev/dri/renderD128", head+
 		"      VAProfileH264High               :\tVAEntrypointEncSlice\n"+
 		"      VAProfileH264High               :\tVAEntrypointEncSliceLP\n")
-	if err != nil || full.LowPower || !strings.Contains(full.Driver, "25.4.6") {
+	if err != nil || full.LowPower || !strings.Contains(full.Driver, "25.4.6") || full.Vendor != VendorIntel {
 		t.Errorf("full encoder: %+v, %v", full, err)
 	}
 	lp, err := parseVAInfo("/dev/dri/renderD128", head+
@@ -101,15 +100,15 @@ func TestParseVAInfo(t *testing.T) {
 	if _, err := parseVAInfo("/dev/dri/renderD128", head); err == nil {
 		t.Error("decoder only: no error")
 	}
-}
-
-// The fixtures are H.264, which needs no copy.
-func TestProbeCodec(t *testing.T) {
-	video, err := ProbeVideo(context.Background(), filepath.Join("testdata", "video.mov"))
-	if err != nil {
-		t.Fatal(err)
+	radeon, err := parseVAInfo("/dev/dri/renderD128",
+		"vainfo: Driver version: Mesa Gallium driver 25.0.7 for AMD Radeon Graphics (radeonsi, gfx1152, LLVM 19.1.7, DRM 3.61, 6.12.0)\n"+
+			"      VAProfileH264High               :\tVAEntrypointEncSlice\n")
+	if err != nil || radeon.Vendor != VendorAMD || radeon.LowPower {
+		t.Errorf("AMD driver: %+v, %v", radeon, err)
 	}
-	if video.Codec != "h264" || video.Width != 320 || video.Height != 240 || NeedsCopy(video) {
-		t.Errorf("probe = %+v", video)
+	if _, err := parseVAInfo("/dev/dri/renderD128",
+		"vainfo: Driver version: Splitted-Desktop Systems VDPAU backend for VA-API - 0.7.4\n"+
+			"      VAProfileH264High               :\tVAEntrypointEncSlice\n"); err == nil {
+		t.Error("unknown driver: no error")
 	}
 }

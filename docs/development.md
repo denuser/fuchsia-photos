@@ -80,7 +80,8 @@ The server reads its settings from environment variables:
 | `ML_URL` | unset | Address of the ML service, such as `http://mac.local:8090`. Without it search by description is off. `make dev-backend` sets `http://127.0.0.1:8090` |
 | `ML_TOKEN` | unset | Bearer token the ML service requires, if it was started with one |
 | `ML_MODEL` | `google/siglip2-base-patch16-384@1` | The model whose vectors the application uses, as the service's `/health` names it. A service with another model is not used. Changing it makes the application embed all photos again |
-| `VAAPI_DEVICE` | `/dev/dri/renderD128` | Render node of the graphics that make H.264 copies of videos. Used only by the image for Intel graphics; elsewhere copies are off |
+| `TRANSCODER_URL` | unset | Address of the transcoder, such as `http://transcoder:8091`, which makes H.264 copies of videos on the graphics. Without it no copies are made. See [Video copies](deployment.md#video-copies) |
+| `TRANSCODER_TOKEN` | unset | Bearer token the transcoder requires; needed with `TRANSCODER_URL` |
 
 ### Database and migrations
 
@@ -198,7 +199,7 @@ On failure it prints the failed step and saves a screenshot to `frontend/e2e/res
 - a push to `master` tags it `latest` and `sha-<commit>`;
 - a tag `vX.Y.Z` tags it `X.Y.Z`, `X.Y` and `sha-<commit>`, leaves `latest` alone and creates a GitHub release.
 
-The image for Intel graphics, the `intel` target of `deploy/Dockerfile`, is built only by hand, so that pushes do not make a large image each time. It is `linux/amd64` only. Start it with `gh workflow run ci.yml` or "Run workflow" in the Actions tab: from `master` it moves `latest-intel`, and from a tag (`gh workflow run ci.yml --ref v0.1.0`) it adds `0.1.0-intel`. Started from any other branch, it fails before building. To build it locally, run `docker build --platform linux/amd64 --target intel -f deploy/Dockerfile .`.
+The transcoder's images, the `transcoder-intel` and `transcoder-amd` targets of `deploy/Dockerfile`, are built only by hand, so that pushes do not make large images each time, and published to `ghcr.io/denuser/fuchsia-photos-transcoder`. They are `linux/amd64` only. Start them with `gh workflow run ci.yml` or "Run workflow" in the Actions tab: from `master` they move `latest-intel` and `latest-amd`, and from a tag (`gh workflow run ci.yml --ref v0.1.0`) they add `0.1.0-intel` and `0.1.0-amd`. Started from any other branch, they fail before building. To build one locally, run `docker build --platform linux/amd64 --target transcoder-intel -f deploy/Dockerfile .`. The transcoder is `backend/cmd/fuchsia-photos-transcoder`, built without cgo, and what differs between makers of graphics lives in a file per vendor in `backend/internal/vaapi`.
 
 Only the publishing jobs can write packages, and only the release job can write to the repository.
 

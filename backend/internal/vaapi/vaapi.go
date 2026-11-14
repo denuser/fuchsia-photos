@@ -1,6 +1,11 @@
-package media
+// Package vaapi makes H.264 copies of videos on graphics that encode H.264
+// through VAAPI. It runs in the transcoder, a service of its own whose image
+// carries the drivers of one maker of graphics, and uses no cgo, so that the
+// transcoder needs no libraries but ffmpeg's.
+package vaapi
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,12 +20,15 @@ import (
 // DetectHardware found it.
 type Hardware struct {
 	// Device is the render node, such as /dev/dri/renderD128.
-	Device string
+	Device string `json:"device"`
 	// LowPower tells h264_vaapi to use the low-power encoder, the only one
 	// some Intel graphics offer for H.264.
-	LowPower bool
+	LowPower bool `json:"lowPower"`
 	// Driver is the driver's own description, for the administration page.
-	Driver string
+	Driver string `json:"driver"`
+	// Vendor names the maker of the graphics, such as VendorIntel, which
+	// decides how HDR is tone mapped.
+	Vendor string `json:"vendor"`
 }
 
 var (
@@ -40,7 +48,7 @@ func DetectHardware(ctx context.Context, device string) (Hardware, error) {
 		return Hardware{}, fmt.Errorf("list ffmpeg encoders: %w", err)
 	}
 	if !strings.Contains(string(encoders), " h264_vaapi ") {
-		return Hardware{}, errors.New("this ffmpeg has no h264_vaapi encoder; hardware transcoding needs the image for Intel graphics")
+		return Hardware{}, errors.New("this ffmpeg has no h264_vaapi encoder; the transcoder needs its image for the graphics")
 	}
 	cmd := exec.CommandContext(ctx, "vainfo", "--display", "drm", "--device", device)
 	// vainfo prints the profiles to stdout and its errors to stderr; both are
@@ -59,6 +67,11 @@ func parseVAInfo(device, out string) (Hardware, error) {
 	if m := vaDriver.FindStringSubmatch(out); m != nil {
 		hw.Driver = strings.TrimSpace(m[1])
 	}
+	v, ok := vendorByDriver(hw.Driver)
+	if !ok {
+		return Hardware{}, fmt.Errorf("the driver on %s is not supported: %q", device, hw.Driver)
+	}
+	hw.Vendor = v.name
 	switch {
 	case encSlice.MatchString(out):
 	case encSliceLP.MatchString(out):
@@ -67,18 +80,6 @@ func parseVAInfo(device, out string) (Hardware, error) {
 		return Hardware{}, fmt.Errorf("the graphics on %s offer no H.264 encoding", device)
 	}
 	return hw, nil
-}
-
-// NeedsCopy tells whether a video needs an H.264 copy to play in every
-// browser, and whether the graphics can decode it to make one. H.264 plays
-// everywhere. ProRes, MPEG-4 Part 2 and MJPEG would have to be decoded on the
-// CPU, which is too slow on a NAS, so they stay as they are.
-func NeedsCopy(video Video) bool {
-	switch video.Codec {
-	case "hevc", "vp9", "av1":
-		return video.Width > 0 && video.Height > 0
-	}
-	return false
 }
 
 // CopySize returns the size of the copy: the shorter side at most 1080, both
@@ -91,25 +92,36 @@ func CopySize(width, height int) (int, int) {
 	return width / 2 * 2, height / 2 * 2
 }
 
+// Source is what the copy of a video depends on, as the application probed it.
+type Source struct {
+	Width  int  `json:"width"`
+	Height int  `json:"height"`
+	HDR    bool `json:"hdr"`
+}
+
 // TranscodeArgs returns the ffmpeg arguments that make the H.264 copy of the
 // video at in, written to out as MP4. Decoding, scaling and encoding all run
-// on the graphics. HDR is tone mapped with OpenCL on the same graphics, the
-// only way that takes the HLG of an iPhone; frames are shared with VAAPI, not
-// copied. The video is not rotated: its display matrix goes into the copy,
+// on the graphics, and HDR is tone mapped as the vendor of the graphics does
+// it. The video is not rotated: its display matrix goes into the copy,
 // which plays upright as the original does. The copy carries no metadata
 // tags, so that no location goes with it.
-func TranscodeArgs(in, out string, video Video, hw Hardware) []string {
+func TranscodeArgs(in, out string, video Source, hw Hardware) ([]string, error) {
+	v, ok := vendorByName(hw.Vendor)
+	if !ok {
+		return nil, fmt.Errorf("unknown graphics vendor %q", hw.Vendor)
+	}
 	width, height := CopySize(video.Width, video.Height)
 	size := "w=" + strconv.Itoa(width) + ":h=" + strconv.Itoa(height)
 	args := []string{"-hide_banner", "-nostdin", "-y", "-v", "error", "-noautorotate",
 		"-init_hw_device", "vaapi=va:" + hw.Device}
 	filter := "scale_vaapi=" + size + ":format=nv12"
 	if video.HDR {
-		args = append(args, "-init_hw_device", "opencl=ocl@va", "-filter_hw_device", "ocl")
-		filter = "scale_vaapi=" + size + ":format=p010," +
-			"hwmap=derive_device=opencl:mode=read," +
-			"tonemap_opencl=format=nv12:t=bt709:m=bt709:p=bt709:tonemap=bt2390:desat=0," +
-			"hwmap=derive_device=vaapi:mode=write:reverse=1,format=vaapi"
+		if v.toneMap == nil {
+			return nil, fmt.Errorf("copies of HDR videos are not made on %s graphics yet", v.name)
+		}
+		var options []string
+		options, filter = v.toneMap(size)
+		args = append(args, options...)
 	}
 	args = append(args,
 		"-hwaccel", "vaapi", "-hwaccel_device", "va", "-hwaccel_output_format", "vaapi",
@@ -123,13 +135,36 @@ func TranscodeArgs(in, out string, video Video, hw Hardware) []string {
 	return append(args,
 		"-profile:v", "high", "-rc_mode", "CQP", "-qp", "24",
 		"-c:a", "aac", "-b:a", "128k",
-		"-movflags", "+faststart", "-f", "mp4", out)
+		"-movflags", "+faststart", "-f", "mp4", out), nil
 }
 
 // Transcode makes the H.264 copy of the video at in and writes it to out.
-func Transcode(ctx context.Context, in, out string, video Video, hw Hardware) error {
-	if _, err := run(exec.CommandContext(ctx, "ffmpeg", TranscodeArgs(in, out, video, hw)...)); err != nil {
+func Transcode(ctx context.Context, in, out string, video Source, hw Hardware) error {
+	args, err := TranscodeArgs(in, out, video, hw)
+	if err != nil {
+		return err
+	}
+	if _, err := run(exec.CommandContext(ctx, "ffmpeg", args...)); err != nil {
 		return fmt.Errorf("transcode %s: %w", in, err)
 	}
 	return nil
+}
+
+// run runs a command and returns its output, or an error with the last line
+// it wrote to stderr.
+func run(cmd *exec.Cmd) ([]byte, error) {
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return nil, fmt.Errorf("%w: %s", err, lastLine(msg))
+		}
+		return nil, err
+	}
+	return stdout.Bytes(), nil
+}
+
+func lastLine(s string) string {
+	return s[strings.LastIndexByte(s, '\n')+1:]
 }

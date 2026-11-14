@@ -1,5 +1,6 @@
-// Package transcode makes H.264 copies of videos that some browsers cannot
-// play, such as HEVC from phones, on graphics that encode H.264 through VAAPI.
+// Package transcode decides which videos get H.264 copies that every browser
+// plays, such as of HEVC from phones, and queues them for the transcoder, the
+// service that makes them on the graphics.
 package transcode
 
 import (
@@ -9,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -18,6 +20,8 @@ import (
 	"github.com/denuser/fuchsia-photos/backend/internal/media"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/fuchsia-photos/backend/internal/transcoder"
+	"github.com/denuser/fuchsia-photos/backend/internal/vaapi"
 )
 
 // Queue runs the transcoding. It has one worker, as the graphics make one
@@ -48,9 +52,16 @@ var waitingOrRunning = []rivertype.JobState{
 	rivertype.JobStateRunning, rivertype.JobStateScheduled,
 }
 
-// Transcoder makes the copy of the video at in. Tests replace it, as they have
-// no graphics.
-type Transcoder func(ctx context.Context, in, out string, video media.Video, hw media.Hardware) error
+// How often the transcoder is asked whether it can make copies.
+const checkInterval = 30 * time.Second
+
+// Backend makes the copies: the transcoder's client, or a fake in tests, as
+// they have no graphics. An error that wraps transcoder.ErrUnavailable means
+// the transcoder could not be asked, not that the video cannot be copied.
+type Backend interface {
+	Hardware(ctx context.Context) (vaapi.Hardware, error)
+	Transcode(ctx context.Context, in, out string, video vaapi.Source) error
+}
 
 // Prober reads what the copy depends on. Tests replace it, as their sample
 // videos are H.264, which needs no copy.
@@ -60,21 +71,107 @@ type Prober func(ctx context.Context, path string) (media.Video, error)
 type Service struct {
 	Queries *store.Queries
 	Layout  storage.Layout
-	// Hardware is nil when the graphics cannot make copies, and Unavailable
-	// then says why.
-	Hardware    *media.Hardware
-	Unavailable string
+	// Backend is nil when no transcoder is set up.
+	Backend Backend
 	// Jobs queues the copies. It is set once the job client exists.
 	Jobs *river.Client[pgx.Tx]
-	// Transcode defaults to media.Transcode, Probe to media.ProbeVideo.
-	Transcode Transcoder
-	Probe     Prober
+	// Probe defaults to media.ProbeVideo.
+	Probe Prober
+
+	mu          sync.Mutex
+	hardware    *vaapi.Hardware
+	unavailable string
 }
 
-// Mode returns when copies are made, or ModeOff when the graphics cannot make
-// them.
+// Status returns the graphics of the transcoder, or nil and why copies cannot
+// be made, as the last check found them.
+func (s *Service) Status() (*vaapi.Hardware, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch {
+	case s.Backend == nil:
+		return nil, "no transcoder is set up: TRANSCODER_URL is empty"
+	case s.hardware != nil:
+		hw := *s.hardware
+		return &hw, ""
+	case s.unavailable == "":
+		return nil, "the transcoder has not answered yet"
+	}
+	return nil, s.unavailable
+}
+
+// Run asks the transcoder for its graphics at once and then at an interval,
+// until ctx ends.
+func (s *Service) Run(ctx context.Context) {
+	if s.Backend == nil {
+		slog.Info("videos get no H.264 copies: no transcoder is set up")
+		return
+	}
+	ticker := time.NewTicker(checkInterval)
+	defer ticker.Stop()
+	for {
+		s.Check(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// Check asks the transcoder for its graphics now. When it becomes able to
+// make copies on upload, the items that missed theirs are queued.
+func (s *Service) Check(ctx context.Context) {
+	if s.Backend == nil {
+		return
+	}
+	checkCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	hw, err := s.Backend.Hardware(checkCtx)
+	if ctx.Err() != nil {
+		return
+	}
+	if err != nil {
+		s.setUnavailable(err)
+		return
+	}
+	s.mu.Lock()
+	was := s.hardware != nil
+	s.hardware, s.unavailable = &hw, ""
+	s.mu.Unlock()
+	if was {
+		return
+	}
+	slog.Info("videos can get H.264 copies", "device", hw.Device, "vendor", hw.Vendor, "driver", hw.Driver, "low_power", hw.LowPower)
+	if s.Jobs == nil {
+		return
+	}
+	// Only copies on upload are queued without anyone asking.
+	mode, err := s.Mode(ctx)
+	if err == nil && mode == ModeUpload {
+		_, err = s.Jobs.Insert(ctx, QueueMissingArgs{}, nil)
+	}
+	if err != nil {
+		slog.Error("queue video copies", "error", err)
+	}
+}
+
+// setUnavailable records that the transcoder cannot make copies, so that none
+// are queued until a check finds it again.
+func (s *Service) setUnavailable(err error) {
+	s.mu.Lock()
+	was := s.hardware != nil || s.unavailable == ""
+	s.hardware, s.unavailable = nil, err.Error()
+	s.mu.Unlock()
+	if was {
+		slog.Warn("videos get no H.264 copies", "reason", err)
+	}
+}
+
+// Mode returns when copies are made, or ModeOff when the transcoder cannot
+// make them.
 func (s *Service) Mode(ctx context.Context) (string, error) {
-	if s.Hardware == nil {
+	if hw, _ := s.Status(); hw == nil {
 		return ModeOff, nil
 	}
 	settings, err := s.Queries.GetVideoSettings(ctx)
@@ -252,6 +349,12 @@ func (w *worker) Work(ctx context.Context, job *river.Job[Args]) error {
 	}
 
 	state, err := s.makeCopy(ctx, photo.ID, source)
+	if errors.Is(err, transcoder.ErrUnavailable) {
+		// Not the video's fault: it waits for the transcoder, and is queued
+		// again when the transcoder is back.
+		s.setUnavailable(err)
+		return nil
+	}
 	if err != nil {
 		if ctx.Err() != nil || job.Attempt < job.MaxAttempts {
 			return err
@@ -300,7 +403,8 @@ func (s *Service) makeCopy(ctx context.Context, photoID int64, source string) (s
 		return CopyNotNeeded, nil
 	}
 	// Written next to the previews, which may be on another disk than the
-	// originals, and moved into place when whole.
+	// originals, and moved into place when whole. The transcoder writes into
+	// the file made here, so it runs as the same user.
 	path := s.Layout.Copy(photoID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return "", err
@@ -312,12 +416,8 @@ func (s *Service) makeCopy(ctx context.Context, photoID int64, source string) (s
 	tmp.Close()
 	defer os.Remove(tmp.Name())
 
-	transcode := s.Transcode
-	if transcode == nil {
-		transcode = media.Transcode
-	}
 	start := time.Now()
-	if err := transcode(ctx, source, tmp.Name(), video, *s.Hardware); err != nil {
+	if err := s.Backend.Transcode(ctx, source, tmp.Name(), vaapi.Source{Width: video.Width, Height: video.Height, HDR: video.HDR}); err != nil {
 		return "", err
 	}
 	if err := os.Rename(tmp.Name(), path); err != nil {
