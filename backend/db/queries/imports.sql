@@ -101,10 +101,10 @@ WHERE id = @id AND status IN ('listing', 'importing', 'matching');
 -- name: FinishImportPart :exec
 DELETE FROM import_files WHERE run_id = @run_id AND path = @path;
 
--- The paths of the entries already recorded from one part or, with an empty
--- source, from unpacked folders.
+-- The paths of the entries of an export already recorded, from any of its
+-- parts: a part downloaded twice adds nothing the second time.
 -- name: ListTakeoutEntryPaths :many
-SELECT export, path FROM takeout_entries WHERE run_id = @run_id AND source = @source;
+SELECT path FROM takeout_entries WHERE run_id = @run_id AND export = @export;
 
 -- Records an entry once. Reading it again after a restart counts nothing.
 -- name: AddTakeoutEntry :exec

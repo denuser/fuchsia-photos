@@ -253,6 +253,22 @@ func TestTakeoutResumesInTheMiddleOfAPart(t *testing.T) {
 	}
 }
 
+func TestTakeoutReadsAPartDownloadedTwice(t *testing.T) {
+	e := setup(t)
+	// More files than one batch, so that each copy pauses partway.
+	png := e.fixture("landscape.png")
+	var files []archiveFile
+	for i := range processBatch + 5 {
+		files = append(files, archiveFile{fmt.Sprintf("%s%02d.png", yearFolder, i), append(png[:len(png):len(png)], byte(i))})
+	}
+	part := makeZip(t, files)
+	e.write("takeout-20261115T073434Z-1-001.zip", part)
+	e.write("takeout-20261115T073434Z-1-001 (1).zip", part)
+
+	run := e.finish(e.startKind("", KindTakeout).ID)
+	wantCounts(t, run, counts{found: processBatch + 5, added: processBatch + 5})
+}
+
 func TestTakeoutReportsProblems(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()

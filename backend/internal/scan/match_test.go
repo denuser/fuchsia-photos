@@ -38,8 +38,9 @@ func TestMatchExport(t *testing.T) {
 		media(year + "20190921-_MG_5983.jpg"),
 		sidecar(year+"20190921-_MG_5983.jpg.supplemental-metadata.json", "20190921-_MG_5983.jpg"),
 		media(year + "20190921-_MG_5983-отредактировано.jpg"),
-		// An edited copy of a repeated name.
+		// Edited copies of a repeated name, with the word before or after the "(n)".
 		media(year + "IMG_2(1)-edited.jpg"),
+		media(year + "IMG_2-edited(1).jpg"),
 		// The album's own file, a JSON without a file, and a file without a JSON.
 		{path: album + "метаданные.json", title: "Поездка"},
 		sidecar(year+"IMG_9.jpg.supplemental-metadata.json", "IMG_9.jpg"),
@@ -76,6 +77,7 @@ func TestMatchExport(t *testing.T) {
 	wantOriginal := map[string]string{
 		year + "20190921-_MG_5983-отредактировано.jpg": year + "20190921-_MG_5983.jpg",
 		year + "IMG_2(1)-edited.jpg":                   year + "IMG_2(1).jpg",
+		year + "IMG_2-edited(1).jpg":                   year + "IMG_2(1).jpg",
 	}
 	if !maps.Equal(got.original, wantOriginal) {
 		t.Errorf("originals = %v, want %v", got.original, wantOriginal)

@@ -226,13 +226,14 @@ func nameAndCutSuffix(m mediaName, s matchFile) bool {
 // that marks the copy is the last "-" part of its name, before or after its "(n)".
 func originalOf(m mediaName, names map[string]bool) string {
 	var candidates []string
-	if i := strings.LastIndex(m.stem, "-"); i > 0 {
-		candidates = append(candidates, m.dir+m.stem[:i]+m.ext)
-	}
+	// IMG_1-edited(1).jpg is the copy of IMG_1(1).jpg rather than of IMG_1.jpg.
 	if m.number != "" {
 		if i := strings.LastIndex(m.base, "-"); i > 0 {
 			candidates = append(candidates, m.dir+m.base[:i]+"("+m.number+")"+m.ext)
 		}
+	}
+	if i := strings.LastIndex(m.stem, "-"); i > 0 {
+		candidates = append(candidates, m.dir+m.stem[:i]+m.ext)
 	}
 	for _, c := range candidates {
 		if names[c] && c != m.dir+m.name {

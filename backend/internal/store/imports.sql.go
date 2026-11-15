@@ -462,34 +462,29 @@ func (q *Queries) ListTakeoutEntriesForMatching(ctx context.Context, runID int64
 }
 
 const listTakeoutEntryPaths = `-- name: ListTakeoutEntryPaths :many
-SELECT export, path FROM takeout_entries WHERE run_id = $1 AND source = $2
+SELECT path FROM takeout_entries WHERE run_id = $1 AND export = $2
 `
 
 type ListTakeoutEntryPathsParams struct {
 	RunID  int64
-	Source string
-}
-
-type ListTakeoutEntryPathsRow struct {
 	Export string
-	Path   string
 }
 
-// The paths of the entries already recorded from one part or, with an empty
-// source, from unpacked folders.
-func (q *Queries) ListTakeoutEntryPaths(ctx context.Context, arg ListTakeoutEntryPathsParams) ([]ListTakeoutEntryPathsRow, error) {
-	rows, err := q.db.Query(ctx, listTakeoutEntryPaths, arg.RunID, arg.Source)
+// The paths of the entries of an export already recorded, from any of its
+// parts: a part downloaded twice adds nothing the second time.
+func (q *Queries) ListTakeoutEntryPaths(ctx context.Context, arg ListTakeoutEntryPathsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listTakeoutEntryPaths, arg.RunID, arg.Export)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListTakeoutEntryPathsRow
+	var items []string
 	for rows.Next() {
-		var i ListTakeoutEntryPathsRow
-		if err := rows.Scan(&i.Export, &i.Path); err != nil {
+		var path string
+		if err := rows.Scan(&path); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, path)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

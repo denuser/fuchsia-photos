@@ -120,7 +120,14 @@ func (s *Service) processTakeout(ctx context.Context, run store.ImportRun, slice
 	}
 	defer root.Close()
 
+	// A .tgz part gets a longer slice, counted from the start of the step too,
+	// so that one step never runs past jobTimeout.
 	deadline := time.Now().Add(slice)
+	tarDeadline := deadline
+	if slice > 0 {
+		tarDeadline = time.Now().Add(tarSlice)
+	}
+	started := false
 	for {
 		stopped, err := s.stopped(ctx, run.ID)
 		if err != nil {
@@ -139,7 +146,12 @@ func (s *Service) processTakeout(ctx context.Context, run store.ImportRun, slice
 			return 0, true, queries.StartMatching(ctx, run.ID)
 		}
 		for _, file := range files {
-			done, err := s.readTakeoutFile(ctx, root, run, file, deadline, slice)
+			// A part read whole may take long: the next one waits for a new step.
+			if started && !time.Now().Before(deadline) {
+				return 0, true, nil
+			}
+			started = true
+			done, err := s.readTakeoutFile(ctx, root, run, file, deadline, tarDeadline)
 			if err != nil || !done {
 				return 0, err == nil, err
 			}
@@ -162,7 +174,7 @@ func (s *Service) stopped(ctx context.Context, runID int64) (bool, error) {
 // readTakeoutFile reads a part or a file of an unpacked export. It reports
 // whether the file is done; a part may need more slices. It returns an error
 // only for a problem with the scan itself.
-func (s *Service) readTakeoutFile(ctx context.Context, root *os.Root, run store.ImportRun, listed store.ListPendingImportFilesRow, deadline time.Time, slice time.Duration) (bool, error) {
+func (s *Service) readTakeoutFile(ctx context.Context, root *os.Root, run store.ImportRun, listed store.ListPendingImportFilesRow, deadline, tarDeadline time.Time) (bool, error) {
 	queries := s.queries()
 	failed := func(cause error) (bool, error) {
 		if ctx.Err() != nil {
@@ -195,10 +207,7 @@ func (s *Service) readTakeoutFile(ctx context.Context, root *os.Root, run store.
 	case isZip(name):
 		done, err = s.readZip(ctx, run, listed.Path, file, info.Size(), deadline)
 	case takeoutPart(name):
-		if slice > 0 {
-			deadline = time.Now().Add(tarSlice)
-		}
-		done, err = s.readTar(ctx, run, listed.Path, file, deadline)
+		done, err = s.readTar(ctx, run, listed.Path, file, tarDeadline)
 	default:
 		if export, inner, ok := splitUnpacked(listed.Path); ok {
 			err = s.importEntry(ctx, run, entry{export: export, path: inner}, file)
@@ -222,15 +231,16 @@ func badPart(err error) error {
 	return fmt.Errorf("%w: %w", errBadPart, err)
 }
 
-// donePaths returns the entries of a part recorded in an earlier slice.
-func (s *Service) donePaths(ctx context.Context, runID int64, source string) (map[string]bool, error) {
-	rows, err := s.queries().ListTakeoutEntryPaths(ctx, store.ListTakeoutEntryPathsParams{RunID: runID, Source: source})
+// donePaths returns the entries of an export recorded in an earlier slice or
+// from another part, such as the same part downloaded twice.
+func (s *Service) donePaths(ctx context.Context, runID int64, export string) (map[string]bool, error) {
+	paths, err := s.queries().ListTakeoutEntryPaths(ctx, store.ListTakeoutEntryPathsParams{RunID: runID, Export: export})
 	if err != nil {
 		return nil, fmt.Errorf("list entries: %w", err)
 	}
-	done := make(map[string]bool, len(rows))
-	for _, row := range rows {
-		done[row.Path] = true
+	done := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		done[p] = true
 	}
 	return done, nil
 }
@@ -254,11 +264,11 @@ func (s *Service) readZip(ctx context.Context, run store.ImportRun, p string, fi
 	if err != nil {
 		return false, badPart(err)
 	}
-	done, err := s.donePaths(ctx, run.ID, p)
+	export := partExport(p)
+	done, err := s.donePaths(ctx, run.ID, export)
 	if err != nil {
 		return false, err
 	}
-	export := partExport(p)
 	read := 0
 	for _, f := range archive.File {
 		if f.Mode().Type() != 0 || !partEntry(f.Name) || done[f.Name] {
@@ -286,11 +296,11 @@ func (s *Service) readTar(ctx context.Context, run store.ImportRun, p string, fi
 		return false, badPart(err)
 	}
 	defer unzipped.Close()
-	done, err := s.donePaths(ctx, run.ID, p)
+	export := partExport(p)
+	done, err := s.donePaths(ctx, run.ID, export)
 	if err != nil {
 		return false, err
 	}
-	export := partExport(p)
 	archive := tar.NewReader(unzipped)
 	read := 0
 	for {
