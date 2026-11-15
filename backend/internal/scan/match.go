@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
+	"time"
 
+	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 )
 
@@ -281,6 +284,12 @@ func (s *Service) match(ctx context.Context, run store.ImportRun) (bool, error) 
 		finish.Edited += int64(len(found.original))
 	}
 
+	saved := store.SaveImportedMetadataParams{RunID: run.ID}
+	for export := range exports {
+		saved.Exports = append(saved.Exports, export)
+		saved.ExportTimes = append(saved.ExportTimes, exportTime(export))
+	}
+
 	tx, err := s.Ingest.Pool.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("begin transaction: %w", err)
@@ -289,11 +298,40 @@ func (s *Service) match(ctx context.Context, run store.ImportRun) (bool, error) 
 	if err := store.New(tx).SetTakeoutMatches(ctx, params); err != nil {
 		return false, fmt.Errorf("record matches: %w", err)
 	}
-	if err := store.New(tx).FinishMatching(ctx, finish); err != nil {
-		return false, fmt.Errorf("finish run: %w", err)
+	if err := store.New(tx).SaveImportedMetadata(ctx, saved); err != nil {
+		return false, fmt.Errorf("save metadata: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("commit: %w", err)
 	}
+
+	// Photos processed while the parts were read get their dates and places
+	// now; the others get them from processing.
+	ids, err := queries.ListImportedPhotosOfRun(ctx, &run.ID)
+	if err != nil {
+		return false, fmt.Errorf("list photos: %w", err)
+	}
+	for batch := range slices.Chunk(ids, 1000) {
+		if err := jobs.ApplyImportedMetadata(ctx, queries, batch); err != nil {
+			return false, err
+		}
+	}
+	if err := queries.FinishMatching(ctx, finish); err != nil {
+		return false, fmt.Errorf("finish run: %w", err)
+	}
 	return false, nil
 }
+
+// exportTime reads the time in the name of an export's parts, which tells a
+// newer export of the same photos from an older one. An unpacked folder has
+// none and counts as the oldest.
+func exportTime(export string) time.Time {
+	if m := exportStamp.FindStringSubmatch(path.Base(export)); m != nil {
+		if t, err := time.Parse("20060102T150405Z", m[1]); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
+}
+
+var exportStamp = regexp.MustCompile(`^takeout-(\d{8}T\d{6}Z)$`)

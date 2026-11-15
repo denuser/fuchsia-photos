@@ -404,3 +404,28 @@ UPDATE photos
 SET video_copy = @video_copy,
     updated_at = now()
 WHERE id = @id AND purged_at IS NULL;
+
+-- The processed photos among the given ones, or edited copies of them, that
+-- have metadata from an import, with what the date and location are worked
+-- out from.
+-- name: ListImportedForApply :many
+SELECT m.photo_id, p.mime, p.exif, m.taken_at, m.latitude, m.longitude,
+       (m.original_id IS NOT NULL)::boolean AS edited, o.mime AS original_mime, o.exif AS original_exif
+FROM imported_metadata m
+JOIN photos p ON p.id = m.photo_id
+LEFT JOIN photos o ON o.id = m.original_id
+WHERE (m.photo_id = ANY(@ids::bigint[]) OR m.original_id = ANY(@ids::bigint[])) AND p.status = 'ready';
+
+-- Sets the date and the imported location of photos. A date of the zero time
+-- and a location of NaN stand for none.
+-- name: SetImportedDetails :exec
+UPDATE photos p
+SET taken_at = NULLIF(u.taken_at, '0001-01-01 00:00:00+00'),
+    sort_at = COALESCE(NULLIF(u.taken_at, '0001-01-01 00:00:00+00'), p.sort_at),
+    imported_latitude = NULLIF(u.latitude, 'NaN'),
+    imported_longitude = NULLIF(u.longitude, 'NaN')
+FROM (
+    SELECT unnest(@ids::bigint[]) AS id, unnest(@taken_ats::timestamptz[]) AS taken_at,
+           unnest(@latitudes::double precision[]) AS latitude, unnest(@longitudes::double precision[]) AS longitude
+) u
+WHERE p.id = u.id;

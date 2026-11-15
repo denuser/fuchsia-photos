@@ -6,10 +6,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 )
@@ -328,4 +330,81 @@ func TestTakeoutNames(t *testing.T) {
 			t.Errorf("splitUnpacked(%q) = %q, %q, %v", u.path, export, inner, ok)
 		}
 	}
+}
+
+// processed marks the photo with the given content as processed, with tags, as
+// processing would.
+func (e *env) processed(data []byte, exif string) int64 {
+	e.t.Helper()
+	sum := sha256.Sum256(data)
+	var id int64
+	err := e.service.Ingest.Pool.QueryRow(context.Background(),
+		"UPDATE photos SET status = 'ready', exif = $2, taken_at = $3, sort_at = $3 WHERE owner_id = $1 AND sha256 = $4 RETURNING id",
+		e.owner, exif, time.Date(2017, 7, 4, 13, 58, 10, 0, time.UTC), sum[:]).Scan(&id)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return id
+}
+
+func (e *env) details(id int64) (takenAt time.Time, lat, lon *float64) {
+	e.t.Helper()
+	err := e.service.Ingest.Pool.QueryRow(context.Background(),
+		"SELECT taken_at, imported_latitude, imported_longitude FROM photos WHERE id = $1", id).Scan(&takenAt, &lat, &lon)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return takenAt, lat, lon
+}
+
+func TestTakeoutAppliesTheNewestExportsMetadata(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	photo := e.fixture("landscape.jpg")
+	// The photo is in the library already, processed, with a date without an offset.
+	if _, err := e.service.Ingest.Ingest(ctx, e.owner, bytes.NewReader(photo), "IMG_1.jpg", 0); err != nil {
+		t.Fatal(err)
+	}
+	id := e.processed(photo, `{"DateTimeOriginal": "2017:07:04 13:58:10"}`)
+
+	sidecar := func(timestamp string, lat float64) []byte {
+		return fmt.Appendf(nil, `{"title": "IMG_1.jpg", "photoTakenTime": {"timestamp": %q}, "geoData": {"latitude": %v, "longitude": 44.8}}`, timestamp, lat)
+	}
+	export := func(timestamp string, lat float64) []archiveFile {
+		return []archiveFile{
+			{yearFolder + "IMG_1.jpg", photo},
+			{yearFolder + "IMG_1.jpg.supplemental-metadata.json", sidecar(timestamp, lat)},
+		}
+	}
+	// The newest export is read first, as names sort, and an unpacked folder
+	// counts as older than any.
+	e.write("a/takeout-20261115T075702Z-1-001.zip", makeZip(t, export("1499165890", 41.7)))
+	e.write("b/takeout-20261115T073434Z-1-001.zip", makeZip(t, export("1400000000", 10)))
+	for _, f := range export("1300000000", 20) {
+		e.write("c/"+f.name, f.data)
+	}
+
+	run := e.finish(e.startKind("", KindTakeout).ID)
+	wantCounts(t, run, counts{found: 6, duplicates: 3})
+	takenAt, lat, lon := e.details(id)
+	if want := time.Unix(1499165890, 0); !takenAt.Equal(want) {
+		t.Errorf("taken at = %v, want %v from the newest export", takenAt, want)
+	}
+	if lat == nil || lon == nil || *lat != 41.7 || *lon != 44.8 {
+		t.Errorf("imported location = %v, %v", lat, lon)
+	}
+	var export_ string
+	if err := e.service.Ingest.Pool.QueryRow(ctx, "SELECT export FROM imported_metadata WHERE photo_id = $1", id).Scan(&export_); err != nil {
+		t.Fatal(err)
+	}
+	if export_ != "a/takeout-20261115T075702Z" {
+		t.Errorf("metadata from %s", export_)
+	}
+
+	t.Run("a later import of an older export changes nothing", func(t *testing.T) {
+		e.finish(e.startKind("b", KindTakeout).ID)
+		if takenAt, _, _ := e.details(id); !takenAt.Equal(time.Unix(1499165890, 0)) {
+			t.Errorf("taken at = %v", takenAt)
+		}
+	})
 }

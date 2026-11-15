@@ -111,7 +111,8 @@ func fromFields(fields map[string]any, video bool) (Metadata, error) {
 	for _, tag := range fileTags {
 		delete(fields, tag)
 	}
-	meta := Metadata{TakenAt: takenAt(fields, video)}
+	taken := takenAt(fields, video)
+	meta := Metadata{TakenAt: taken.at}
 	if id, ok := fields["ContentIdentifier"].(string); ok {
 		meta.ContentIdentifier = strings.TrimSpace(id)
 	}
@@ -293,7 +294,23 @@ var (
 	}
 )
 
-func takenAt(fields map[string]any, video bool) *time.Time {
+// Date is when a photo was taken, as its tags tell it.
+type Date struct {
+	At *time.Time
+	// Zoned tells that the moment is certain: the date came with its offset,
+	// or is a video's, whose dates are in UTC when they have none.
+	Zoned bool
+	// Raw is the value of the tag the date came from.
+	Raw string
+}
+
+type taken struct {
+	at    *time.Time
+	zoned bool
+	raw   string
+}
+
+func takenAt(fields map[string]any, video bool) taken {
 	dates := photoDates
 	if video {
 		dates = videoDates
@@ -301,30 +318,40 @@ func takenAt(fields map[string]any, video bool) *time.Time {
 	for _, d := range dates {
 		value, _ := fields[d.date].(string)
 		offset, _ := fields[d.offset].(string)
-		if t, ok := parseDate(value, offset); ok {
-			return &t
+		if t, zoned, ok := parseDate(value, offset); ok {
+			return taken{at: &t, zoned: zoned || video, raw: strings.TrimSpace(value)}
 		}
 	}
-	return nil
+	return taken{}
 }
 
-// parseDate parses an EXIF date. Dates without an offset are taken as UTC,
-// because the camera's time zone is unknown.
-func parseDate(value, offset string) (time.Time, bool) {
+// TakenAt reads the date out of tags stored by Read, as processing does.
+func TakenAt(tags []byte, video bool) Date {
+	var fields map[string]any
+	if len(tags) == 0 || json.Unmarshal(tags, &fields) != nil {
+		return Date{}
+	}
+	t := takenAt(fields, video)
+	return Date{At: t.at, Zoned: t.zoned, Raw: t.raw}
+}
+
+// parseDate parses an EXIF date and tells whether it came with an offset.
+// Dates without one are taken as UTC, because the camera's time zone is unknown.
+func parseDate(value, offset string) (t time.Time, zoned, ok bool) {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return time.Time{}, false
+		return time.Time{}, false, false
 	}
 	if t, err := time.Parse("2006:01:02 15:04:05.999999999Z07:00", value); err == nil {
-		return t, true
+		return t, true, true
 	}
 	if t, err := time.Parse("2006:01:02 15:04:05.999999999Z07:00", value+strings.TrimSpace(offset)); err == nil {
-		return t, true
+		return t, true, true
 	}
 	if t, err := time.Parse("2006:01:02 15:04:05.999999999", value); err == nil {
-		return t, true
+		return t, false, true
 	}
-	return time.Time{}, false
+	return time.Time{}, false, false
 }
 
 // Camera holds the shooting details of a photo. It leaves out the location

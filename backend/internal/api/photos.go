@@ -78,6 +78,10 @@ func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 		}
 		camera.Lens = p.Lens
 	}
+	// A location an import knew comes after the file's own.
+	if location == nil && p.ImportedLatitude != nil && p.ImportedLongitude != nil {
+		location = &metadata.Location{Latitude: *p.ImportedLatitude, Longitude: *p.ImportedLongitude}
+	}
 	if !showLocation {
 		location = nil
 	}

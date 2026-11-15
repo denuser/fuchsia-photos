@@ -157,6 +157,10 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) err
 	if err != nil {
 		return fmt.Errorf("update photo: %w", err)
 	}
+	// An import may know more about the date and the place than the tags do.
+	if err := ApplyImportedMetadata(ctx, w.queries, []int64{photo.ID}); err != nil {
+		return err
+	}
 
 	// The other file of a Live Photo may have come first.
 	if meta.ContentIdentifier != "" {

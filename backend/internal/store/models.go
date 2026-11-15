@@ -72,6 +72,19 @@ type ImportRun struct {
 	Edited            int64
 }
 
+type ImportedMetadatum struct {
+	PhotoID    int64
+	OriginalID *int64
+	RunID      *int64
+	Export     string
+	ExportTime time.Time
+	Path       string
+	Sidecar    []byte
+	TakenAt    *time.Time
+	Latitude   *float64
+	Longitude  *float64
+}
+
 type MetadataSetting struct {
 	ID           int16
 	ShowLocation bool
@@ -105,6 +118,8 @@ type Photo struct {
 	ContentIdentifier *string
 	LivePhotoID       *int64
 	VideoCopy         *string
+	ImportedLatitude  *float64
+	ImportedLongitude *float64
 }
 
 type PhotoEmbedding struct {

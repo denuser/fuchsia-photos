@@ -168,7 +168,7 @@ func (q *Queries) ListAlbumShareUsers(ctx context.Context, albumID int64) ([]Lis
 }
 
 const listAllPhotos = `-- name: ListAllPhotos :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id, p.video_copy
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id, p.video_copy, p.imported_latitude, p.imported_longitude
 FROM photos p
 WHERE p.deleted_at IS NULL
   AND p.live_photo_id IS NULL
@@ -235,6 +235,8 @@ func (q *Queries) ListAllPhotos(ctx context.Context, arg ListAllPhotosParams) ([
 			&i.ContentIdentifier,
 			&i.LivePhotoID,
 			&i.VideoCopy,
+			&i.ImportedLatitude,
+			&i.ImportedLongitude,
 		); err != nil {
 			return nil, err
 		}
@@ -279,7 +281,7 @@ func (q *Queries) ListPhotoShareUsers(ctx context.Context, photoID int64) ([]Lis
 }
 
 const listSharedPhotos = `-- name: ListSharedPhotos :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id, p.video_copy
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id, p.video_copy, p.imported_latitude, p.imported_longitude
 FROM photos p
 WHERE p.owner_id <> $1::bigint
   AND p.deleted_at IS NULL
@@ -352,6 +354,8 @@ func (q *Queries) ListSharedPhotos(ctx context.Context, arg ListSharedPhotosPara
 			&i.ContentIdentifier,
 			&i.LivePhotoID,
 			&i.VideoCopy,
+			&i.ImportedLatitude,
+			&i.ImportedLongitude,
 		); err != nil {
 			return nil, err
 		}

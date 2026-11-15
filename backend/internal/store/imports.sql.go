@@ -380,6 +380,30 @@ func (q *Queries) ListImportRuns(ctx context.Context, maxRows int32) ([]ImportRu
 	return items, nil
 }
 
+const listImportedPhotosOfRun = `-- name: ListImportedPhotosOfRun :many
+SELECT photo_id FROM imported_metadata WHERE run_id = $1 ORDER BY photo_id
+`
+
+func (q *Queries) ListImportedPhotosOfRun(ctx context.Context, runID *int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listImportedPhotosOfRun, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var photo_id int64
+		if err := rows.Scan(&photo_id); err != nil {
+			return nil, err
+		}
+		items = append(items, photo_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPendingImportFiles = `-- name: ListPendingImportFiles :many
 SELECT path, size, mtime
 FROM import_files
@@ -531,6 +555,52 @@ UPDATE import_runs SET found = 0, failed = 0 WHERE id = $1
 // Starts a listing over, after an attempt that did not finish.
 func (q *Queries) ResetImportListing(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, resetImportListing, id)
+	return err
+}
+
+const saveImportedMetadata = `-- name: SaveImportedMetadata :exec
+INSERT INTO imported_metadata (photo_id, original_id, run_id, export, export_time, path, sidecar, taken_at, latitude, longitude)
+SELECT DISTINCT ON (e.photo_id)
+       e.photo_id, o.photo_id, e.run_id, e.export, x.export_time, s.path, s.sidecar,
+       CASE WHEN s.sidecar -> 'photoTakenTime' ->> 'timestamp' ~ '^[0-9]{1,12}$'
+                 AND (s.sidecar -> 'photoTakenTime' ->> 'timestamp')::bigint > 0
+            THEN to_timestamp((s.sidecar -> 'photoTakenTime' ->> 'timestamp')::bigint) END,
+       g.latitude, g.longitude
+FROM takeout_entries e
+JOIN (SELECT unnest($1::text[]) AS export, unnest($2::timestamptz[]) AS export_time) x
+    ON x.export = e.export
+LEFT JOIN takeout_entries o ON o.run_id = e.run_id AND o.export = e.export AND o.path = e.original_path
+JOIN takeout_entries s ON s.run_id = e.run_id AND s.export = e.export AND s.path = coalesce(e.sidecar_path, o.sidecar_path)
+LEFT JOIN LATERAL (
+    SELECT (s.sidecar -> 'geoData' ->> 'latitude')::double precision AS latitude,
+           (s.sidecar -> 'geoData' ->> 'longitude')::double precision AS longitude
+    WHERE jsonb_typeof(s.sidecar -> 'geoData' -> 'latitude') = 'number'
+      AND jsonb_typeof(s.sidecar -> 'geoData' -> 'longitude') = 'number'
+      AND ((s.sidecar -> 'geoData' ->> 'latitude')::double precision <> 0
+           OR (s.sidecar -> 'geoData' ->> 'longitude')::double precision <> 0)
+      AND abs((s.sidecar -> 'geoData' ->> 'latitude')::double precision) <= 90
+      AND abs((s.sidecar -> 'geoData' ->> 'longitude')::double precision) <= 180
+) g ON true
+WHERE e.run_id = $3 AND e.photo_id IS NOT NULL AND s.sidecar IS NOT NULL
+  AND (e.original_path IS NULL OR o.photo_id IS NOT NULL)
+ORDER BY e.photo_id, x.export_time DESC, (e.original_path IS NULL) DESC, e.export, e.path
+ON CONFLICT (photo_id) DO UPDATE
+SET original_id = excluded.original_id, run_id = excluded.run_id, export = excluded.export,
+    export_time = excluded.export_time, path = excluded.path, sidecar = excluded.sidecar,
+    taken_at = excluded.taken_at, latitude = excluded.latitude, longitude = excluded.longitude
+WHERE excluded.export_time >= imported_metadata.export_time
+`
+
+type SaveImportedMetadataParams struct {
+	Exports     []string
+	ExportTimes []time.Time
+	RunID       int64
+}
+
+// Keeps the JSON of each photo of a run, from the newest export that has it.
+// A photo's own JSON comes before its original's, which an edited copy takes.
+func (q *Queries) SaveImportedMetadata(ctx context.Context, arg SaveImportedMetadataParams) error {
+	_, err := q.db.Exec(ctx, saveImportedMetadata, arg.Exports, arg.ExportTimes, arg.RunID)
 	return err
 }
 

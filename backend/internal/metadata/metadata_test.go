@@ -17,17 +17,21 @@ func TestParseDate(t *testing.T) {
 	tests := []struct {
 		value, offset string
 		want          string
+		zoned         bool
 	}{
-		{"2024:06:01 12:30:45", "", "2024-06-01T12:30:45Z"},
-		{"2024:06:01 12:30:45", "+03:00", "2024-06-01T09:30:45Z"},
-		{"2024:06:01 12:30:45+03:00", "", "2024-06-01T09:30:45Z"},
-		{"2024:06:01 12:30:45.250", "", "2024-06-01T12:30:45.25Z"},
-		{"0000:00:00 00:00:00", "", ""},
-		{"    :  :     :  :  ", "", ""},
-		{"", "", ""},
+		{"2024:06:01 12:30:45", "", "2024-06-01T12:30:45Z", false},
+		{"2024:06:01 12:30:45", "+03:00", "2024-06-01T09:30:45Z", true},
+		{"2024:06:01 12:30:45+03:00", "", "2024-06-01T09:30:45Z", true},
+		{"2024:06:01 12:30:45.250", "", "2024-06-01T12:30:45.25Z", false},
+		{"0000:00:00 00:00:00", "", "", false},
+		{"    :  :     :  :  ", "", "", false},
+		{"", "", "", false},
 	}
 	for _, tt := range tests {
-		got, ok := parseDate(tt.value, tt.offset)
+		got, zoned, ok := parseDate(tt.value, tt.offset)
+		if zoned != tt.zoned {
+			t.Errorf("parseDate(%q, %q) zoned = %v", tt.value, tt.offset, zoned)
+		}
 		if tt.want == "" {
 			if ok {
 				t.Errorf("parseDate(%q) = %v, want no date", tt.value, got)
@@ -246,5 +250,23 @@ func TestDetailsMissing(t *testing.T) {
 		if camera, location := Details([]byte(tags)); camera != nil || location != nil {
 			t.Errorf("Details(%s) = %+v, %+v", tags, camera, location)
 		}
+	}
+}
+
+func TestTakenAtFromStoredTags(t *testing.T) {
+	photo := TakenAt([]byte(`{"DateTimeOriginal": "2017:07:04 13:58:10"}`), false)
+	if photo.At == nil || photo.Zoned || photo.Raw != "2017:07:04 13:58:10" {
+		t.Errorf("photo without an offset = %+v", photo)
+	}
+	zoned := TakenAt([]byte(`{"DateTimeOriginal": "2019:09:21 11:39:52", "OffsetTimeOriginal": "+03:00"}`), false)
+	if zoned.At == nil || !zoned.Zoned || zoned.At.UTC().Hour() != 8 {
+		t.Errorf("photo with an offset = %+v", zoned)
+	}
+	// QuickTime dates without an offset are in UTC by the standard.
+	if video := TakenAt([]byte(`{"CreateDate": "2013:04:02 10:23:11"}`), true); video.At == nil || !video.Zoned {
+		t.Errorf("video = %+v", video)
+	}
+	if none := TakenAt(nil, false); none.At != nil || none.Raw != "" {
+		t.Errorf("no tags = %+v", none)
 	}
 }

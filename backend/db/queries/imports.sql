@@ -150,3 +150,40 @@ UPDATE import_runs
 SET status = 'finished', finished_at = now(),
     without_sidecar = @without_sidecar, unmatched_sidecars = @unmatched_sidecars, edited = @edited
 WHERE id = @id AND status = 'matching';
+
+-- Keeps the JSON of each photo of a run, from the newest export that has it.
+-- A photo's own JSON comes before its original's, which an edited copy takes.
+-- name: SaveImportedMetadata :exec
+INSERT INTO imported_metadata (photo_id, original_id, run_id, export, export_time, path, sidecar, taken_at, latitude, longitude)
+SELECT DISTINCT ON (e.photo_id)
+       e.photo_id, o.photo_id, e.run_id, e.export, x.export_time, s.path, s.sidecar,
+       CASE WHEN s.sidecar -> 'photoTakenTime' ->> 'timestamp' ~ '^[0-9]{1,12}$'
+                 AND (s.sidecar -> 'photoTakenTime' ->> 'timestamp')::bigint > 0
+            THEN to_timestamp((s.sidecar -> 'photoTakenTime' ->> 'timestamp')::bigint) END,
+       g.latitude, g.longitude
+FROM takeout_entries e
+JOIN (SELECT unnest(@exports::text[]) AS export, unnest(@export_times::timestamptz[]) AS export_time) x
+    ON x.export = e.export
+LEFT JOIN takeout_entries o ON o.run_id = e.run_id AND o.export = e.export AND o.path = e.original_path
+JOIN takeout_entries s ON s.run_id = e.run_id AND s.export = e.export AND s.path = coalesce(e.sidecar_path, o.sidecar_path)
+LEFT JOIN LATERAL (
+    SELECT (s.sidecar -> 'geoData' ->> 'latitude')::double precision AS latitude,
+           (s.sidecar -> 'geoData' ->> 'longitude')::double precision AS longitude
+    WHERE jsonb_typeof(s.sidecar -> 'geoData' -> 'latitude') = 'number'
+      AND jsonb_typeof(s.sidecar -> 'geoData' -> 'longitude') = 'number'
+      AND ((s.sidecar -> 'geoData' ->> 'latitude')::double precision <> 0
+           OR (s.sidecar -> 'geoData' ->> 'longitude')::double precision <> 0)
+      AND abs((s.sidecar -> 'geoData' ->> 'latitude')::double precision) <= 90
+      AND abs((s.sidecar -> 'geoData' ->> 'longitude')::double precision) <= 180
+) g ON true
+WHERE e.run_id = @run_id AND e.photo_id IS NOT NULL AND s.sidecar IS NOT NULL
+  AND (e.original_path IS NULL OR o.photo_id IS NOT NULL)
+ORDER BY e.photo_id, x.export_time DESC, (e.original_path IS NULL) DESC, e.export, e.path
+ON CONFLICT (photo_id) DO UPDATE
+SET original_id = excluded.original_id, run_id = excluded.run_id, export = excluded.export,
+    export_time = excluded.export_time, path = excluded.path, sidecar = excluded.sidecar,
+    taken_at = excluded.taken_at, latitude = excluded.latitude, longitude = excluded.longitude
+WHERE excluded.export_time >= imported_metadata.export_time;
+
+-- name: ListImportedPhotosOfRun :many
+SELECT photo_id FROM imported_metadata WHERE run_id = @run_id ORDER BY photo_id;
