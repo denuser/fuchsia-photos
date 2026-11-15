@@ -61,6 +61,22 @@ func (q *Queries) AddImportProblem(ctx context.Context, arg AddImportProblemPara
 	return err
 }
 
+const addPhotosToAlbums = `-- name: AddPhotosToAlbums :exec
+INSERT INTO album_photos (album_id, photo_id)
+SELECT unnest($1::bigint[]), unnest($2::bigint[])
+ON CONFLICT DO NOTHING
+`
+
+type AddPhotosToAlbumsParams struct {
+	AlbumIds []int64
+	PhotoIds []int64
+}
+
+func (q *Queries) AddPhotosToAlbums(ctx context.Context, arg AddPhotosToAlbumsParams) error {
+	_, err := q.db.Exec(ctx, addPhotosToAlbums, arg.AlbumIds, arg.PhotoIds)
+	return err
+}
+
 const addTakeoutEntry = `-- name: AddTakeoutEntry :exec
 WITH added AS (
     INSERT INTO takeout_entries (run_id, export, path, source, outcome, photo_id, sidecar, error)
@@ -106,17 +122,32 @@ func (q *Queries) AddTakeoutEntry(ctx context.Context, arg AddTakeoutEntryParams
 	return err
 }
 
+const countRestoredPhotos = `-- name: CountRestoredPhotos :exec
+UPDATE import_runs SET restored = restored + $1 WHERE id = $2
+`
+
+type CountRestoredPhotosParams struct {
+	Restored int64
+	ID       int64
+}
+
+func (q *Queries) CountRestoredPhotos(ctx context.Context, arg CountRestoredPhotosParams) error {
+	_, err := q.db.Exec(ctx, countRestoredPhotos, arg.Restored, arg.ID)
+	return err
+}
+
 const createImportRun = `-- name: CreateImportRun :one
-INSERT INTO import_runs (owner_id, started_by, folder, kind)
-VALUES ($1, $2, $3, $4)
-RETURNING id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited
+INSERT INTO import_runs (owner_id, started_by, folder, kind, album_trash)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited, album_trash, albums, restored
 `
 
 type CreateImportRunParams struct {
-	OwnerID   int64
-	StartedBy int64
-	Folder    string
-	Kind      string
+	OwnerID    int64
+	StartedBy  int64
+	Folder     string
+	Kind       string
+	AlbumTrash string
 }
 
 func (q *Queries) CreateImportRun(ctx context.Context, arg CreateImportRunParams) (ImportRun, error) {
@@ -125,6 +156,7 @@ func (q *Queries) CreateImportRun(ctx context.Context, arg CreateImportRunParams
 		arg.StartedBy,
 		arg.Folder,
 		arg.Kind,
+		arg.AlbumTrash,
 	)
 	var i ImportRun
 	err := row.Scan(
@@ -150,6 +182,9 @@ func (q *Queries) CreateImportRun(ctx context.Context, arg CreateImportRunParams
 		&i.WithoutSidecar,
 		&i.UnmatchedSidecars,
 		&i.Edited,
+		&i.AlbumTrash,
+		&i.Albums,
+		&i.Restored,
 	)
 	return i, err
 }
@@ -177,6 +212,23 @@ type FailImportRunParams struct {
 func (q *Queries) FailImportRun(ctx context.Context, arg FailImportRunParams) error {
 	_, err := q.db.Exec(ctx, failImportRun, arg.Error, arg.ID)
 	return err
+}
+
+const findAlbumByName = `-- name: FindAlbumByName :one
+SELECT id FROM albums WHERE owner_id = $1 AND name = $2 ORDER BY id LIMIT 1
+`
+
+type FindAlbumByNameParams struct {
+	OwnerID int64
+	Name    string
+}
+
+// The owner's album with this name, the oldest if there are several.
+func (q *Queries) FindAlbumByName(ctx context.Context, arg FindAlbumByNameParams) (int64, error) {
+	row := q.db.QueryRow(ctx, findAlbumByName, arg.OwnerID, arg.Name)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const finishImportFile = `-- name: FinishImportFile :exec
@@ -231,14 +283,16 @@ func (q *Queries) FinishImportRun(ctx context.Context, id int64) error {
 const finishMatching = `-- name: FinishMatching :exec
 UPDATE import_runs
 SET status = 'finished', finished_at = now(),
-    without_sidecar = $1, unmatched_sidecars = $2, edited = $3
-WHERE id = $4 AND status = 'matching'
+    without_sidecar = $1, unmatched_sidecars = $2, edited = $3,
+    albums = $4
+WHERE id = $5 AND status = 'matching'
 `
 
 type FinishMatchingParams struct {
 	WithoutSidecar    int64
 	UnmatchedSidecars int64
 	Edited            int64
+	Albums            int64
 	ID                int64
 }
 
@@ -247,13 +301,14 @@ func (q *Queries) FinishMatching(ctx context.Context, arg FinishMatchingParams) 
 		arg.WithoutSidecar,
 		arg.UnmatchedSidecars,
 		arg.Edited,
+		arg.Albums,
 		arg.ID,
 	)
 	return err
 }
 
 const getImportRun = `-- name: GetImportRun :one
-SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited FROM import_runs WHERE id = $1
+SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited, album_trash, albums, restored FROM import_runs WHERE id = $1
 `
 
 func (q *Queries) GetImportRun(ctx context.Context, id int64) (ImportRun, error) {
@@ -282,6 +337,9 @@ func (q *Queries) GetImportRun(ctx context.Context, id int64) (ImportRun, error)
 		&i.WithoutSidecar,
 		&i.UnmatchedSidecars,
 		&i.Edited,
+		&i.AlbumTrash,
+		&i.Albums,
+		&i.Restored,
 	)
 	return i, err
 }
@@ -334,7 +392,7 @@ func (q *Queries) ListImportProblems(ctx context.Context, arg ListImportProblems
 }
 
 const listImportRuns = `-- name: ListImportRuns :many
-SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited FROM import_runs ORDER BY id DESC LIMIT $1
+SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited, album_trash, albums, restored FROM import_runs ORDER BY id DESC LIMIT $1
 `
 
 func (q *Queries) ListImportRuns(ctx context.Context, maxRows int32) ([]ImportRun, error) {
@@ -369,6 +427,9 @@ func (q *Queries) ListImportRuns(ctx context.Context, maxRows int32) ([]ImportRu
 			&i.WithoutSidecar,
 			&i.UnmatchedSidecars,
 			&i.Edited,
+			&i.AlbumTrash,
+			&i.Albums,
+			&i.Restored,
 		); err != nil {
 			return nil, err
 		}
@@ -433,6 +494,106 @@ func (q *Queries) ListPendingImportFiles(ctx context.Context, arg ListPendingImp
 	for rows.Next() {
 		var i ListPendingImportFilesRow
 		if err := rows.Scan(&i.Path, &i.Size, &i.Mtime); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTakeoutAlbumFiles = `-- name: ListTakeoutAlbumFiles :many
+SELECT export, path, (sidecar ->> 'title')::text AS title
+FROM takeout_entries
+WHERE run_id = $1 AND outcome = 'sidecar'
+  AND (sidecar -> 'photoTakenTime') IS NULL
+  AND jsonb_typeof(sidecar -> 'title') = 'string'
+ORDER BY export, path
+`
+
+type ListTakeoutAlbumFilesRow struct {
+	Export string
+	Path   string
+	Title  string
+}
+
+// The JSON files that may describe albums: those of no photo, with a title
+// that is a string. The matching keeps the ones right under the product folder.
+func (q *Queries) ListTakeoutAlbumFiles(ctx context.Context, runID int64) ([]ListTakeoutAlbumFilesRow, error) {
+	rows, err := q.db.Query(ctx, listTakeoutAlbumFiles, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTakeoutAlbumFilesRow
+	for rows.Next() {
+		var i ListTakeoutAlbumFilesRow
+		if err := rows.Scan(&i.Export, &i.Path, &i.Title); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTakeoutAlbumPhotos = `-- name: ListTakeoutAlbumPhotos :many
+SELECT DISTINCT f.album_id::bigint AS album_id, p.id AS photo_id,
+       (p.deleted_at IS NOT NULL)::boolean AS trashed, (p.live_photo_id IS NULL)::boolean AS shown
+FROM (
+    SELECT unnest($1::text[]) AS export, unnest($2::text[]) AS folder, unnest($3::bigint[]) AS album_id
+) f
+JOIN takeout_entries e ON e.run_id = $4 AND e.export = f.export
+    AND starts_with(e.path, f.folder) AND strpos(substr(e.path, length(f.folder) + 1), '/') = 0
+JOIN photos p ON p.id = e.photo_id
+WHERE e.outcome IN ('added', 'duplicate', 'in_trash')
+  AND p.owner_id = $5
+  AND p.purged_at IS NULL
+ORDER BY 1, 2
+`
+
+type ListTakeoutAlbumPhotosParams struct {
+	Exports  []string
+	Folders  []string
+	AlbumIds []int64
+	RunID    int64
+	OwnerID  int64
+}
+
+type ListTakeoutAlbumPhotosRow struct {
+	AlbumID int64
+	PhotoID int64
+	Trashed bool
+	Shown   bool
+}
+
+// The photos of the owner in the folders of a run's albums, files right in the
+// folder only. Purged photos stay out; trashed tells those in the trash.
+func (q *Queries) ListTakeoutAlbumPhotos(ctx context.Context, arg ListTakeoutAlbumPhotosParams) ([]ListTakeoutAlbumPhotosRow, error) {
+	rows, err := q.db.Query(ctx, listTakeoutAlbumPhotos,
+		arg.Exports,
+		arg.Folders,
+		arg.AlbumIds,
+		arg.RunID,
+		arg.OwnerID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTakeoutAlbumPhotosRow
+	for rows.Next() {
+		var i ListTakeoutAlbumPhotosRow
+		if err := rows.Scan(
+			&i.AlbumID,
+			&i.PhotoID,
+			&i.Trashed,
+			&i.Shown,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

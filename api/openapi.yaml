@@ -1367,6 +1367,8 @@ paths:
                   type: string
                 kind:
                   $ref: "#/components/schemas/ImportKind"
+                albumTrash:
+                  $ref: "#/components/schemas/ImportAlbumTrash"
       responses:
         "201":
           description: The new scan
@@ -1768,7 +1770,7 @@ components:
           description: Longest side of a viewer preview, in pixels
     ImportRun:
       type: object
-      required: [id, ownerId, folder, kind, status, error, found, added, duplicates, inTrash, purged, unsupported, sidecars, withoutSidecar, unmatchedSidecars, edited, changing, failed, createdAt, finishedAt]
+      required: [id, ownerId, folder, kind, status, error, found, added, duplicates, inTrash, purged, unsupported, sidecars, withoutSidecar, unmatchedSidecars, edited, albumTrash, albums, restored, changing, failed, createdAt, finishedAt]
       properties:
         id:
           type: integer
@@ -1826,6 +1828,16 @@ components:
           description: Edited copies a Takeout scan matched to their originals
           type: integer
           format: int64
+        albumTrash:
+          $ref: "#/components/schemas/ImportAlbumTrash"
+        albums:
+          description: Albums a Takeout scan filled, created or found by their titles
+          type: integer
+          format: int64
+        restored:
+          description: Photos of albums a Takeout scan took out of the trash
+          type: integer
+          format: int64
         changing:
           description: Files that changed during the scan, probably still being copied
           type: integer
@@ -1844,6 +1856,10 @@ components:
       description: What a scan reads, photos of a folder or Google Takeout exports in it. The default is folder
       type: string
       enum: [folder, takeout]
+    ImportAlbumTrash:
+      description: What a Takeout scan does with a photo of an album that is in the owner's trash, leave it out of the album, add it, or add it and restore it. The default is skip
+      type: string
+      enum: [skip, add, restore]
     ImportProblem:
       type: object
       required: [path, state, error]

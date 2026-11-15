@@ -301,8 +301,20 @@ func (s *Service) match(ctx context.Context, run store.ImportRun) (bool, error) 
 	if err := store.New(tx).SaveImportedMetadata(ctx, saved); err != nil {
 		return false, fmt.Errorf("save metadata: %w", err)
 	}
+	albums, err := s.makeAlbums(ctx, store.New(tx), run)
+	if err != nil {
+		return false, err
+	}
+	finish.Albums = int64(albums)
 	if err := tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("commit: %w", err)
+	}
+	// A video may have come in while its photo was in the trash, as when the
+	// photos of albums are restored.
+	if run.AlbumTrash == AlbumTrashRestore {
+		if _, err := jobs.PairLivePhotos(ctx, s.Ingest.Pool, &run.OwnerID, nil); err != nil {
+			return false, fmt.Errorf("pair live photos: %w", err)
+		}
 	}
 
 	// Photos processed while the parts were read get their dates and places

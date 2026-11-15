@@ -21,6 +21,7 @@ type importRunJSON struct {
 	OwnerID     int64   `json:"ownerId"`
 	Folder      string  `json:"folder"`
 	Kind        string  `json:"kind"`
+	AlbumTrash  string  `json:"albumTrash"`
 	Status      string  `json:"status"`
 	Error       *string `json:"error"`
 	Found       int64   `json:"found"`
@@ -34,6 +35,8 @@ type importRunJSON struct {
 	WithoutSidecar    int64      `json:"withoutSidecar"`
 	UnmatchedSidecars int64      `json:"unmatchedSidecars"`
 	Edited            int64      `json:"edited"`
+	Albums            int64      `json:"albums"`
+	Restored          int64      `json:"restored"`
 	Changing          int64      `json:"changing"`
 	Failed            int64      `json:"failed"`
 	CreatedAt         time.Time  `json:"createdAt"`
@@ -52,6 +55,7 @@ func toImportRunJSON(r store.ImportRun) importRunJSON {
 		OwnerID:           r.OwnerID,
 		Folder:            r.Folder,
 		Kind:              r.Kind,
+		AlbumTrash:        r.AlbumTrash,
 		Status:            r.Status,
 		Error:             r.Error,
 		Found:             r.Found,
@@ -64,6 +68,8 @@ func toImportRunJSON(r store.ImportRun) importRunJSON {
 		WithoutSidecar:    r.WithoutSidecar,
 		UnmatchedSidecars: r.UnmatchedSidecars,
 		Edited:            r.Edited,
+		Albums:            r.Albums,
+		Restored:          r.Restored,
 		Changing:          r.Changing,
 		Failed:            r.Failed,
 		CreatedAt:         r.CreatedAt,
@@ -95,16 +101,18 @@ func (s *server) listImportFolders(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) startImport(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		OwnerID int64  `json:"ownerId"`
-		Folder  string `json:"folder"`
-		Kind    string `json:"kind"`
+		OwnerID    int64  `json:"ownerId"`
+		Folder     string `json:"folder"`
+		Kind       string `json:"kind"`
+		AlbumTrash string `json:"albumTrash"`
 	}
 	if !readJSON(w, r, &req) {
 		return
 	}
-	run, err := s.Scan.Start(r.Context(), currentUser(r).ID, req.OwnerID, req.Folder, req.Kind)
+	run, err := s.Scan.Start(r.Context(), currentUser(r).ID, req.OwnerID, scan.Options{Folder: req.Folder, Kind: req.Kind, AlbumTrash: req.AlbumTrash})
 	switch {
-	case errors.Is(err, scan.ErrNoFolder), errors.Is(err, scan.ErrNoOwner), errors.Is(err, scan.ErrNoKind):
+	case errors.Is(err, scan.ErrNoFolder), errors.Is(err, scan.ErrNoOwner), errors.Is(err, scan.ErrNoKind),
+		errors.Is(err, scan.ErrNoAlbumTrash):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, scan.ErrRunning):
 		writeError(w, http.StatusConflict, err.Error())

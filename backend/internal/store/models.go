@@ -70,6 +70,9 @@ type ImportRun struct {
 	WithoutSidecar    int64
 	UnmatchedSidecars int64
 	Edited            int64
+	AlbumTrash        string
+	Albums            int64
+	Restored          int64
 }
 
 type ImportedMetadatum struct {

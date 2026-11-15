@@ -76,7 +76,7 @@ func (e *env) start(folder string) store.ImportRun {
 
 func (e *env) startKind(folder, kind string) store.ImportRun {
 	e.t.Helper()
-	run, err := e.service.Start(context.Background(), e.owner, e.owner, folder, kind)
+	run, err := e.service.Start(context.Background(), e.owner, e.owner, Options{Folder: folder, Kind: kind})
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -420,17 +420,17 @@ func TestStart(t *testing.T) {
 	}
 
 	for _, folder := range []string{"nope", "folder/a.jpg", "..", "../..", "folder/../..", "link"} {
-		if _, err := e.service.Start(ctx, e.owner, e.owner, folder, KindFolder); !errors.Is(err, ErrNoFolder) {
+		if _, err := e.service.Start(ctx, e.owner, e.owner, Options{Folder: folder}); !errors.Is(err, ErrNoFolder) {
 			t.Errorf("folder %q: error = %v", folder, err)
 		}
 	}
-	if _, err := e.service.Start(ctx, e.owner, 9999, "", KindFolder); !errors.Is(err, ErrNoOwner) {
+	if _, err := e.service.Start(ctx, e.owner, 9999, Options{}); !errors.Is(err, ErrNoOwner) {
 		t.Errorf("unknown owner: error = %v", err)
 	}
 	if err := e.queries.SetUserDisabled(ctx, store.SetUserDisabledParams{ID: e.owner, Disabled: true}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.service.Start(ctx, e.owner, e.owner, "", KindFolder); !errors.Is(err, ErrNoOwner) {
+	if _, err := e.service.Start(ctx, e.owner, e.owner, Options{}); !errors.Is(err, ErrNoOwner) {
 		t.Errorf("disabled owner: error = %v", err)
 	}
 	if err := e.queries.SetUserDisabled(ctx, store.SetUserDisabledParams{ID: e.owner, Disabled: false}); err != nil {
@@ -438,7 +438,7 @@ func TestStart(t *testing.T) {
 	}
 
 	run := e.start("folder")
-	if _, err := e.service.Start(ctx, e.owner, e.owner, "", KindFolder); !errors.Is(err, ErrRunning) {
+	if _, err := e.service.Start(ctx, e.owner, e.owner, Options{}); !errors.Is(err, ErrRunning) {
 		t.Errorf("second scan: error = %v", err)
 	}
 	e.finish(run.ID)

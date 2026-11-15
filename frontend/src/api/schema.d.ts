@@ -1267,6 +1267,17 @@ export interface components {
              * @description Edited copies a Takeout scan matched to their originals
              */
             edited: number;
+            albumTrash: components["schemas"]["ImportAlbumTrash"];
+            /**
+             * Format: int64
+             * @description Albums a Takeout scan filled, created or found by their titles
+             */
+            albums: number;
+            /**
+             * Format: int64
+             * @description Photos of albums a Takeout scan took out of the trash
+             */
+            restored: number;
             /**
              * Format: int64
              * @description Files that changed during the scan, probably still being copied
@@ -1287,6 +1298,11 @@ export interface components {
          * @enum {string}
          */
         ImportKind: "folder" | "takeout";
+        /**
+         * @description What a Takeout scan does with a photo of an album that is in the owner's trash, leave it out of the album, add it, or add it and restore it. The default is skip
+         * @enum {string}
+         */
+        ImportAlbumTrash: "skip" | "add" | "restore";
         ImportProblem: {
             path: string;
             /** @enum {string} */
@@ -3165,6 +3181,7 @@ export interface operations {
                     /** @description A folder inside the import folder. Empty means all of it */
                     folder: string;
                     kind?: components["schemas"]["ImportKind"];
+                    albumTrash?: components["schemas"]["ImportAlbumTrash"];
                 };
             };
         };

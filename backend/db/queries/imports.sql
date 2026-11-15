@@ -1,6 +1,6 @@
 -- name: CreateImportRun :one
-INSERT INTO import_runs (owner_id, started_by, folder, kind)
-VALUES (@owner_id, @started_by, @folder, @kind)
+INSERT INTO import_runs (owner_id, started_by, folder, kind, album_trash)
+VALUES (@owner_id, @started_by, @folder, @kind, @album_trash)
 RETURNING *;
 
 -- name: GetImportRun :one
@@ -148,7 +148,8 @@ WHERE e.run_id = @run_id AND e.export = m.export AND e.path = m.path;
 -- name: FinishMatching :exec
 UPDATE import_runs
 SET status = 'finished', finished_at = now(),
-    without_sidecar = @without_sidecar, unmatched_sidecars = @unmatched_sidecars, edited = @edited
+    without_sidecar = @without_sidecar, unmatched_sidecars = @unmatched_sidecars, edited = @edited,
+    albums = @albums
 WHERE id = @id AND status = 'matching';
 
 -- Keeps the JSON of each photo of a run, from the newest export that has it.
@@ -187,3 +188,41 @@ WHERE excluded.export_time >= imported_metadata.export_time;
 
 -- name: ListImportedPhotosOfRun :many
 SELECT photo_id FROM imported_metadata WHERE run_id = @run_id ORDER BY photo_id;
+
+-- The JSON files that may describe albums: those of no photo, with a title
+-- that is a string. The matching keeps the ones right under the product folder.
+-- name: ListTakeoutAlbumFiles :many
+SELECT export, path, (sidecar ->> 'title')::text AS title
+FROM takeout_entries
+WHERE run_id = @run_id AND outcome = 'sidecar'
+  AND (sidecar -> 'photoTakenTime') IS NULL
+  AND jsonb_typeof(sidecar -> 'title') = 'string'
+ORDER BY export, path;
+
+-- The owner's album with this name, the oldest if there are several.
+-- name: FindAlbumByName :one
+SELECT id FROM albums WHERE owner_id = @owner_id AND name = @name ORDER BY id LIMIT 1;
+
+-- The photos of the owner in the folders of a run's albums, files right in the
+-- folder only. Purged photos stay out; trashed tells those in the trash.
+-- name: ListTakeoutAlbumPhotos :many
+SELECT DISTINCT f.album_id::bigint AS album_id, p.id AS photo_id,
+       (p.deleted_at IS NOT NULL)::boolean AS trashed, (p.live_photo_id IS NULL)::boolean AS shown
+FROM (
+    SELECT unnest(@exports::text[]) AS export, unnest(@folders::text[]) AS folder, unnest(@album_ids::bigint[]) AS album_id
+) f
+JOIN takeout_entries e ON e.run_id = @run_id AND e.export = f.export
+    AND starts_with(e.path, f.folder) AND strpos(substr(e.path, length(f.folder) + 1), '/') = 0
+JOIN photos p ON p.id = e.photo_id
+WHERE e.outcome IN ('added', 'duplicate', 'in_trash')
+  AND p.owner_id = @owner_id
+  AND p.purged_at IS NULL
+ORDER BY 1, 2;
+
+-- name: AddPhotosToAlbums :exec
+INSERT INTO album_photos (album_id, photo_id)
+SELECT unnest(@album_ids::bigint[]), unnest(@photo_ids::bigint[])
+ON CONFLICT DO NOTHING;
+
+-- name: CountRestoredPhotos :exec
+UPDATE import_runs SET restored = restored + @restored WHERE id = @id;

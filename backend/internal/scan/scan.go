@@ -47,6 +47,12 @@ const (
 	// exports in it.
 	KindFolder  = "folder"
 	KindTakeout = "takeout"
+
+	// What a Takeout scan does with a photo of an album that is in the owner's
+	// trash: leaves it out of the album, adds it, or adds it and restores it.
+	AlbumTrashSkip    = "skip"
+	AlbumTrashAdd     = "add"
+	AlbumTrashRestore = "restore"
 )
 
 var (
@@ -58,6 +64,9 @@ var (
 	ErrNoOwner = errors.New("no such active user")
 	// ErrNoKind means the kind of scan is not KindFolder or KindTakeout.
 	ErrNoKind = errors.New("no such kind of scan")
+	// ErrNoAlbumTrash means the choice for photos of albums in the trash is not
+	// one of the AlbumTrash values.
+	ErrNoAlbumTrash = errors.New("no such choice for photos of albums in the trash")
 )
 
 // Service starts and runs folder scans.
@@ -92,14 +101,28 @@ func (s *Service) queries() *store.Queries {
 	return store.New(s.Ingest.Pool)
 }
 
-// Start creates a run and queues its job in one transaction. An empty kind
-// means KindFolder.
-func (s *Service) Start(ctx context.Context, startedBy, ownerID int64, folder, kind string) (store.ImportRun, error) {
-	kind = cmp.Or(kind, KindFolder)
+// Options say what a scan reads and how.
+type Options struct {
+	// Folder is relative to the import root; empty means the root itself.
+	Folder string
+	// Kind is KindFolder or KindTakeout; empty means KindFolder.
+	Kind string
+	// AlbumTrash is one of the AlbumTrash values; empty means AlbumTrashSkip.
+	// Only a Takeout scan makes albums.
+	AlbumTrash string
+}
+
+// Start creates a run and queues its job in one transaction.
+func (s *Service) Start(ctx context.Context, startedBy, ownerID int64, opts Options) (store.ImportRun, error) {
+	kind := cmp.Or(opts.Kind, KindFolder)
 	if kind != KindFolder && kind != KindTakeout {
 		return store.ImportRun{}, ErrNoKind
 	}
-	folder = strings.Trim(folder, "/")
+	albumTrash := cmp.Or(opts.AlbumTrash, AlbumTrashSkip)
+	if albumTrash != AlbumTrashSkip && albumTrash != AlbumTrashAdd && albumTrash != AlbumTrashRestore {
+		return store.ImportRun{}, ErrNoAlbumTrash
+	}
+	folder := strings.Trim(opts.Folder, "/")
 	if err := s.checkFolder(folder); err != nil {
 		return store.ImportRun{}, err
 	}
@@ -117,7 +140,7 @@ func (s *Service) Start(ctx context.Context, startedBy, ownerID int64, folder, k
 	}
 	defer tx.Rollback(ctx)
 
-	run, err := store.New(tx).CreateImportRun(ctx, store.CreateImportRunParams{OwnerID: ownerID, StartedBy: startedBy, Folder: folder, Kind: kind})
+	run, err := store.New(tx).CreateImportRun(ctx, store.CreateImportRunParams{OwnerID: ownerID, StartedBy: startedBy, Folder: folder, Kind: kind, AlbumTrash: albumTrash})
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
 		return store.ImportRun{}, ErrRunning

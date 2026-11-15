@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
 
-import { api, type ImportKind, type ImportProblem, type ImportRun } from '../api/client'
+import { api, type ImportAlbumTrash, type ImportKind, type ImportProblem, type ImportRun } from '../api/client'
 import AppAutocomplete from '../components/AppAutocomplete.vue'
 import { formatDateTime, t } from '../i18n'
 import { apiError } from '../i18n/apiErrors'
@@ -19,6 +19,7 @@ const folders = shallowRef<string[]>([])
 const owner = ref<number | null>(null)
 const folder = ref('')
 const kind = ref<ImportKind>('folder')
+const albumTrash = ref<ImportAlbumTrash>('skip')
 const error = ref('')
 
 const detailsOf = shallowRef<ImportRun | null>(null)
@@ -32,6 +33,12 @@ const folderItems = computed(() => [
 const kindItems = computed(() => [
   { title: t('import.kinds.folder'), value: 'folder' },
   { title: t('import.kinds.takeout'), value: 'takeout' },
+])
+
+const albumTrashItems = computed(() => [
+  { title: t('import.albumTrashes.skip'), value: 'skip' },
+  { title: t('import.albumTrashes.add'), value: 'add' },
+  { title: t('import.albumTrashes.restore'), value: 'restore' },
 ])
 
 const running = computed(() => runs.value.some(isActive))
@@ -74,7 +81,14 @@ function showsProgress(run: ImportRun) {
 }
 
 async function start() {
-  const { error: failure } = await api.POST('/imports', { body: { ownerId: owner.value!, folder: folder.value, kind: kind.value } })
+  const { error: failure } = await api.POST('/imports', {
+    body: {
+      ownerId: owner.value!,
+      folder: folder.value,
+      kind: kind.value,
+      ...(kind.value === 'takeout' ? { albumTrash: albumTrash.value } : {}),
+    },
+  })
   error.value = failure ? apiError(failure) : ''
   await load()
 }
@@ -112,6 +126,9 @@ async function openDetails(run: ImportRun) {
         </AppFormGroup>
         <AppFormGroup v-slot="field" :label="t('import.kind')" required class="field mb-0">
           <v-select v-bind="field" v-model="kind" variant="outlined" :items="kindItems" data-testid="import-kind" />
+        </AppFormGroup>
+        <AppFormGroup v-if="kind === 'takeout'" v-slot="field" :label="t('import.albumTrash')" required class="field mb-0">
+          <v-select v-bind="field" v-model="albumTrash" variant="outlined" :items="albumTrashItems" />
         </AppFormGroup>
         <v-btn type="submit" color="primary" :text="t('import.start')" :disabled="owner === null || running" />
       </v-form>
@@ -157,6 +174,10 @@ async function openDetails(run: ImportRun) {
                 {{ run.sidecars }}
                 <div v-if="run.status === 'finished'" class="text-medium-emphasis" data-testid="matching">
                   {{ t('import.matching', { edited: run.edited, withoutSidecar: run.withoutSidecar, unmatched: run.unmatchedSidecars }) }}
+                  <div v-if="run.albums > 0" data-testid="albums">
+                    {{ t('import.albums', { n: run.albums }, run.albums) }}<template v-if="run.restored > 0">,
+                      {{ t('import.restored', { n: run.restored }, run.restored) }}</template>
+                  </div>
                 </div>
               </template>
             </td>
