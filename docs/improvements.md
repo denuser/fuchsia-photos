@@ -1,6 +1,6 @@
 # Improvements
 
-The current list of improvements, in order of priority. All of them are done except 6, 8 and 9, which are planned. Stages 0 to 6 of the [roadmap](roadmap.md) are done too.
+The current list of improvements, in order of priority. All of them are done except 6, 8, 9 and 10, which are planned. Stages 0 to 6 of the [roadmap](roadmap.md) are done too.
 
 ## 1. Administration page
 
@@ -124,3 +124,36 @@ Motion photos play for Google's formats (Motion Photo and the older MicroVideo, 
 
 1. **OPPO, OnePlus and realme.** Descriptions of the format say it is a Google Motion Photo with OPPO's own XMP fields (`OLivePhotoVersion`, `MotionPhotoOwner`), so `MotionPhotoVideo` should already find the video. No real file has confirmed it. Get an original from a phone with Live Photo on, sent as a file rather than as a photo in a messenger, which drops the video, and check it with `exiftool -b -MotionPhotoVideo` and `ffprobe`. If no phone is at hand, a file from an OPPO converter checks the parsing but not what a phone writes. Scanning Wikimedia Commons originals in bulk does not work: upload.wikimedia.org answers 429 even at one request a second.
 2. **Huawei and Honor photos processed before 2026-11-12.** Their stored tags do not tell a moving picture apart, so `backfill_motion` does not find them. It could read the end of the file of every Huawei and Honor photo by `Make`, once rather than daily, for example with a mark that the check was done.
+
+## 10. Import from Google Takeout and iCloud
+
+**Status:** planned, not started. Google Takeout comes first, iCloud after it.
+
+People leaving Google Photos or iCloud take their library with them as an export. The files are there, but part of what the service knew about them is not in the files: dates and locations of photos without EXIF, places the owner corrected, descriptions, favorites, the archive and albums. An import reads these next to the files.
+
+Settled with the user on 2026-11-15:
+
+- Both services are imported from their exports only. Google removed reading a whole library from the Photos Library API on 2025-03-31, so a token gives nothing to import. iCloud Photos has no public API, and the private web API of icloud.com, which icloudpd uses, needs the Apple ID session to be renewed with a 2FA code every two months, does not work with Advanced Data Protection and breaks when Apple changes the login. icloudpd is not used, neither inside the application nor next to it.
+- An import is a kind of folder scan, run by an administrator for an owner in the same scan root. It reads an unpacked export, `.zip` parts and `.tgz` parts, so the parts do not need unpacking by hand.
+- Metadata from the export fills what the file lacks or got wrong. An EXIF date with an offset stays. A date without an offset, or no date, gives way to `photoTakenTime` from the JSON: the application reads a date without an offset as UTC and the interface shows dates in the browser's time zone, so such photos already appear shifted by it (by 3 hours in Moscow), while the Takeout time is the real moment, with the time zone and the owner's corrections that Google applied. A location from `geoData` that differs from `geoDataExif` is a correction made in Google Photos and takes the place of the EXIF location. The shift of dates without an offset outside imports is a problem of its own, not solved here.
+- An edited copy (`IMG_1-edited.jpg`, or the word in the language of the account) is linked to its original as a version of it, the way a Live Photo video is linked to its photo. Both use one link, "hidden under", with the kind of link in a field of its own, in place of `live_photo_id`, so that the lists keep one condition; pairs of RAW and JPEG could use it later. Until the versions step, edited copies are imported as photos of their own, and the import remembers each pair, so that a job links the pairs already imported with no new import. The grid and the viewer show the edited copy, as Google Photos did, with a switch to the original in the viewer. The date, location and favorite come from the original's JSON. The hidden version follows the shown one into the trash, albums and shares.
+- Photos that other people added to a shared album are imported for the owner of the import, so that the album is whole.
+- Descriptions, favorites and the archive are imported, and each becomes a feature of the application:
+  - A description is shown in the viewer's details and its owner can edit it there. Searching by description comes later.
+  - A favorite is each user's own mark, on any photo they can see. Others do not see it.
+  - The archive is each user's own too: an archived photo leaves that user's timeline and stays in albums, search and an "Archive" page.
+
+Plan for Google Takeout:
+
+0. **A real export first.** The naming rules below come from reports by other projects, and Google has changed them before. Before the matcher is written, the user makes a small Takeout of one or two albums with an edited photo, a screenshot and an iPhone Live Photo in them, and `testdata` is built from its real names. It answers three questions: whether an edited copy has no JSON of its own and shares the original's, which would find it by "no JSON, same folder and extension, the original's name and a suffix" with no list of words in each language; whether the photo and the video of a Live Photo still share `ContentIdentifier` after Google, as pairing by name is ruled out in the [architecture](architecture.md#decisions); and what the year folders and `metadata.json` of albums look like.
+1. **Archives and resuming.** The scan job lists the export's parts and reads them in order. A file is streamed into ingest as it is read, so a `.tgz` part needs no random access. Every JSON file is kept in the import's tables with its path, and every photo with the path it came from. After a restart a `.zip` part continues from the next entry, and a `.tgz` part is read again from its start, skipping the entries done.
+2. **Matching.** Once every part is read, a step matches each JSON to its file. The name of the JSON varies: `IMG_1.jpg.supplemental-metadata.json`, the suffix cut short (`.supplemental.json`, `.supplementa.json` and so on) when the name is long, file names themselves cut at 47 characters, and a `(1)` for repeated names in more than one place in the name. Edited copies are matched to their originals in the same folder. The import report counts files without JSON and JSON without files.
+3. **Metadata.** A table of metadata from imports, which keeps the whole matched JSON of each photo, read together with EXIF where the date and location are worked out (`metadata.Details` and `takenAt`), by the rules above. A photo already in the library, matched by its hash, gets the metadata too. Keeping the JSON lets the later steps fill descriptions, favorites, the archive and versions by a job, as `backfill_motion` does, after the export is deleted.
+4. **Albums.** A folder with a `metadata.json` of an album becomes an album with that title. Year folders such as "Photos from 2019", whose name depends on the language of the account, have no such file and are not albums. A file in both places is stored once and added to the album.
+5. **Versions.** A link from the original to the edited copy, the lists and counts that leave the hidden version out, the trash, albums and shares that move both, and the switch in the viewer.
+6. **Descriptions, favorites, archive.** Schema, API and interface for each, filled from `description`, `favorited` and `archived` in the JSON. Items in the trash of Google Photos, if an export has them, go to the trash.
+7. **Tests.** A small Takeout export in `testdata`, made from the real names of step 0, with cut names, repeated names, an edited copy, an album, a photo in two parts and a restart in the middle of a `.tgz`, read as a folder, a `.zip` and a `.tgz`. Then a whole real export, recording here what it showed.
+
+Steps 0 to 4 make a working import, released on their own. Versions come next, and descriptions, favorites and the archive each as a change of its own.
+
+iCloud later: the parts of a copy from privacy.apple.com hold the files, `Photo Details.csv` (`imgName`, `fileChecksum`, `favorite`, `hidden`, `deleted`, `originalCreationDate`, `importDate`) and `Albums/*.csv`. Rows are matched to files by name, and by `fileChecksum` when a name repeats in a part. Live Photos are paired by `ContentIdentifier` as they are now.

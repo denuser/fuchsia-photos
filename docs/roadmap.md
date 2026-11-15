@@ -78,7 +78,7 @@ Decisions are in the [architecture](architecture.md).
 
 Features people tend to expect before moving their photos to a new library. None is planned in detail or ordered yet.
 
-- **Import from Google Takeout and iCloud.** Both exports keep dates, descriptions and locations in JSON sidecars or CSV files rather than in the photos, and leaving these services is a common reason to look for a self-hosted library.
+- **Import from Google Takeout and iCloud.** Planned as [improvement 10](improvements.md#10-import-from-google-takeout-and-icloud).
 - **Map.** Photos on a map by their GPS locations, next to the place names in the viewer from [improvement 8](improvements.md#8-place-names-in-the-viewer).
 - **Duplicates.** Near-duplicates and bursts, from the stage 7 embedding.
 - **Faces.** A model of their own, processed at home only, as face vectors are biometric data.
