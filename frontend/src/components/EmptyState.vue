@@ -22,7 +22,9 @@ defineProps<{ icon: string; title: string; text?: string; danger?: boolean }>()
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  /* Fills the rest of a flex column, such as a page under its header, rather
+     than taking its whole height and sliding below the fold. */
+  flex: 1 0 auto;
   padding: 32px;
   text-align: center;
 }

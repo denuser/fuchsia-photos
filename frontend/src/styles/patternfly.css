@@ -178,6 +178,25 @@
     padding: 0 24px 24px;
   }
 
+  /* An empty state fills the rest of the page under the header, so its text
+     is centred in the free space (EmptyState grows in a flex column). */
+  .page:has(> .empty-state, > .page-section > .empty-state) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .page:has(> .page-section > .empty-state) > .page-section {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+  }
+
+  /* Vuetify lets an alert grow in a flex column. */
+  .page > .v-alert,
+  .page > .page-section > .v-alert {
+    flex: none;
+  }
+
   @media (max-width: 599.98px) {
     .page-section {
       padding: 0 16px 16px;

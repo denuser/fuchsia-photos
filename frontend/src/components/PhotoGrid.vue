@@ -3,9 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { isVideo, previewUrl, type Photo } from '../api/client'
 import { formatDuration } from '../lib/duration'
-import { useGridEdge } from '../lib/gridEdge'
 import { visibleRows } from '../lib/justify'
-import { layoutTimeline, monthTitle, rowHeight, visibleSections, type SectionLayout } from '../lib/timeline'
+import { layoutTimeline, monthTitle, rowHeight, squareSide, visibleSections, type SectionLayout } from '../lib/timeline'
 import { useAuthStore } from '../stores/auth'
 import type { Section } from '../stores/photos'
 import TimelineScrubber from './TimelineScrubber.vue'
@@ -31,14 +30,11 @@ const scroller = ref<HTMLElement>()
 const width = ref(0)
 const viewportHeight = ref(0)
 const scrollTop = ref(0)
-const pixelRatio = ref(window.devicePixelRatio || 1)
 
 const auth = useAuthStore()
-const gridEdge = useGridEdge()
 
-// Square tiles show a grid preview at its own resolution: as many CSS pixels
-// as the preview has pixels on this screen.
-const square = computed(() => (auth.user?.gridSquares ? gridEdge.value / pixelRatio.value : null))
+// Square tiles have the same size in CSS pixels on any screen density.
+const square = computed(() => (auth.user?.gridSquares ? squareSide(width.value - PADDING * 2) : null))
 
 const layout = computed(() => layoutTimeline(props.sections, width.value - PADDING * 2, props.byMonth, square.value))
 const canvasHeight = computed(() => layout.value.height + PADDING * 2)
@@ -210,8 +206,6 @@ function seek(top: number) {
 const resizeObserver = new ResizeObserver(([entry]) => {
   width.value = entry!.contentRect.width
   viewportHeight.value = entry!.contentRect.height
-  // Zooming the page changes the ratio and resizes the grid.
-  pixelRatio.value = window.devicePixelRatio || 1
 })
 
 onMounted(() => resizeObserver.observe(scroller.value!))

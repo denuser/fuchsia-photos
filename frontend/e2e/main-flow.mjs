@@ -510,16 +510,15 @@ const steps = {
       await page.setViewportSize({ width: 1280, height: 800 })
     }
   },
-  'square previews from the profile take the grid preview size': async () => {
+  'square previews from the profile are about 200 pixels on any screen': async () => {
     await page.goto(`${BASE}/profile`)
     await expectRequest('/me', () => page.getByLabel('Show square previews').click())
     await page.goto(BASE)
     await previews(3)
-    // The administrator set the grid preview size to 300 pixels.
-    await waitFor('square tiles no larger than the preview', () => {
+    // A wide grid aims at 200 CSS pixels and fits a whole number of squares in a row.
+    await waitFor('square tiles of about 200 pixels', () => {
       const boxes = [...document.querySelectorAll('[data-testid=tile]')].map((t) => t.getBoundingClientRect())
-      const side = 300 / window.devicePixelRatio
-      return boxes.length > 0 && boxes.every((b) => Math.abs(b.width - b.height) < 1 && b.width <= side && b.width > side / 2)
+      return boxes.length > 0 && boxes.every((b) => Math.abs(b.width - b.height) < 1 && b.width > 150 && b.width < 250)
     })
   },
   'the profile switches the interface to Russian, kept after a reload, and back': async () => {

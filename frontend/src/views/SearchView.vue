@@ -90,7 +90,7 @@ function clear() {
           type="info"
           variant="tonal"
           density="compact"
-          class="mx-4 mx-sm-6 mb-2"
+          class="unavailable mx-4 mx-sm-6 mb-2"
           :title="t('search.unavailableAlert')"
         />
       </template>
@@ -143,5 +143,10 @@ function clear() {
 
 .search-bar {
   max-width: 720px;
+}
+
+/* Vuetify lets an alert grow in a flex column; this one keeps its height. */
+.unavailable {
+  flex: none;
 }
 </style>

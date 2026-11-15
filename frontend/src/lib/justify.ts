@@ -60,14 +60,15 @@ export function justify(items: JustifyItem[], width: number, targetHeight: numbe
   return { rows, height: Math.max(0, y - gap) }
 }
 
-// The number of squares in a row: as many as it takes to fill the width
-// without any being larger than side.
+// The number of squares in a row: the whole number that brings them closest
+// to side when they fill the width.
 export function squareColumns(width: number, side: number, gap: number) {
-  return Math.max(1, Math.ceil((width + gap) / (side + gap)))
+  return Math.max(1, Math.round((width + gap) / (side + gap)))
 }
 
 // Lays count items out as squares in rows that fill the width. The squares are
-// side wide, or a little narrower so that a whole number of them fills a row.
+// about side wide, a little wider or narrower so that a whole number of them
+// fills a row.
 export function squares(count: number, width: number, side: number, gap: number): Layout {
   const rows: Row[] = []
   if (width <= 0) {

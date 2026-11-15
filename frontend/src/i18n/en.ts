@@ -267,6 +267,7 @@ export default {
   },
   allPhotos: {
     description: 'The photos of every user, for administrators.',
+    count: '{n} photo shown. | {n} photos shown.',
     anyOwner: 'Any owner',
     owner: 'Owner',
     none: 'No photos',
@@ -281,7 +282,7 @@ export default {
     saveFailed: 'The setting could not be saved',
     grid: 'Photo grid',
     squares: 'Show square previews',
-    squaresHint: 'All previews are the same size, cropped to a square. The size follows the grid preview size an administrator sets.',
+    squaresHint: 'All previews are the same size, cropped to a square.',
     viewer: 'Viewer',
     originals: 'Load originals when zooming in',
     originalsHint:

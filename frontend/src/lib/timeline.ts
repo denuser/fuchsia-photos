@@ -5,6 +5,17 @@ import { justify, squareColumns, squares, type Row } from './justify'
 
 export const TARGET_HEIGHT = 200
 export const GAP = 4
+// Square tiles are about as large as the rows of photos that keep their shape,
+// on any screen density; a grid narrower than a tablet gets smaller ones, so
+// that a phone shows three in a row.
+const SQUARE_SIDE = TARGET_HEIGHT
+const NARROW_SQUARE_SIDE = 130
+const NARROW_WIDTH = 600
+
+// The side a square tile aims at for a grid this wide, in CSS pixels.
+export function squareSide(width: number) {
+  return width < NARROW_WIDTH ? NARROW_SQUARE_SIDE : SQUARE_SIDE
+}
 // The month title above the photos of a month.
 export const HEADER_HEIGHT = 48
 // The row that shows a list loading its next page, or failing to.

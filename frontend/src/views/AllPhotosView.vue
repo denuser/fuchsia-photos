@@ -21,6 +21,17 @@ const owner = computed(() => {
   return Number.isInteger(id) && id > 0 ? id : undefined
 })
 
+// The months carry their counts, so the total of the chosen owner, or of
+// everyone, is known before the photos load.
+const description = computed(() => {
+  const text = t('allPhotos.description')
+  if (!photos.loadedOnce || photos.failedToOpen) {
+    return text
+  }
+  const total = photos.sections.reduce((sum, s) => sum + s.count, 0)
+  return `${text} ${t('allPhotos.count', total)}`
+})
+
 function open() {
   void photos.open({ everyone: true, owner: owner.value })
 }
@@ -39,7 +50,7 @@ function chooseOwner(id: number | null) {
 <template>
   <PhotoBrowser mode="admin">
     <template #header>
-      <AppPageHeader :title="t('nav.all')" :description="t('allPhotos.description')" />
+      <AppPageHeader :title="t('nav.all')" :description="description" />
     </template>
     <template #toolbar>
       <div class="d-flex align-center px-4 px-sm-6 pb-2 ga-2">

@@ -283,6 +283,8 @@ defineExpose({ clearSelection, say })
 }
 
 .content {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
 }
