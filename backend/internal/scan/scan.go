@@ -41,6 +41,7 @@ const (
 
 	statusListing   = "listing"
 	statusImporting = "importing"
+	statusMatching  = "matching"
 
 	// KindFolder reads the photos of a folder; KindTakeout reads Google Takeout
 	// exports in it.
@@ -259,6 +260,9 @@ func (s *Service) step(ctx context.Context, runID int64, slice time.Duration) (w
 			return s.processTakeout(ctx, run, slice)
 		}
 		return s.process(ctx, run, slice)
+	case statusMatching:
+		more, err := s.match(ctx, run)
+		return 0, more, err
 	}
 	return 0, false, queries.DeletePendingImportFiles(ctx, runID)
 }

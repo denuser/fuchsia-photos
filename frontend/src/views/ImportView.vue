@@ -61,7 +61,7 @@ async function load() {
 }
 
 function isActive(run: ImportRun) {
-  return run.status === 'listing' || run.status === 'importing'
+  return run.status === 'listing' || run.status === 'importing' || run.status === 'matching'
 }
 
 function processed(run: ImportRun) {
@@ -152,7 +152,14 @@ async function openDetails(run: ImportRun) {
             <td class="text-right">{{ run.inTrash }}</td>
             <td class="text-right">{{ run.purged }}</td>
             <td class="text-right">{{ run.unsupported }}</td>
-            <td class="text-right">{{ run.kind === 'takeout' ? run.sidecars : '' }}</td>
+            <td class="text-right">
+              <template v-if="run.kind === 'takeout'">
+                {{ run.sidecars }}
+                <div v-if="run.status === 'finished'" class="text-medium-emphasis text-no-wrap" data-testid="matching">
+                  {{ t('import.matching', { edited: run.edited, withoutSidecar: run.withoutSidecar, unmatched: run.unmatchedSidecars }) }}
+                </div>
+              </template>
+            </td>
             <td class="text-right">{{ run.changing + run.failed }}</td>
             <td class="text-right">
               <v-btn v-if="isActive(run)" variant="text" size="small" :text="t('import.stop')" @click="stop(run)" />

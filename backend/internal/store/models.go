@@ -48,25 +48,28 @@ type ImportFile struct {
 }
 
 type ImportRun struct {
-	ID          int64
-	OwnerID     int64
-	StartedBy   int64
-	Folder      string
-	Status      string
-	Error       *string
-	Found       int64
-	Added       int64
-	Duplicates  int64
-	InTrash     int64
-	Purged      int64
-	Unsupported int64
-	Changing    int64
-	Failed      int64
-	SettleAt    *time.Time
-	CreatedAt   time.Time
-	FinishedAt  *time.Time
-	Kind        string
-	Sidecars    int64
+	ID                int64
+	OwnerID           int64
+	StartedBy         int64
+	Folder            string
+	Status            string
+	Error             *string
+	Found             int64
+	Added             int64
+	Duplicates        int64
+	InTrash           int64
+	Purged            int64
+	Unsupported       int64
+	Changing          int64
+	Failed            int64
+	SettleAt          *time.Time
+	CreatedAt         time.Time
+	FinishedAt        *time.Time
+	Kind              string
+	Sidecars          int64
+	WithoutSidecar    int64
+	UnmatchedSidecars int64
+	Edited            int64
 }
 
 type MetadataSetting struct {
@@ -155,14 +158,16 @@ type Tag struct {
 }
 
 type TakeoutEntry struct {
-	RunID   int64
-	Export  string
-	Path    string
-	Source  string
-	Outcome string
-	PhotoID *int64
-	Sidecar []byte
-	Error   *string
+	RunID        int64
+	Export       string
+	Path         string
+	Source       string
+	Outcome      string
+	PhotoID      *int64
+	Sidecar      []byte
+	Error        *string
+	SidecarPath  *string
+	OriginalPath *string
 }
 
 type User struct {

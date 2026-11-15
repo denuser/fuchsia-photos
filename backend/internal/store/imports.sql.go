@@ -109,7 +109,7 @@ func (q *Queries) AddTakeoutEntry(ctx context.Context, arg AddTakeoutEntryParams
 const createImportRun = `-- name: CreateImportRun :one
 INSERT INTO import_runs (owner_id, started_by, folder, kind)
 VALUES ($1, $2, $3, $4)
-RETURNING id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars
+RETURNING id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited
 `
 
 type CreateImportRunParams struct {
@@ -147,6 +147,9 @@ func (q *Queries) CreateImportRun(ctx context.Context, arg CreateImportRunParams
 		&i.FinishedAt,
 		&i.Kind,
 		&i.Sidecars,
+		&i.WithoutSidecar,
+		&i.UnmatchedSidecars,
+		&i.Edited,
 	)
 	return i, err
 }
@@ -163,7 +166,7 @@ func (q *Queries) DeletePendingImportFiles(ctx context.Context, runID int64) err
 const failImportRun = `-- name: FailImportRun :exec
 UPDATE import_runs
 SET status = 'failed', error = $1, finished_at = now()
-WHERE id = $2 AND status IN ('listing', 'importing')
+WHERE id = $2 AND status IN ('listing', 'importing', 'matching')
 `
 
 type FailImportRunParams struct {
@@ -225,8 +228,32 @@ func (q *Queries) FinishImportRun(ctx context.Context, id int64) error {
 	return err
 }
 
+const finishMatching = `-- name: FinishMatching :exec
+UPDATE import_runs
+SET status = 'finished', finished_at = now(),
+    without_sidecar = $1, unmatched_sidecars = $2, edited = $3
+WHERE id = $4 AND status = 'matching'
+`
+
+type FinishMatchingParams struct {
+	WithoutSidecar    int64
+	UnmatchedSidecars int64
+	Edited            int64
+	ID                int64
+}
+
+func (q *Queries) FinishMatching(ctx context.Context, arg FinishMatchingParams) error {
+	_, err := q.db.Exec(ctx, finishMatching,
+		arg.WithoutSidecar,
+		arg.UnmatchedSidecars,
+		arg.Edited,
+		arg.ID,
+	)
+	return err
+}
+
 const getImportRun = `-- name: GetImportRun :one
-SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars FROM import_runs WHERE id = $1
+SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited FROM import_runs WHERE id = $1
 `
 
 func (q *Queries) GetImportRun(ctx context.Context, id int64) (ImportRun, error) {
@@ -252,6 +279,9 @@ func (q *Queries) GetImportRun(ctx context.Context, id int64) (ImportRun, error)
 		&i.FinishedAt,
 		&i.Kind,
 		&i.Sidecars,
+		&i.WithoutSidecar,
+		&i.UnmatchedSidecars,
+		&i.Edited,
 	)
 	return i, err
 }
@@ -304,7 +334,7 @@ func (q *Queries) ListImportProblems(ctx context.Context, arg ListImportProblems
 }
 
 const listImportRuns = `-- name: ListImportRuns :many
-SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars FROM import_runs ORDER BY id DESC LIMIT $1
+SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited FROM import_runs ORDER BY id DESC LIMIT $1
 `
 
 func (q *Queries) ListImportRuns(ctx context.Context, maxRows int32) ([]ImportRun, error) {
@@ -336,6 +366,9 @@ func (q *Queries) ListImportRuns(ctx context.Context, maxRows int32) ([]ImportRu
 			&i.FinishedAt,
 			&i.Kind,
 			&i.Sidecars,
+			&i.WithoutSidecar,
+			&i.UnmatchedSidecars,
+			&i.Edited,
 		); err != nil {
 			return nil, err
 		}
@@ -376,6 +409,48 @@ func (q *Queries) ListPendingImportFiles(ctx context.Context, arg ListPendingImp
 	for rows.Next() {
 		var i ListPendingImportFilesRow
 		if err := rows.Scan(&i.Path, &i.Size, &i.Mtime); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTakeoutEntriesForMatching = `-- name: ListTakeoutEntriesForMatching :many
+SELECT export, path, outcome, coalesce(sidecar ->> 'title', '')::text AS title, ((sidecar -> 'photoTakenTime') IS NOT NULL)::boolean AS photo
+FROM takeout_entries
+WHERE run_id = $1 AND outcome <> 'failed'
+`
+
+type ListTakeoutEntriesForMatchingRow struct {
+	Export  string
+	Path    string
+	Outcome string
+	Title   string
+	Photo   bool
+}
+
+// The entries the matching looks at. title is the file name a JSON file
+// describes, and photo tells the JSON of a photo from that of an album.
+func (q *Queries) ListTakeoutEntriesForMatching(ctx context.Context, runID int64) ([]ListTakeoutEntriesForMatchingRow, error) {
+	rows, err := q.db.Query(ctx, listTakeoutEntriesForMatching, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTakeoutEntriesForMatchingRow
+	for rows.Next() {
+		var i ListTakeoutEntriesForMatchingRow
+		if err := rows.Scan(
+			&i.Export,
+			&i.Path,
+			&i.Outcome,
+			&i.Title,
+			&i.Photo,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -464,6 +539,35 @@ func (q *Queries) ResetImportListing(ctx context.Context, id int64) error {
 	return err
 }
 
+const setTakeoutMatches = `-- name: SetTakeoutMatches :exec
+UPDATE takeout_entries e
+SET sidecar_path = NULLIF(m.sidecar_path, ''), original_path = NULLIF(m.original_path, '')
+FROM (
+    SELECT unnest($2::text[]) AS export, unnest($3::text[]) AS path,
+           unnest($4::text[]) AS sidecar_path, unnest($5::text[]) AS original_path
+) m
+WHERE e.run_id = $1 AND e.export = m.export AND e.path = m.path
+`
+
+type SetTakeoutMatchesParams struct {
+	RunID         int64
+	Exports       []string
+	Paths         []string
+	SidecarPaths  []string
+	OriginalPaths []string
+}
+
+func (q *Queries) SetTakeoutMatches(ctx context.Context, arg SetTakeoutMatchesParams) error {
+	_, err := q.db.Exec(ctx, setTakeoutMatches,
+		arg.RunID,
+		arg.Exports,
+		arg.Paths,
+		arg.SidecarPaths,
+		arg.OriginalPaths,
+	)
+	return err
+}
+
 const startImporting = `-- name: StartImporting :exec
 UPDATE import_runs SET status = 'importing', settle_at = $1 WHERE id = $2 AND status = 'listing'
 `
@@ -478,10 +582,20 @@ func (q *Queries) StartImporting(ctx context.Context, arg StartImportingParams) 
 	return err
 }
 
+const startMatching = `-- name: StartMatching :exec
+UPDATE import_runs SET status = 'matching' WHERE id = $1 AND status = 'importing'
+`
+
+// A Takeout scan matches its entries once every part is read.
+func (q *Queries) StartMatching(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, startMatching, id)
+	return err
+}
+
 const stopImportRun = `-- name: StopImportRun :execrows
 UPDATE import_runs
 SET status = 'stopped', finished_at = now()
-WHERE id = $1 AND status IN ('listing', 'importing')
+WHERE id = $1 AND status IN ('listing', 'importing', 'matching')
 `
 
 func (q *Queries) StopImportRun(ctx context.Context, id int64) (int64, error) {

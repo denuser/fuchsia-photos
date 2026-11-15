@@ -89,12 +89,12 @@ UPDATE import_runs SET status = 'finished', finished_at = now() WHERE id = @id A
 -- name: FailImportRun :exec
 UPDATE import_runs
 SET status = 'failed', error = @error, finished_at = now()
-WHERE id = @id AND status IN ('listing', 'importing');
+WHERE id = @id AND status IN ('listing', 'importing', 'matching');
 
 -- name: StopImportRun :execrows
 UPDATE import_runs
 SET status = 'stopped', finished_at = now()
-WHERE id = @id AND status IN ('listing', 'importing');
+WHERE id = @id AND status IN ('listing', 'importing', 'matching');
 
 -- A part of a Takeout export that was read to its end. Its entries are counted
 -- one by one as they are recorded.
@@ -124,3 +124,29 @@ SET found = found + (SELECT count(*) FROM added),
     sidecars = sidecars + (SELECT count(*) FROM added WHERE outcome = 'sidecar'),
     failed = failed + (SELECT count(*) FROM added WHERE outcome = 'failed')
 WHERE id = @run_id;
+
+-- A Takeout scan matches its entries once every part is read.
+-- name: StartMatching :exec
+UPDATE import_runs SET status = 'matching' WHERE id = @id AND status = 'importing';
+
+-- The entries the matching looks at. title is the file name a JSON file
+-- describes, and photo tells the JSON of a photo from that of an album.
+-- name: ListTakeoutEntriesForMatching :many
+SELECT export, path, outcome, coalesce(sidecar ->> 'title', '')::text AS title, ((sidecar -> 'photoTakenTime') IS NOT NULL)::boolean AS photo
+FROM takeout_entries
+WHERE run_id = @run_id AND outcome <> 'failed';
+
+-- name: SetTakeoutMatches :exec
+UPDATE takeout_entries e
+SET sidecar_path = NULLIF(m.sidecar_path, ''), original_path = NULLIF(m.original_path, '')
+FROM (
+    SELECT unnest(@exports::text[]) AS export, unnest(@paths::text[]) AS path,
+           unnest(@sidecar_paths::text[]) AS sidecar_path, unnest(@original_paths::text[]) AS original_path
+) m
+WHERE e.run_id = @run_id AND e.export = m.export AND e.path = m.path;
+
+-- name: FinishMatching :exec
+UPDATE import_runs
+SET status = 'finished', finished_at = now(),
+    without_sidecar = @without_sidecar, unmatched_sidecars = @unmatched_sidecars, edited = @edited
+WHERE id = @id AND status = 'matching';

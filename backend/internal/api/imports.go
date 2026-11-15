@@ -17,23 +17,27 @@ const (
 )
 
 type importRunJSON struct {
-	ID          int64      `json:"id"`
-	OwnerID     int64      `json:"ownerId"`
-	Folder      string     `json:"folder"`
-	Kind        string     `json:"kind"`
-	Status      string     `json:"status"`
-	Error       *string    `json:"error"`
-	Found       int64      `json:"found"`
-	Added       int64      `json:"added"`
-	Duplicates  int64      `json:"duplicates"`
-	InTrash     int64      `json:"inTrash"`
-	Purged      int64      `json:"purged"`
-	Unsupported int64      `json:"unsupported"`
-	Sidecars    int64      `json:"sidecars"`
-	Changing    int64      `json:"changing"`
-	Failed      int64      `json:"failed"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	FinishedAt  *time.Time `json:"finishedAt"`
+	ID          int64   `json:"id"`
+	OwnerID     int64   `json:"ownerId"`
+	Folder      string  `json:"folder"`
+	Kind        string  `json:"kind"`
+	Status      string  `json:"status"`
+	Error       *string `json:"error"`
+	Found       int64   `json:"found"`
+	Added       int64   `json:"added"`
+	Duplicates  int64   `json:"duplicates"`
+	InTrash     int64   `json:"inTrash"`
+	Purged      int64   `json:"purged"`
+	Unsupported int64   `json:"unsupported"`
+	Sidecars    int64   `json:"sidecars"`
+	// Results of matching a Takeout export.
+	WithoutSidecar    int64      `json:"withoutSidecar"`
+	UnmatchedSidecars int64      `json:"unmatchedSidecars"`
+	Edited            int64      `json:"edited"`
+	Changing          int64      `json:"changing"`
+	Failed            int64      `json:"failed"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	FinishedAt        *time.Time `json:"finishedAt"`
 }
 
 type importProblemJSON struct {
@@ -44,23 +48,26 @@ type importProblemJSON struct {
 
 func toImportRunJSON(r store.ImportRun) importRunJSON {
 	return importRunJSON{
-		ID:          r.ID,
-		OwnerID:     r.OwnerID,
-		Folder:      r.Folder,
-		Kind:        r.Kind,
-		Status:      r.Status,
-		Error:       r.Error,
-		Found:       r.Found,
-		Added:       r.Added,
-		Duplicates:  r.Duplicates,
-		InTrash:     r.InTrash,
-		Purged:      r.Purged,
-		Unsupported: r.Unsupported,
-		Sidecars:    r.Sidecars,
-		Changing:    r.Changing,
-		Failed:      r.Failed,
-		CreatedAt:   r.CreatedAt,
-		FinishedAt:  r.FinishedAt,
+		ID:                r.ID,
+		OwnerID:           r.OwnerID,
+		Folder:            r.Folder,
+		Kind:              r.Kind,
+		Status:            r.Status,
+		Error:             r.Error,
+		Found:             r.Found,
+		Added:             r.Added,
+		Duplicates:        r.Duplicates,
+		InTrash:           r.InTrash,
+		Purged:            r.Purged,
+		Unsupported:       r.Unsupported,
+		Sidecars:          r.Sidecars,
+		WithoutSidecar:    r.WithoutSidecar,
+		UnmatchedSidecars: r.UnmatchedSidecars,
+		Edited:            r.Edited,
+		Changing:          r.Changing,
+		Failed:            r.Failed,
+		CreatedAt:         r.CreatedAt,
+		FinishedAt:        r.FinishedAt,
 	}
 }
 

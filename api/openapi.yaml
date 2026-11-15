@@ -1768,7 +1768,7 @@ components:
           description: Longest side of a viewer preview, in pixels
     ImportRun:
       type: object
-      required: [id, ownerId, folder, kind, status, error, found, added, duplicates, inTrash, purged, unsupported, sidecars, changing, failed, createdAt, finishedAt]
+      required: [id, ownerId, folder, kind, status, error, found, added, duplicates, inTrash, purged, unsupported, sidecars, withoutSidecar, unmatchedSidecars, edited, changing, failed, createdAt, finishedAt]
       properties:
         id:
           type: integer
@@ -1782,7 +1782,8 @@ components:
           $ref: "#/components/schemas/ImportKind"
         status:
           type: string
-          enum: [listing, importing, finished, stopped, failed]
+          description: A Takeout scan matches JSON files to photos after it has read every part
+          enum: [listing, importing, matching, finished, stopped, failed]
         error:
           type: [string, "null"]
         found:
@@ -1811,6 +1812,18 @@ components:
           format: int64
         sidecars:
           description: JSON files a Takeout scan kept, which describe photos
+          type: integer
+          format: int64
+        withoutSidecar:
+          description: Files of a Takeout scan with neither a JSON file nor an original they are an edited copy of
+          type: integer
+          format: int64
+        unmatchedSidecars:
+          description: JSON files of photos that a Takeout scan matched to no file
+          type: integer
+          format: int64
+        edited:
+          description: Edited copies a Takeout scan matched to their originals
           type: integer
           format: int64
         changing:

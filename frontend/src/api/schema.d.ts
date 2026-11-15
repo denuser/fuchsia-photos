@@ -1211,8 +1211,11 @@ export interface components {
             ownerId: number;
             folder: string;
             kind: components["schemas"]["ImportKind"];
-            /** @enum {string} */
-            status: "listing" | "importing" | "finished" | "stopped" | "failed";
+            /**
+             * @description A Takeout scan matches JSON files to photos after it has read every part
+             * @enum {string}
+             */
+            status: "listing" | "importing" | "matching" | "finished" | "stopped" | "failed";
             error: string | null;
             /**
              * Format: int64
@@ -1249,6 +1252,21 @@ export interface components {
              * @description JSON files a Takeout scan kept, which describe photos
              */
             sidecars: number;
+            /**
+             * Format: int64
+             * @description Files of a Takeout scan with neither a JSON file nor an original they are an edited copy of
+             */
+            withoutSidecar: number;
+            /**
+             * Format: int64
+             * @description JSON files of photos that a Takeout scan matched to no file
+             */
+            unmatchedSidecars: number;
+            /**
+             * Format: int64
+             * @description Edited copies a Takeout scan matched to their originals
+             */
+            edited: number;
             /**
              * Format: int64
              * @description Files that changed during the scan, probably still being copied

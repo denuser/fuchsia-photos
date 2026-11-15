@@ -135,7 +135,8 @@ func (s *Service) processTakeout(ctx context.Context, run store.ImportRun, slice
 			return 0, false, fmt.Errorf("list files: %w", err)
 		}
 		if len(files) == 0 {
-			return 0, false, queries.FinishImportRun(ctx, run.ID)
+			// Matching needs every part read, and is quick: it runs in the next step.
+			return 0, true, queries.StartMatching(ctx, run.ID)
 		}
 		for _, file := range files {
 			done, err := s.readTakeoutFile(ctx, root, run, file, deadline, slice)

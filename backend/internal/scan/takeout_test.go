@@ -45,7 +45,7 @@ func (e *env) export() []archiveFile {
 		{yearFolder + "IMG_1.jpg.supplemental-metadata.json", []byte(`{"title": "IMG_1.jpg", "photoTakenTime": {"timestamp": "1569055192"}}`)},
 		{yearFolder + "IMG_1-отредактировано.jpg", e.fixture("rotated.jpg")},
 		{albumFolder + "IMG_1.jpg", photo},
-		{albumFolder + "IMG_1.jpg.supplemental-metadata.json", []byte(`{"title": "IMG_1.jpg", "sharedAlbumComments": [{"liked": true}]}`)},
+		{albumFolder + "IMG_1.jpg.supplemental-metadata.json", []byte(`{"title": "IMG_1.jpg", "photoTakenTime": {"timestamp": "1569055192"}, "sharedAlbumComments": [{"liked": true}]}`)},
 		{albumFolder + "метаданные.json", []byte(`{"title": "Поездка"}`)},
 		{"Takeout/archive_browser.html", []byte("<html></html>")},
 	}
@@ -104,12 +104,13 @@ type takeoutEntry struct {
 	Export, Path, Source, Outcome string
 	PhotoID                       *int64
 	Sidecar                       []byte
+	SidecarPath, OriginalPath     *string
 }
 
 func (e *env) entries(runID int64) []takeoutEntry {
 	e.t.Helper()
 	rows, err := e.service.Ingest.Pool.Query(context.Background(),
-		"SELECT export, path, source, outcome, photo_id, sidecar FROM takeout_entries WHERE run_id = $1 ORDER BY export, path", runID)
+		"SELECT export, path, source, outcome, photo_id, sidecar, sidecar_path, original_path FROM takeout_entries WHERE run_id = $1 ORDER BY export, path", runID)
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -117,7 +118,7 @@ func (e *env) entries(runID int64) []takeoutEntry {
 	var out []takeoutEntry
 	for rows.Next() {
 		var en takeoutEntry
-		if err := rows.Scan(&en.Export, &en.Path, &en.Source, &en.Outcome, &en.PhotoID, &en.Sidecar); err != nil {
+		if err := rows.Scan(&en.Export, &en.Path, &en.Source, &en.Outcome, &en.PhotoID, &en.Sidecar, &en.SidecarPath, &en.OriginalPath); err != nil {
 			e.t.Fatal(err)
 		}
 		out = append(out, en)
@@ -147,6 +148,9 @@ func TestTakeoutReadsZipTgzAndFolder(t *testing.T) {
 	wantCounts(t, run, counts{found: 21, added: 2, duplicates: 7, unsupported: 3})
 	if run.Sidecars != 9 || run.Kind != KindTakeout {
 		t.Errorf("sidecars = %d, kind = %s", run.Sidecars, run.Kind)
+	}
+	if run.Edited != 3 || run.WithoutSidecar != 0 || run.UnmatchedSidecars != 0 {
+		t.Errorf("edited = %d, without sidecar = %d, unmatched sidecars = %d", run.Edited, run.WithoutSidecar, run.UnmatchedSidecars)
 	}
 	if got := e.photoCount(); got != 2 {
 		t.Errorf("photos = %d, want 2", got)
@@ -183,8 +187,16 @@ func TestTakeoutReadsZipTgzAndFolder(t *testing.T) {
 		if year.PhotoID == nil || album.PhotoID == nil || *year.PhotoID != *album.PhotoID {
 			t.Errorf("%s: the album's copy is not linked to the same photo: %v, %v", export, year.PhotoID, album.PhotoID)
 		}
-		if edited := got[yearFolder+"IMG_1-отредактировано.jpg"]; edited.PhotoID == nil || *edited.PhotoID == *year.PhotoID {
+		if year.SidecarPath == nil || *year.SidecarPath != yearFolder+"IMG_1.jpg.supplemental-metadata.json" ||
+			album.SidecarPath == nil || *album.SidecarPath != albumFolder+"IMG_1.jpg.supplemental-metadata.json" {
+			t.Errorf("%s: sidecars = %v, %v", export, year.SidecarPath, album.SidecarPath)
+		}
+		edited := got[yearFolder+"IMG_1-отредактировано.jpg"]
+		if edited.PhotoID == nil || *edited.PhotoID == *year.PhotoID {
 			t.Errorf("%s: edited copy = %+v", export, edited)
+		}
+		if edited.SidecarPath != nil || edited.OriginalPath == nil || *edited.OriginalPath != yearFolder+"IMG_1.jpg" {
+			t.Errorf("%s: edited copy matched to %v, %v", export, edited.SidecarPath, edited.OriginalPath)
 		}
 		if sidecar := got[albumFolder+"IMG_1.jpg.supplemental-metadata.json"]; sidecar.Outcome != "sidecar" || !bytes.Contains(sidecar.Sidecar, []byte("sharedAlbumComments")) {
 			t.Errorf("%s: sidecar = %+v", export, sidecar)
