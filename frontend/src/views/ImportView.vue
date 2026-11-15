@@ -155,7 +155,7 @@ async function openDetails(run: ImportRun) {
             <td class="text-right">
               <template v-if="run.kind === 'takeout'">
                 {{ run.sidecars }}
-                <div v-if="run.status === 'finished'" class="text-medium-emphasis text-no-wrap" data-testid="matching">
+                <div v-if="run.status === 'finished'" class="text-medium-emphasis" data-testid="matching">
                   {{ t('import.matching', { edited: run.edited, withoutSidecar: run.withoutSidecar, unmatched: run.unmatchedSidecars }) }}
                 </div>
               </template>
