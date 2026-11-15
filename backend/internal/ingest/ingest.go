@@ -84,17 +84,24 @@ type Result struct {
 
 // Ingest stores the photo read from r and queues its processing.
 func (s *Service) Ingest(ctx context.Context, ownerID int64, r io.Reader, name string, priority int) (Result, error) {
-	return s.ingest(ctx, ownerID, r, name, priority, false)
+	return s.ingest(ctx, ownerID, r, name, priority, false, true)
 }
 
 // Receive adds a photo a sync client sends, such as one over WebDAV. Like a
 // folder scan, it leaves photos the owner has deleted as they are: a phone that
 // sends its camera roll again gives no sign that the owner wants them back.
 func (s *Service) Receive(ctx context.Context, ownerID int64, r io.Reader, name string) (Result, error) {
-	return s.ingest(ctx, ownerID, r, name, PriorityBulk, true)
+	return s.ingest(ctx, ownerID, r, name, PriorityBulk, true, true)
 }
 
-func (s *Service) ingest(ctx context.Context, ownerID int64, r io.Reader, name string, priority int, keepDeleted bool) (Result, error) {
+// ImportStream adds a file a scan reads from an archive with no random access,
+// such as an entry of a .tgz. It works as Import does, but has to store the file
+// before it knows whether the library already has it.
+func (s *Service) ImportStream(ctx context.Context, ownerID int64, r io.Reader, name string) (Result, error) {
+	return s.ingest(ctx, ownerID, r, name, PriorityBulk, true, false)
+}
+
+func (s *Service) ingest(ctx context.Context, ownerID int64, r io.Reader, name string, priority int, keepDeleted, limited bool) (Result, error) {
 	buffered := bufio.NewReaderSize(r, 4096)
 	head, err := buffered.Peek(512)
 	if err != nil && !errors.Is(err, io.EOF) {
@@ -105,14 +112,18 @@ func (s *Service) ingest(ctx context.Context, ownerID int64, r io.Reader, name s
 		return Result{}, ErrUnsupported
 	}
 
-	// One byte past the limit tells a file of exactly the limit from a larger one.
+	var src io.Reader = buffered
 	limit := s.limit(mime)
-	tmp, sum, size, err := s.writeTemp(io.LimitReader(buffered, limit+1))
+	if limited {
+		// One byte past the limit tells a file of exactly the limit from a larger one.
+		src = io.LimitReader(buffered, limit+1)
+	}
+	tmp, sum, size, err := s.writeTemp(src)
 	if err != nil {
 		return Result{}, err
 	}
 	defer os.Remove(tmp) // Fails harmlessly once the file has been moved.
-	if size > limit {
+	if limited && size > limit {
 		return Result{}, ErrTooLarge
 	}
 

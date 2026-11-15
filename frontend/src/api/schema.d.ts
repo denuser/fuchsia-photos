@@ -943,7 +943,7 @@ export interface paths {
         put?: never;
         /**
          * Start a scan of a folder for a user (administrators only)
-         * @description Only one scan runs at a time. The source folder is never changed.
+         * @description Only one scan runs at a time. The source folder is never changed. A Takeout scan reads the Google Takeout exports in the folder, their .zip and .tgz parts and unpacked Takeout folders, and leaves out other files.
          */
         post: operations["startImport"];
         delete?: never;
@@ -1210,12 +1210,13 @@ export interface components {
             /** Format: int64 */
             ownerId: number;
             folder: string;
+            kind: components["schemas"]["ImportKind"];
             /** @enum {string} */
             status: "listing" | "importing" | "finished" | "stopped" | "failed";
             error: string | null;
             /**
              * Format: int64
-             * @description Files found in the folder
+             * @description Files found in the folder. A Takeout scan counts the files inside the parts as it reads them
              */
             found: number;
             /**
@@ -1245,6 +1246,11 @@ export interface components {
             unsupported: number;
             /**
              * Format: int64
+             * @description JSON files a Takeout scan kept, which describe photos
+             */
+            sidecars: number;
+            /**
+             * Format: int64
              * @description Files that changed during the scan, probably still being copied
              */
             changing: number;
@@ -1258,6 +1264,11 @@ export interface components {
             /** Format: date-time */
             finishedAt: string | null;
         };
+        /**
+         * @description What a scan reads, photos of a folder or Google Takeout exports in it. The default is folder
+         * @enum {string}
+         */
+        ImportKind: "folder" | "takeout";
         ImportProblem: {
             path: string;
             /** @enum {string} */
@@ -3135,6 +3146,7 @@ export interface operations {
                     ownerId: number;
                     /** @description A folder inside the import folder. Empty means all of it */
                     folder: string;
+                    kind?: components["schemas"]["ImportKind"];
                 };
             };
         };

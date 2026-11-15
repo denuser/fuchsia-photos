@@ -3,6 +3,7 @@
 package scan
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -40,6 +41,11 @@ const (
 
 	statusListing   = "listing"
 	statusImporting = "importing"
+
+	// KindFolder reads the photos of a folder; KindTakeout reads Google Takeout
+	// exports in it.
+	KindFolder  = "folder"
+	KindTakeout = "takeout"
 )
 
 var (
@@ -49,6 +55,8 @@ var (
 	ErrNoFolder = errors.New("no such folder in the import folder")
 	// ErrNoOwner means the owner does not exist or cannot log in.
 	ErrNoOwner = errors.New("no such active user")
+	// ErrNoKind means the kind of scan is not KindFolder or KindTakeout.
+	ErrNoKind = errors.New("no such kind of scan")
 )
 
 // Service starts and runs folder scans.
@@ -83,8 +91,13 @@ func (s *Service) queries() *store.Queries {
 	return store.New(s.Ingest.Pool)
 }
 
-// Start creates a run and queues its job in one transaction.
-func (s *Service) Start(ctx context.Context, startedBy, ownerID int64, folder string) (store.ImportRun, error) {
+// Start creates a run and queues its job in one transaction. An empty kind
+// means KindFolder.
+func (s *Service) Start(ctx context.Context, startedBy, ownerID int64, folder, kind string) (store.ImportRun, error) {
+	kind = cmp.Or(kind, KindFolder)
+	if kind != KindFolder && kind != KindTakeout {
+		return store.ImportRun{}, ErrNoKind
+	}
 	folder = strings.Trim(folder, "/")
 	if err := s.checkFolder(folder); err != nil {
 		return store.ImportRun{}, err
@@ -103,7 +116,7 @@ func (s *Service) Start(ctx context.Context, startedBy, ownerID int64, folder st
 	}
 	defer tx.Rollback(ctx)
 
-	run, err := store.New(tx).CreateImportRun(ctx, store.CreateImportRunParams{OwnerID: ownerID, StartedBy: startedBy, Folder: folder})
+	run, err := store.New(tx).CreateImportRun(ctx, store.CreateImportRunParams{OwnerID: ownerID, StartedBy: startedBy, Folder: folder, Kind: kind})
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
 		return store.ImportRun{}, ErrRunning
@@ -185,9 +198,11 @@ func skipped(name string) bool {
 
 // sidecar recognizes files that describe a photo rather than hold one, such as
 // the edits Apple Photos exports next to an original in an .aae file, like the
-// range a slow-motion video plays slowed. They are left out without a report.
+// range a slow-motion video plays slowed, or the JSON that Google Takeout keeps
+// next to each photo, which only a Takeout scan reads. A folder scan leaves
+// them out without a report.
 func sidecar(name string) bool {
-	return strings.EqualFold(path.Ext(name), ".aae")
+	return strings.EqualFold(path.Ext(name), ".aae") || strings.HasSuffix(name, takeoutSidecarSuffix)
 }
 
 type worker struct {
@@ -196,6 +211,14 @@ type worker struct {
 }
 
 func (w *worker) Timeout(*river.Job[Args]) time.Duration { return jobTimeout }
+
+// wanted tells whether a scan of the kind reads the file at p.
+func (s *Service) wanted(kind, p, name string) bool {
+	if kind == KindTakeout {
+		return takeoutPart(name) || inTakeoutFolder(p)
+	}
+	return !sidecar(name)
+}
 
 func (w *worker) Work(ctx context.Context, job *river.Job[Args]) error {
 	wait, more, err := w.service.step(ctx, job.Args.RunID, workSlice)
@@ -232,6 +255,9 @@ func (s *Service) step(ctx context.Context, runID int64, slice time.Duration) (w
 	case statusListing:
 		return s.list(ctx, run)
 	case statusImporting:
+		if run.Kind == KindTakeout {
+			return s.processTakeout(ctx, run, slice)
+		}
 		return s.process(ctx, run, slice)
 	}
 	return 0, false, queries.DeletePendingImportFiles(ctx, runID)
@@ -279,7 +305,7 @@ func (s *Service) list(ctx context.Context, run store.ImportRun) (time.Duration,
 			}
 			return nil
 		}
-		if !entry.IsDir() && sidecar(entry.Name()) {
+		if !entry.IsDir() && !s.wanted(run.Kind, p, entry.Name()) {
 			return nil
 		}
 		// Links are left out, so that they cannot bring in a file twice.

@@ -1,6 +1,6 @@
 -- name: CreateImportRun :one
-INSERT INTO import_runs (owner_id, started_by, folder)
-VALUES (@owner_id, @started_by, @folder)
+INSERT INTO import_runs (owner_id, started_by, folder, kind)
+VALUES (@owner_id, @started_by, @folder, @kind)
 RETURNING *;
 
 -- name: GetImportRun :one
@@ -21,7 +21,10 @@ WITH added AS (
     ON CONFLICT DO NOTHING
     RETURNING 1
 )
-UPDATE import_runs SET found = found + (SELECT count(*) FROM added) WHERE id = @run_id;
+-- A Takeout scan counts the files inside its parts as it reads them instead.
+UPDATE import_runs
+SET found = found + CASE WHEN kind = 'folder' THEN (SELECT count(*) FROM added) ELSE 0 END
+WHERE id = @run_id;
 
 -- A file that could not even be listed, such as one whose name is not valid text.
 -- name: AddImportProblem :exec
@@ -62,11 +65,19 @@ UPDATE import_runs SET changing = changing + 1 WHERE id = @run_id;
 WITH marked AS (UPDATE import_files f SET state = 'failed', error = @error WHERE f.run_id = @run_id AND f.path = @path)
 UPDATE import_runs SET failed = failed + 1 WHERE id = @run_id;
 
+-- Files of a Takeout export that failed are listed by the part they are in.
 -- name: ListImportProblems :many
-SELECT path, state, error
-FROM import_files
-WHERE run_id = @run_id AND state <> 'pending'
-ORDER BY path
+SELECT p.path, p.state, p.error
+FROM (
+    SELECT f.path, f.state, f.error
+    FROM import_files f
+    WHERE f.run_id = @run_id AND f.state <> 'pending'
+    UNION ALL
+    SELECT ltrim(CASE WHEN e.source = '' THEN e.export || '/' || e.path ELSE e.source || '/' || e.path END, '/'), 'failed', e.error
+    FROM takeout_entries e
+    WHERE e.run_id = @run_id AND e.outcome = 'failed'
+) p
+ORDER BY p.path
 LIMIT @max_rows;
 
 -- name: DeletePendingImportFiles :exec
@@ -84,3 +95,32 @@ WHERE id = @id AND status IN ('listing', 'importing');
 UPDATE import_runs
 SET status = 'stopped', finished_at = now()
 WHERE id = @id AND status IN ('listing', 'importing');
+
+-- A part of a Takeout export that was read to its end. Its entries are counted
+-- one by one as they are recorded.
+-- name: FinishImportPart :exec
+DELETE FROM import_files WHERE run_id = @run_id AND path = @path;
+
+-- The paths of the entries already recorded from one part or, with an empty
+-- source, from unpacked folders.
+-- name: ListTakeoutEntryPaths :many
+SELECT export, path FROM takeout_entries WHERE run_id = @run_id AND source = @source;
+
+-- Records an entry once. Reading it again after a restart counts nothing.
+-- name: AddTakeoutEntry :exec
+WITH added AS (
+    INSERT INTO takeout_entries (run_id, export, path, source, outcome, photo_id, sidecar, error)
+    VALUES (@run_id, @export, @path, @source, @outcome, @photo_id, @sidecar, @error)
+    ON CONFLICT DO NOTHING
+    RETURNING outcome
+)
+UPDATE import_runs
+SET found = found + (SELECT count(*) FROM added),
+    added = added + (SELECT count(*) FROM added WHERE outcome = 'added'),
+    duplicates = duplicates + (SELECT count(*) FROM added WHERE outcome = 'duplicate'),
+    in_trash = in_trash + (SELECT count(*) FROM added WHERE outcome = 'in_trash'),
+    purged = purged + (SELECT count(*) FROM added WHERE outcome = 'purged'),
+    unsupported = unsupported + (SELECT count(*) FROM added WHERE outcome = 'unsupported'),
+    sidecars = sidecars + (SELECT count(*) FROM added WHERE outcome = 'sidecar'),
+    failed = failed + (SELECT count(*) FROM added WHERE outcome = 'failed')
+WHERE id = @run_id;

@@ -1350,7 +1350,7 @@ paths:
     post:
       operationId: startImport
       summary: Start a scan of a folder for a user (administrators only)
-      description: Only one scan runs at a time. The source folder is never changed.
+      description: Only one scan runs at a time. The source folder is never changed. A Takeout scan reads the Google Takeout exports in the folder, their .zip and .tgz parts and unpacked Takeout folders, and leaves out other files.
       requestBody:
         required: true
         content:
@@ -1365,6 +1365,8 @@ paths:
                 folder:
                   description: A folder inside the import folder. Empty means all of it
                   type: string
+                kind:
+                  $ref: "#/components/schemas/ImportKind"
       responses:
         "201":
           description: The new scan
@@ -1766,7 +1768,7 @@ components:
           description: Longest side of a viewer preview, in pixels
     ImportRun:
       type: object
-      required: [id, ownerId, folder, status, error, found, added, duplicates, inTrash, purged, unsupported, changing, failed, createdAt, finishedAt]
+      required: [id, ownerId, folder, kind, status, error, found, added, duplicates, inTrash, purged, unsupported, sidecars, changing, failed, createdAt, finishedAt]
       properties:
         id:
           type: integer
@@ -1776,13 +1778,15 @@ components:
           format: int64
         folder:
           type: string
+        kind:
+          $ref: "#/components/schemas/ImportKind"
         status:
           type: string
           enum: [listing, importing, finished, stopped, failed]
         error:
           type: [string, "null"]
         found:
-          description: Files found in the folder
+          description: Files found in the folder. A Takeout scan counts the files inside the parts as it reads them
           type: integer
           format: int64
         added:
@@ -1805,6 +1809,10 @@ components:
           description: Files that are not supported photos
           type: integer
           format: int64
+        sidecars:
+          description: JSON files a Takeout scan kept, which describe photos
+          type: integer
+          format: int64
         changing:
           description: Files that changed during the scan, probably still being copied
           type: integer
@@ -1819,6 +1827,10 @@ components:
         finishedAt:
           type: [string, "null"]
           format: date-time
+    ImportKind:
+      description: What a scan reads, photos of a folder or Google Takeout exports in it. The default is folder
+      type: string
+      enum: [folder, takeout]
     ImportProblem:
       type: object
       required: [path, state, error]

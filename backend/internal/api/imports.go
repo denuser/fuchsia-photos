@@ -20,6 +20,7 @@ type importRunJSON struct {
 	ID          int64      `json:"id"`
 	OwnerID     int64      `json:"ownerId"`
 	Folder      string     `json:"folder"`
+	Kind        string     `json:"kind"`
 	Status      string     `json:"status"`
 	Error       *string    `json:"error"`
 	Found       int64      `json:"found"`
@@ -28,6 +29,7 @@ type importRunJSON struct {
 	InTrash     int64      `json:"inTrash"`
 	Purged      int64      `json:"purged"`
 	Unsupported int64      `json:"unsupported"`
+	Sidecars    int64      `json:"sidecars"`
 	Changing    int64      `json:"changing"`
 	Failed      int64      `json:"failed"`
 	CreatedAt   time.Time  `json:"createdAt"`
@@ -45,6 +47,7 @@ func toImportRunJSON(r store.ImportRun) importRunJSON {
 		ID:          r.ID,
 		OwnerID:     r.OwnerID,
 		Folder:      r.Folder,
+		Kind:        r.Kind,
 		Status:      r.Status,
 		Error:       r.Error,
 		Found:       r.Found,
@@ -53,6 +56,7 @@ func toImportRunJSON(r store.ImportRun) importRunJSON {
 		InTrash:     r.InTrash,
 		Purged:      r.Purged,
 		Unsupported: r.Unsupported,
+		Sidecars:    r.Sidecars,
 		Changing:    r.Changing,
 		Failed:      r.Failed,
 		CreatedAt:   r.CreatedAt,
@@ -86,13 +90,14 @@ func (s *server) startImport(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		OwnerID int64  `json:"ownerId"`
 		Folder  string `json:"folder"`
+		Kind    string `json:"kind"`
 	}
 	if !readJSON(w, r, &req) {
 		return
 	}
-	run, err := s.Scan.Start(r.Context(), currentUser(r).ID, req.OwnerID, req.Folder)
+	run, err := s.Scan.Start(r.Context(), currentUser(r).ID, req.OwnerID, req.Folder, req.Kind)
 	switch {
-	case errors.Is(err, scan.ErrNoFolder), errors.Is(err, scan.ErrNoOwner):
+	case errors.Is(err, scan.ErrNoFolder), errors.Is(err, scan.ErrNoOwner), errors.Is(err, scan.ErrNoKind):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, scan.ErrRunning):
 		writeError(w, http.StatusConflict, err.Error())

@@ -65,6 +65,8 @@ type ImportRun struct {
 	SettleAt    *time.Time
 	CreatedAt   time.Time
 	FinishedAt  *time.Time
+	Kind        string
+	Sidecars    int64
 }
 
 type MetadataSetting struct {
@@ -150,6 +152,17 @@ type Tag struct {
 	OwnerID   int64
 	Name      string
 	CreatedAt time.Time
+}
+
+type TakeoutEntry struct {
+	RunID   int64
+	Export  string
+	Path    string
+	Source  string
+	Outcome string
+	PhotoID *int64
+	Sidecar []byte
+	Error   *string
 }
 
 type User struct {

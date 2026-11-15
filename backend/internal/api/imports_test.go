@@ -39,12 +39,13 @@ func TestImports(t *testing.T) {
 	t.Run("rejects a folder outside the root and an unknown owner", func(t *testing.T) {
 		wantStatus(t, admin.json(http.MethodPost, imports, map[string]any{"ownerId": anna.ID, "folder": "../.."}), http.StatusBadRequest)
 		wantStatus(t, admin.json(http.MethodPost, imports, map[string]any{"ownerId": 9999, "folder": ""}), http.StatusBadRequest)
+		wantStatus(t, admin.json(http.MethodPost, imports, map[string]any{"ownerId": anna.ID, "folder": "", "kind": "icloud"}), http.StatusBadRequest)
 	})
 
 	res := admin.json(http.MethodPost, imports, body)
 	wantStatus(t, res, http.StatusCreated)
 	run := decode[importRunJSON](t, res)
-	if run.OwnerID != anna.ID || run.Folder != "summer" || run.Status != "listing" {
+	if run.OwnerID != anna.ID || run.Folder != "summer" || run.Kind != "folder" || run.Status != "listing" {
 		t.Errorf("run = %+v", run)
 	}
 	path := imports + "/" + itoa(run.ID)
@@ -78,6 +79,10 @@ func TestImports(t *testing.T) {
 	})
 
 	t.Run("a stopped run frees the way for another", func(t *testing.T) {
-		wantStatus(t, admin.json(http.MethodPost, imports, map[string]any{"ownerId": root.ID, "folder": ""}), http.StatusCreated)
+		res := admin.json(http.MethodPost, imports, map[string]any{"ownerId": root.ID, "folder": "", "kind": "takeout"})
+		wantStatus(t, res, http.StatusCreated)
+		if got := decode[importRunJSON](t, res); got.Kind != "takeout" {
+			t.Errorf("kind = %s", got.Kind)
+		}
 	})
 }

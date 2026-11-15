@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
 
-import { api, type ImportProblem, type ImportRun } from '../api/client'
+import { api, type ImportKind, type ImportProblem, type ImportRun } from '../api/client'
 import AppAutocomplete from '../components/AppAutocomplete.vue'
 import { formatDateTime, t } from '../i18n'
 import { apiError } from '../i18n/apiErrors'
@@ -18,6 +18,7 @@ const runs = shallowRef<ImportRun[]>([])
 const folders = shallowRef<string[]>([])
 const owner = ref<number | null>(null)
 const folder = ref('')
+const kind = ref<ImportKind>('folder')
 const error = ref('')
 
 const detailsOf = shallowRef<ImportRun | null>(null)
@@ -26,6 +27,11 @@ const problems = shallowRef<ImportProblem[]>([])
 const folderItems = computed(() => [
   { title: t('import.wholeFolder'), value: '' },
   ...folders.value.map((f) => ({ title: f, value: f })),
+])
+
+const kindItems = computed(() => [
+  { title: t('import.kinds.folder'), value: 'folder' },
+  { title: t('import.kinds.takeout'), value: 'takeout' },
 ])
 
 const running = computed(() => runs.value.some(isActive))
@@ -62,8 +68,13 @@ function processed(run: ImportRun) {
   return run.added + run.duplicates + run.inTrash + run.purged + run.unsupported + run.changing + run.failed
 }
 
+// A Takeout scan learns how many files its parts hold only as it reads them.
+function showsProgress(run: ImportRun) {
+  return run.status === 'importing' && run.kind === 'folder'
+}
+
 async function start() {
-  const { error: failure } = await api.POST('/imports', { body: { ownerId: owner.value!, folder: folder.value } })
+  const { error: failure } = await api.POST('/imports', { body: { ownerId: owner.value!, folder: folder.value, kind: kind.value } })
   error.value = failure ? apiError(failure) : ''
   await load()
 }
@@ -99,6 +110,9 @@ async function openDetails(run: ImportRun) {
         <AppFormGroup v-slot="field" :label="t('folderAlbum.folder')" required class="field mb-0">
           <AppAutocomplete v-bind="field" v-model="folder" :items="folderItems" />
         </AppFormGroup>
+        <AppFormGroup v-slot="field" :label="t('import.kind')" required class="field mb-0">
+          <v-select v-bind="field" v-model="kind" variant="outlined" :items="kindItems" data-testid="import-kind" />
+        </AppFormGroup>
         <v-btn type="submit" color="primary" :text="t('import.start')" :disabled="owner === null || running" />
       </v-form>
 
@@ -115,6 +129,7 @@ async function openDetails(run: ImportRun) {
             <th class="text-right">{{ t('import.inTrash') }}</th>
             <th class="text-right">{{ t('import.purged') }}</th>
             <th class="text-right">{{ t('import.unsupported') }}</th>
+            <th class="text-right">{{ t('import.sidecars') }}</th>
             <th class="text-right">{{ t('import.problems') }}</th>
             <th :aria-label="t('users.actions')" />
           </tr>
@@ -123,10 +138,13 @@ async function openDetails(run: ImportRun) {
           <tr v-for="run in runs" :key="run.id" data-testid="import-run">
             <td>{{ formatDateTime(run.createdAt) }}</td>
             <td>{{ users.login(run.ownerId) }}</td>
-            <td>{{ run.folder || t('import.wholeFolderShort') }}</td>
+            <td>
+              {{ run.folder || t('import.wholeFolderShort') }}
+              <div v-if="run.kind === 'takeout'" class="text-medium-emphasis">{{ t('import.kinds.takeout') }}</div>
+            </td>
             <td :title="run.error ?? undefined">{{ t(`import.statuses.${run.status}`) }}</td>
             <td class="text-right">
-              <template v-if="run.status === 'importing'">{{ t('import.progress', { done: processed(run), total: run.found }) }}</template>
+              <template v-if="showsProgress(run)">{{ t('import.progress', { done: processed(run), total: run.found }) }}</template>
               <template v-else>{{ run.found }}</template>
             </td>
             <td class="text-right" data-testid="added">{{ run.added }}</td>
@@ -134,6 +152,7 @@ async function openDetails(run: ImportRun) {
             <td class="text-right">{{ run.inTrash }}</td>
             <td class="text-right">{{ run.purged }}</td>
             <td class="text-right">{{ run.unsupported }}</td>
+            <td class="text-right">{{ run.kind === 'takeout' ? run.sidecars : '' }}</td>
             <td class="text-right">{{ run.changing + run.failed }}</td>
             <td class="text-right">
               <v-btn v-if="isActive(run)" variant="text" size="small" :text="t('import.stop')" @click="stop(run)" />

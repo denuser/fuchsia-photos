@@ -17,7 +17,9 @@ WITH added AS (
     ON CONFLICT DO NOTHING
     RETURNING 1
 )
-UPDATE import_runs SET found = found + (SELECT count(*) FROM added) WHERE id = $1
+UPDATE import_runs
+SET found = found + CASE WHEN kind = 'folder' THEN (SELECT count(*) FROM added) ELSE 0 END
+WHERE id = $1
 `
 
 type AddImportFilesParams struct {
@@ -27,6 +29,7 @@ type AddImportFilesParams struct {
 	Mtimes []time.Time
 }
 
+// A Takeout scan counts the files inside its parts as it reads them instead.
 func (q *Queries) AddImportFiles(ctx context.Context, arg AddImportFilesParams) error {
 	_, err := q.db.Exec(ctx, addImportFiles,
 		arg.RunID,
@@ -58,20 +61,71 @@ func (q *Queries) AddImportProblem(ctx context.Context, arg AddImportProblemPara
 	return err
 }
 
+const addTakeoutEntry = `-- name: AddTakeoutEntry :exec
+WITH added AS (
+    INSERT INTO takeout_entries (run_id, export, path, source, outcome, photo_id, sidecar, error)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    ON CONFLICT DO NOTHING
+    RETURNING outcome
+)
+UPDATE import_runs
+SET found = found + (SELECT count(*) FROM added),
+    added = added + (SELECT count(*) FROM added WHERE outcome = 'added'),
+    duplicates = duplicates + (SELECT count(*) FROM added WHERE outcome = 'duplicate'),
+    in_trash = in_trash + (SELECT count(*) FROM added WHERE outcome = 'in_trash'),
+    purged = purged + (SELECT count(*) FROM added WHERE outcome = 'purged'),
+    unsupported = unsupported + (SELECT count(*) FROM added WHERE outcome = 'unsupported'),
+    sidecars = sidecars + (SELECT count(*) FROM added WHERE outcome = 'sidecar'),
+    failed = failed + (SELECT count(*) FROM added WHERE outcome = 'failed')
+WHERE id = $1
+`
+
+type AddTakeoutEntryParams struct {
+	RunID   int64
+	Export  string
+	Path    string
+	Source  string
+	Outcome string
+	PhotoID *int64
+	Sidecar []byte
+	Error   *string
+}
+
+// Records an entry once. Reading it again after a restart counts nothing.
+func (q *Queries) AddTakeoutEntry(ctx context.Context, arg AddTakeoutEntryParams) error {
+	_, err := q.db.Exec(ctx, addTakeoutEntry,
+		arg.RunID,
+		arg.Export,
+		arg.Path,
+		arg.Source,
+		arg.Outcome,
+		arg.PhotoID,
+		arg.Sidecar,
+		arg.Error,
+	)
+	return err
+}
+
 const createImportRun = `-- name: CreateImportRun :one
-INSERT INTO import_runs (owner_id, started_by, folder)
-VALUES ($1, $2, $3)
-RETURNING id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at
+INSERT INTO import_runs (owner_id, started_by, folder, kind)
+VALUES ($1, $2, $3, $4)
+RETURNING id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars
 `
 
 type CreateImportRunParams struct {
 	OwnerID   int64
 	StartedBy int64
 	Folder    string
+	Kind      string
 }
 
 func (q *Queries) CreateImportRun(ctx context.Context, arg CreateImportRunParams) (ImportRun, error) {
-	row := q.db.QueryRow(ctx, createImportRun, arg.OwnerID, arg.StartedBy, arg.Folder)
+	row := q.db.QueryRow(ctx, createImportRun,
+		arg.OwnerID,
+		arg.StartedBy,
+		arg.Folder,
+		arg.Kind,
+	)
 	var i ImportRun
 	err := row.Scan(
 		&i.ID,
@@ -91,6 +145,8 @@ func (q *Queries) CreateImportRun(ctx context.Context, arg CreateImportRunParams
 		&i.SettleAt,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.Kind,
+		&i.Sidecars,
 	)
 	return i, err
 }
@@ -144,6 +200,22 @@ func (q *Queries) FinishImportFile(ctx context.Context, arg FinishImportFilePara
 	return err
 }
 
+const finishImportPart = `-- name: FinishImportPart :exec
+DELETE FROM import_files WHERE run_id = $1 AND path = $2
+`
+
+type FinishImportPartParams struct {
+	RunID int64
+	Path  string
+}
+
+// A part of a Takeout export that was read to its end. Its entries are counted
+// one by one as they are recorded.
+func (q *Queries) FinishImportPart(ctx context.Context, arg FinishImportPartParams) error {
+	_, err := q.db.Exec(ctx, finishImportPart, arg.RunID, arg.Path)
+	return err
+}
+
 const finishImportRun = `-- name: FinishImportRun :exec
 UPDATE import_runs SET status = 'finished', finished_at = now() WHERE id = $1 AND status = 'importing'
 `
@@ -154,7 +226,7 @@ func (q *Queries) FinishImportRun(ctx context.Context, id int64) error {
 }
 
 const getImportRun = `-- name: GetImportRun :one
-SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at FROM import_runs WHERE id = $1
+SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars FROM import_runs WHERE id = $1
 `
 
 func (q *Queries) GetImportRun(ctx context.Context, id int64) (ImportRun, error) {
@@ -178,15 +250,24 @@ func (q *Queries) GetImportRun(ctx context.Context, id int64) (ImportRun, error)
 		&i.SettleAt,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.Kind,
+		&i.Sidecars,
 	)
 	return i, err
 }
 
 const listImportProblems = `-- name: ListImportProblems :many
-SELECT path, state, error
-FROM import_files
-WHERE run_id = $1 AND state <> 'pending'
-ORDER BY path
+SELECT p.path, p.state, p.error
+FROM (
+    SELECT f.path, f.state, f.error
+    FROM import_files f
+    WHERE f.run_id = $1 AND f.state <> 'pending'
+    UNION ALL
+    SELECT ltrim(CASE WHEN e.source = '' THEN e.export || '/' || e.path ELSE e.source || '/' || e.path END, '/'), 'failed', e.error
+    FROM takeout_entries e
+    WHERE e.run_id = $1 AND e.outcome = 'failed'
+) p
+ORDER BY p.path
 LIMIT $2
 `
 
@@ -201,6 +282,7 @@ type ListImportProblemsRow struct {
 	Error *string
 }
 
+// Files of a Takeout export that failed are listed by the part they are in.
 func (q *Queries) ListImportProblems(ctx context.Context, arg ListImportProblemsParams) ([]ListImportProblemsRow, error) {
 	rows, err := q.db.Query(ctx, listImportProblems, arg.RunID, arg.MaxRows)
 	if err != nil {
@@ -222,7 +304,7 @@ func (q *Queries) ListImportProblems(ctx context.Context, arg ListImportProblems
 }
 
 const listImportRuns = `-- name: ListImportRuns :many
-SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at FROM import_runs ORDER BY id DESC LIMIT $1
+SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars FROM import_runs ORDER BY id DESC LIMIT $1
 `
 
 func (q *Queries) ListImportRuns(ctx context.Context, maxRows int32) ([]ImportRun, error) {
@@ -252,6 +334,8 @@ func (q *Queries) ListImportRuns(ctx context.Context, maxRows int32) ([]ImportRu
 			&i.SettleAt,
 			&i.CreatedAt,
 			&i.FinishedAt,
+			&i.Kind,
+			&i.Sidecars,
 		); err != nil {
 			return nil, err
 		}
@@ -292,6 +376,42 @@ func (q *Queries) ListPendingImportFiles(ctx context.Context, arg ListPendingImp
 	for rows.Next() {
 		var i ListPendingImportFilesRow
 		if err := rows.Scan(&i.Path, &i.Size, &i.Mtime); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTakeoutEntryPaths = `-- name: ListTakeoutEntryPaths :many
+SELECT export, path FROM takeout_entries WHERE run_id = $1 AND source = $2
+`
+
+type ListTakeoutEntryPathsParams struct {
+	RunID  int64
+	Source string
+}
+
+type ListTakeoutEntryPathsRow struct {
+	Export string
+	Path   string
+}
+
+// The paths of the entries already recorded from one part or, with an empty
+// source, from unpacked folders.
+func (q *Queries) ListTakeoutEntryPaths(ctx context.Context, arg ListTakeoutEntryPathsParams) ([]ListTakeoutEntryPathsRow, error) {
+	rows, err := q.db.Query(ctx, listTakeoutEntryPaths, arg.RunID, arg.Source)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTakeoutEntryPathsRow
+	for rows.Next() {
+		var i ListTakeoutEntryPathsRow
+		if err := rows.Scan(&i.Export, &i.Path); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
