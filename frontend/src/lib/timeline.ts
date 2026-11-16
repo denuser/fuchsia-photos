@@ -4,7 +4,8 @@ import type { Section } from '../stores/photos'
 import { justify, squareColumns, squares, type Row } from './justify'
 
 export const TARGET_HEIGHT = 200
-export const GAP = 4
+// PatternFly's small spacer between photos.
+export const GAP = 8
 // Square tiles are about as large as the rows of photos that keep their shape,
 // on any screen density; a grid narrower than a tablet gets smaller ones, so
 // that a phone shows three in a row.

@@ -97,6 +97,7 @@ export default {
     purgeText:
       '{n} photo and its original file will be deleted. This cannot be undone. | {n} photos and their original files will be deleted. This cannot be undone.',
     restore: 'Restore',
+    selectionActions: 'Actions on the selection',
     restored: '{n} photo restored | {n} photos restored',
     share: 'Share',
     sharingSaved: 'Sharing saved',

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useDisplay } from 'vuetify'
 
 import { isVideo, previewUrl, type Photo } from '../api/client'
 import { formatDuration } from '../lib/duration'
 import { visibleRows } from '../lib/justify'
-import { layoutTimeline, monthTitle, rowHeight, squareSide, visibleSections, type SectionLayout } from '../lib/timeline'
+import { GAP, layoutTimeline, monthTitle, rowHeight, squareSide, visibleSections, type SectionLayout } from '../lib/timeline'
 import { useAuthStore } from '../stores/auth'
 import type { Section } from '../stores/photos'
 import TimelineScrubber from './TimelineScrubber.vue'
@@ -18,7 +19,13 @@ import { t } from '../i18n'
 const props = defineProps<{ sections: Section[]; byMonth: boolean; selected: ReadonlySet<number>; selectable: (photo: Photo) => boolean }>()
 const emit = defineEmits<{ open: [photo: Photo]; toggle: [photo: Photo, range: boolean]; want: [keys: string[]]; retry: [key: string] }>()
 
-const PADDING = 4
+// The photos line up with the page title and the toolbar: their sides keep
+// the padding of a PatternFly page section, 24px, or 16px on a phone, as
+// .page-section does. The header above already ends with its own padding.
+const { xs } = useDisplay()
+const paddingX = computed(() => (xs.value ? 16 : 24))
+const PADDING_TOP = 0
+const paddingBottom = computed(() => paddingX.value)
 // Rows kept rendered outside the viewport, in pixels, so that scrolling does not flash.
 const OVERSCAN = 800
 // Sections this close to the viewport load ahead of time, in pixels.
@@ -33,14 +40,18 @@ const scrollTop = ref(0)
 
 const auth = useAuthStore()
 
-// Square tiles have the same size in CSS pixels on any screen density.
-const square = computed(() => (auth.user?.gridSquares ? squareSide(width.value - PADDING * 2) : null))
+// The width the tiles fill.
+const inner = computed(() => width.value - paddingX.value * 2)
 
-const layout = computed(() => layoutTimeline(props.sections, width.value - PADDING * 2, props.byMonth, square.value))
-const canvasHeight = computed(() => layout.value.height + PADDING * 2)
+// Square tiles have the same size in CSS pixels on any screen density.
+const square = computed(() => (auth.user?.gridSquares ? squareSide(inner.value) : null))
+
+const layout = computed(() => layoutTimeline(props.sections, inner.value, props.byMonth, square.value))
+const canvasHeight = computed(() => layout.value.height + PADDING_TOP + paddingBottom.value)
 const canvasStyle = computed(() => ({
   height: `${canvasHeight.value}px`,
-  '--row-height': `${rowHeight(width.value - PADDING * 2, square.value)}px`,
+  '--row-height': `${rowHeight(inner.value, square.value)}px`,
+  '--gap': `${GAP}px`,
 }))
 
 const selecting = computed(() => props.selected.size > 0)
@@ -54,7 +65,7 @@ function onTileClick(photo: Photo, event: MouseEvent) {
 }
 
 function at(x: number, y: number) {
-  return `translate(${x + PADDING}px, ${y + PADDING}px)`
+  return `translate(${x + paddingX.value}px, ${y + PADDING_TOP}px)`
 }
 
 const visible = computed(() => {
@@ -77,7 +88,7 @@ const pending = computed(() =>
       section: s.section,
       // A month shows the rows it will have; a whole list shows only its status.
       estimate: s.section.month !== null && s.section.photos.length < s.section.count,
-      style: { transform: at(0, s.y + s.pendingY), width: `${width.value - PADDING * 2}px`, height: `${s.pendingHeight}px` },
+      style: { transform: at(0, s.y + s.pendingY), width: `${inner.value}px`, height: `${s.pendingHeight}px` },
     })),
 )
 
@@ -149,7 +160,7 @@ function sectionAt(y: number): SectionLayout | undefined {
 }
 
 function rememberAnchor() {
-  const s = sectionAt(scrollTop.value - PADDING)
+  const s = sectionAt(scrollTop.value - PADDING_TOP)
   anchor = s ? { key: s.section.key, offset: scrollTop.value - s.y } : null
 }
 
@@ -324,7 +335,7 @@ onBeforeUnmount(() => {
 .month {
   display: flex;
   align-items: flex-end;
-  padding: 0 8px 8px;
+  padding-bottom: 8px;
   font-size: 1rem;
   white-space: nowrap;
 }
@@ -334,7 +345,7 @@ onBeforeUnmount(() => {
   background: repeating-linear-gradient(
     to bottom,
     rgba(128, 128, 128, 0.12) 0 var(--row-height),
-    transparent var(--row-height) calc(var(--row-height) + 4px)
+    transparent var(--row-height) calc(var(--row-height) + var(--gap))
   );
 }
 
@@ -356,6 +367,8 @@ onBeforeUnmount(() => {
   top: 0;
   left: 0;
   overflow: hidden;
+  /* PatternFly's small radius, as on buttons and fields. */
+  border-radius: var(--radius-small);
   background: rgba(128, 128, 128, 0.18);
 }
 
@@ -367,6 +380,7 @@ onBeforeUnmount(() => {
   height: 100%;
   padding: 0;
   border: 0;
+  border-radius: inherit;
   background: none;
   cursor: pointer;
 }
@@ -385,6 +399,7 @@ onBeforeUnmount(() => {
   display: block;
   width: 100%;
   height: 100%;
+  border-radius: inherit;
   object-fit: cover;
   transition: transform 0.1s;
 }

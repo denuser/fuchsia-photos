@@ -424,7 +424,8 @@ function onDrop(event: DragEvent) {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 8px;
+  /* The sides match the page sections and the photo grid below. */
+  padding: 16px 24px 8px;
 }
 
 .scope {
@@ -457,6 +458,7 @@ function onDrop(event: DragEvent) {
   .filters {
     flex-wrap: nowrap;
     gap: 4px;
+    padding-inline: 16px;
   }
 
   .tag-filter {

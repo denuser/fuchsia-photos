@@ -8,7 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import { apiError } from '../i18n/apiErrors'
 import NameDialog from '../components/NameDialog.vue'
-import PhotoBrowser from '../components/PhotoBrowser.vue'
+import PhotoBrowser, { type ExtraAction } from '../components/PhotoBrowser.vue'
 import ShareDialog from '../components/ShareDialog.vue'
 import { useAuthStore } from '../stores/auth'
 import { inBatches, usePhotosStore } from '../stores/photos'
@@ -78,6 +78,22 @@ async function setCover(photoId: number | null) {
   album.value = data
 }
 
+// A single photo can become the cover; any can leave the album.
+function albumActions(ids: number[]): ExtraAction[] {
+  const actions: ExtraAction[] = []
+  if (ids.length === 1) {
+    actions.push({ key: 'cover', icon: 'fa-image', text: t('album.setCover'), action: () => setCover(ids[0]!), done: t('album.coverChanged') })
+  }
+  actions.push({
+    key: 'remove',
+    icon: 'fa-circle-minus',
+    text: t('album.remove'),
+    action: () => removeFromAlbum(ids),
+    done: t('album.removed', ids.length),
+  })
+  return actions
+}
+
 async function resetCover() {
   try {
     await setCover(null)
@@ -89,7 +105,7 @@ async function resetCover() {
 </script>
 
 <template>
-  <PhotoBrowser v-if="album" ref="browser" :mode="owned ? 'library' : 'shared'" @tagged="loadAlbum">
+  <PhotoBrowser v-if="album" ref="browser" :mode="owned ? 'library' : 'shared'" :extra-actions="owned ? albumActions : undefined" @tagged="loadAlbum">
     <template #header>
       <AppPageHeader :title="album.name" :description="photoCount" :breadcrumbs="breadcrumbs">
         <template v-if="owned" #actions>
@@ -111,19 +127,6 @@ async function resetCover() {
           </v-menu>
         </template>
       </AppPageHeader>
-    </template>
-    <template #selection-actions="{ ids, run }">
-      <v-btn
-        v-if="ids.length === 1"
-        prepend-icon="fa-image"
-        :text="t('album.setCover')"
-        @click="run(() => setCover(ids[0]!), t('album.coverChanged'))"
-      />
-      <v-btn
-        prepend-icon="fa-circle-minus"
-        :text="t('album.remove')"
-        @click="run(() => removeFromAlbum(ids), t('album.removed', ids.length))"
-      />
     </template>
     <template #empty>
       <EmptyState v-if="owned" icon="fa-book-open" :title="t('album.empty')" :text="t('album.emptyText')">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useDisplay } from 'vuetify'
 
 import type { Photo } from '../api/client'
 import { useAuthStore } from '../stores/auth'
@@ -22,10 +23,24 @@ import { t } from '../i18n'
 // An administrator's list shares or trashes the photos of any user. Photos
 // shared with the user are read-only, also where a library list shows them
 // next to the user's own.
-const props = defineProps<{ mode: 'library' | 'trash' | 'admin' | 'shared' }>()
+// Extra actions on the selection, such as an album's, come before the
+// browser's own; each runs on the selected ids and reports done when it ends.
+export interface ExtraAction {
+  key: string
+  icon: string
+  text: string
+  action: () => Promise<void>
+  done: string
+}
+
+const props = defineProps<{
+  mode: 'library' | 'trash' | 'admin' | 'shared'
+  extraActions?: (ids: number[]) => ExtraAction[]
+}>()
 const emit = defineEmits<{ tagged: [] }>()
 
 const router = useRouter()
+const { xs } = useDisplay()
 const auth = useAuthStore()
 const photos = usePhotosStore()
 const notices = useNoticesStore()
@@ -194,27 +209,82 @@ function findSimilar(photo: Photo) {
   void router.push({ path: '/search', query: { similar: String(photo.id) } })
 }
 
+interface SelectionAction {
+  key: string
+  icon: string
+  text: string
+  click: () => void
+  danger?: boolean
+  // Shows progress on the button while the action runs; the others are disabled.
+  spins?: boolean
+}
+
+// The actions on the selection: buttons in the bar, or, on a phone, where they
+// do not fit beside the count, items of a menu.
+const selectionActions = computed<SelectionAction[]>(() => {
+  const ids = selectedIds.value
+  const list: SelectionAction[] = (props.extraActions?.(ids) ?? []).map((extra) => ({
+    key: extra.key,
+    icon: extra.icon,
+    text: extra.text,
+    click: () => void run(extra.action, extra.done),
+  }))
+  if (canManage.value) {
+    if (props.mode === 'library') {
+      list.push(
+        { key: 'album', icon: 'fa-book-open', text: t('browser.addToAlbum'), click: () => (albumDialog.value = true) },
+        { key: 'tags', icon: 'fa-tag', text: t('browser.tags'), click: openSelectionTags },
+      )
+    }
+    list.push(
+      { key: 'share', icon: 'fa-share-nodes', text: t('browser.share'), click: openSelectionSharing },
+      { key: 'trash', icon: 'fa-trash-can', text: t('browser.moveToTrash'), click: trashSelected, spins: true },
+    )
+  } else {
+    list.push(
+      { key: 'restore', icon: 'fa-trash-can-arrow-up', text: t('browser.restore'), click: restoreSelected, spins: true },
+      { key: 'delete', icon: 'fa-trash-can', text: t('common.delete'), click: () => (purgeDialog.value = true), danger: true },
+    )
+  }
+  return list
+})
+
 defineExpose({ clearSelection, say })
 </script>
 
 <template>
   <div class="browser">
     <slot name="header" />
-    <v-toolbar v-if="selected.size > 0" density="compact" color="surface-variant" class="flex-grow-0">
+    <v-toolbar v-if="selected.size > 0" density="compact" color="surface-variant" class="selection-bar flex-grow-0">
       <v-btn icon="fa-xmark" :aria-label="t('browser.clearSelection')" @click="clearSelection" />
       <v-toolbar-title>{{ t('selection.count', { n: selected.size }) }}</v-toolbar-title>
-      <slot name="selection-actions" :ids="selectedIds" :run="run" />
-      <template v-if="canManage">
-        <template v-if="props.mode === 'library'">
-          <v-btn prepend-icon="fa-book-open" :text="t('browser.addToAlbum')" :disabled="busy" @click="albumDialog = true" />
-          <v-btn prepend-icon="fa-tag" :text="t('browser.tags')" :disabled="busy" @click="openSelectionTags" />
+      <v-menu v-if="xs">
+        <template #activator="{ props: menu }">
+          <v-btn v-bind="menu" icon="fa-ellipsis-vertical" :loading="busy" :aria-label="t('browser.selectionActions')" />
         </template>
-        <v-btn prepend-icon="fa-share-nodes" :text="t('browser.share')" :disabled="busy" @click="openSelectionSharing" />
-        <v-btn prepend-icon="fa-trash-can" :text="t('browser.moveToTrash')" :loading="busy" @click="trashSelected" />
-      </template>
+        <v-list density="compact">
+          <v-list-item
+            v-for="action in selectionActions"
+            :key="action.key"
+            :title="action.text"
+            :prepend-icon="action.icon"
+            :base-color="action.danger ? 'error' : undefined"
+            :disabled="busy"
+            @click="action.click"
+          />
+        </v-list>
+      </v-menu>
       <template v-else>
-        <v-btn prepend-icon="fa-trash-can-arrow-up" :text="t('browser.restore')" :loading="busy" @click="restoreSelected" />
-        <v-btn prepend-icon="fa-trash-can" :text="t('common.delete')" color="error" :disabled="busy" @click="purgeDialog = true" />
+        <v-btn
+          v-for="action in selectionActions"
+          :key="action.key"
+          :prepend-icon="action.icon"
+          :text="action.text"
+          :color="action.danger ? 'error' : undefined"
+          :loading="action.spins && busy"
+          :disabled="busy && !action.spins"
+          @click="action.click"
+        />
       </template>
     </v-toolbar>
     <slot v-else name="toolbar" />
@@ -280,6 +350,26 @@ defineExpose({ clearSelection, say })
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+/* The close icon lines up with the photos below (24px, 16px on a phone; the
+   icon sits 16px inside its button), and the last action ends where they end. */
+.selection-bar :deep(.v-toolbar__content) {
+  padding-inline: 8px 24px;
+}
+
+.selection-bar :deep(.v-toolbar__content > .v-btn:first-child) {
+  margin-inline-start: 0;
+}
+
+.selection-bar :deep(.v-toolbar__content > .v-btn:last-child) {
+  margin-inline-end: 0;
+}
+
+@media (max-width: 599.98px) {
+  .selection-bar :deep(.v-toolbar__content) {
+    padding-inline: 0 16px;
+  }
 }
 
 .content {

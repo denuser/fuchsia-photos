@@ -51,7 +51,14 @@ const shown = computed(() => props.groups.filter((group) => group.chips.length >
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 0 8px 8px;
+  /* Lined up with the toolbar above and the photos below. */
+  padding: 0 24px 8px;
+}
+
+@media (max-width: 599.98px) {
+  .filter-chips {
+    padding-inline: 16px;
+  }
 }
 
 .group {
