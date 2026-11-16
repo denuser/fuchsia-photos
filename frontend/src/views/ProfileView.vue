@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { api, type AppPassword, type Language, type ViewerField, type WebDAVAlbum } from '../api/client'
+import { api, type AppPassword, type GridSize, type Language, type ViewerField, type WebDAVAlbum } from '../api/client'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
 import AppPasswordDialog from '../components/AppPasswordDialog.vue'
@@ -11,6 +11,7 @@ import CopyField from '../components/CopyField.vue'
 import FolderAlbumDialog from '../components/FolderAlbumDialog.vue'
 import { formatDate, languages, t } from '../i18n'
 import { apiError } from '../i18n/apiErrors'
+import { gridSizes } from '../lib/timeline'
 import { viewerFields } from '../lib/viewerFields'
 import { useAuthStore } from '../stores/auth'
 import { useNoticesStore } from '../stores/notices'
@@ -34,6 +35,7 @@ type Changes = {
   viewerHiddenFields?: ViewerField[]
   navigationHiddenOnPhones?: boolean
   gridSquares?: boolean
+  gridSize?: GridSize
   language?: Language
 }
 
@@ -159,9 +161,29 @@ onMounted(() => {
         persistent-hint
         color="primary"
         density="compact"
-        class="mb-6"
+        class="mb-4"
         @update:model-value="save({ gridSquares: Boolean($event) })"
       />
+      <AppFormGroup v-slot="field" :label="t('profile.gridSize')" class="mb-6">
+        <!-- The toggle is inline; the block keeps it under the label. -->
+        <div>
+          <v-btn-toggle
+            v-bind="field"
+            :model-value="auth.user.gridSize"
+            mandatory
+            divided
+            variant="outlined"
+            density="compact"
+            role="group"
+            :aria-label="t('profile.gridSize')"
+            :disabled="saving"
+            data-testid="grid-size"
+            @update:model-value="save({ gridSize: $event })"
+          >
+            <v-btn v-for="size in gridSizes" :key="size" :value="size" :text="t(`profile.gridSizes.${size}`)" />
+          </v-btn-toggle>
+        </div>
+      </AppFormGroup>
 
       <h2 class="mb-2">{{ t('profile.viewer') }}</h2>
       <v-switch

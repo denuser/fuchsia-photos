@@ -510,7 +510,7 @@ const steps = {
       await page.setViewportSize({ width: 1280, height: 800 })
     }
   },
-  'square previews from the profile are about 200 pixels on any screen': async () => {
+  'square previews from the profile are about 200 pixels on any screen, and larger when chosen': async () => {
     await page.goto(`${BASE}/profile`)
     await expectRequest('/me', () => page.getByLabel('Show square previews').click())
     await page.goto(BASE)
@@ -520,6 +520,23 @@ const steps = {
       const boxes = [...document.querySelectorAll('[data-testid=tile]')].map((t) => t.getBoundingClientRect())
       return boxes.length > 0 && boxes.every((b) => Math.abs(b.width - b.height) < 1 && b.width > 150 && b.width < 250)
     })
+    const side = await tile(0).evaluate((t) => t.getBoundingClientRect().width)
+
+    // Large tiles aim at 280 pixels, and the setting is restored for the steps after.
+    await page.goto(`${BASE}/profile`)
+    await expectRequest('/me', () => page.getByTestId('grid-size').getByRole('button', { name: 'Large' }).click())
+    await page.goto(BASE)
+    await previews(3)
+    await waitFor(
+      'large square tiles',
+      (medium) => {
+        const boxes = [...document.querySelectorAll('[data-testid=tile]')].map((t) => t.getBoundingClientRect())
+        return boxes.length > 0 && boxes.every((b) => Math.abs(b.width - b.height) < 1 && b.width > medium + 40)
+      },
+      side,
+    )
+    await page.goto(`${BASE}/profile`)
+    await expectRequest('/me', () => page.getByTestId('grid-size').getByRole('button', { name: 'Medium' }).click())
   },
   'the profile switches the interface to Russian, kept after a reload, and back': async () => {
     await page.goto(`${BASE}/profile`)

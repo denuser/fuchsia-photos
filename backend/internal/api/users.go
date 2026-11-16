@@ -32,6 +32,8 @@ type userJSON struct {
 	NavigationHiddenOnPhones bool `json:"navigationHiddenOnPhones"`
 	// GridSquares makes photo grids show square tiles of one size.
 	GridSquares bool `json:"gridSquares"`
+	// GridSize is the size of grid tiles in both modes: small, medium or large.
+	GridSize string `json:"gridSize"`
 	// TimelineIncludesShared adds other users' photos the user can see to the timeline.
 	TimelineIncludesShared bool `json:"timelineIncludesShared"`
 	// Language is the interface language: auto, en or ru.
@@ -60,6 +62,7 @@ func toUserJSON(u store.User) userJSON {
 
 		NavigationHiddenOnPhones: u.NavigationHiddenOnPhones,
 		GridSquares:              u.GridSquares,
+		GridSize:                 u.GridSize,
 		TimelineIncludesShared:   u.TimelineIncludesShared,
 		Language:                 u.Language,
 	}
@@ -67,6 +70,9 @@ func toUserJSON(u store.User) userJSON {
 
 // languages are the interface languages a user can choose; auto follows the browser.
 var languages = []string{"auto", "en", "ru"}
+
+// gridSizes are the sizes of grid tiles a user can choose.
+var gridSizes = []string{"small", "medium", "large"}
 
 // viewerFields are the photo details the viewer can show, in the order it shows them.
 var viewerFields = []string{"camera", "lens", "focalLength", "aperture", "exposureTime", "iso", "exposureCompensation", "flash", "location"}

@@ -5,7 +5,7 @@ import { useDisplay } from 'vuetify'
 import { isVideo, previewUrl, type Photo } from '../api/client'
 import { formatDuration } from '../lib/duration'
 import { visibleRows } from '../lib/justify'
-import { GAP, layoutTimeline, monthTitle, rowHeight, squareSide, visibleSections, type SectionLayout } from '../lib/timeline'
+import { GAP, layoutTimeline, monthTitle, rowHeight, tileSide, visibleSections, type SectionLayout } from '../lib/timeline'
 import { useAuthStore } from '../stores/auth'
 import type { Section } from '../stores/photos'
 import TimelineScrubber from './TimelineScrubber.vue'
@@ -43,14 +43,16 @@ const auth = useAuthStore()
 // The width the tiles fill.
 const inner = computed(() => width.value - paddingX.value * 2)
 
-// Square tiles have the same size in CSS pixels on any screen density.
-const square = computed(() => (auth.user?.gridSquares ? squareSide(inner.value) : null))
+// The size the user chose, in CSS pixels for this width: the target height of
+// rows that keep each photo's shape, and the side of a square.
+const side = computed(() => tileSide(inner.value, auth.user?.gridSize ?? 'medium'))
+const square = computed(() => (auth.user?.gridSquares ? side.value : null))
 
-const layout = computed(() => layoutTimeline(props.sections, inner.value, props.byMonth, square.value))
+const layout = computed(() => layoutTimeline(props.sections, inner.value, props.byMonth, side.value, square.value))
 const canvasHeight = computed(() => layout.value.height + PADDING_TOP + paddingBottom.value)
 const canvasStyle = computed(() => ({
   height: `${canvasHeight.value}px`,
-  '--row-height': `${rowHeight(inner.value, square.value)}px`,
+  '--row-height': `${rowHeight(inner.value, side.value, square.value)}px`,
   '--gap': `${GAP}px`,
 }))
 

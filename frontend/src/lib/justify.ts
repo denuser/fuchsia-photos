@@ -19,8 +19,15 @@ export interface Layout {
   height: number
 }
 
-// Lays items out in rows of equal height that fill the width. A row is closed as
-// soon as it is wide enough at the target height. The last row keeps the target
+// A row that ends before the photo that would overflow it grows taller than
+// the target, at most this many times, so that a panorama after a single
+// photo does not leave that photo a huge row of its own.
+const MAX_STRETCH = 1.4
+
+// Lays items out in rows of equal height that fill the width. When an item
+// overflows a row at the target height, the row ends with it or before it,
+// whichever brings the row's height closer to the target by ratio, so rows are
+// a little shorter or taller than the target. The last row keeps the target
 // height instead of stretching a few photos across the whole width.
 export function justify(items: JustifyItem[], width: number, targetHeight: number, gap: number): Layout {
   const rows: Row[] = []
@@ -49,9 +56,20 @@ export function justify(items: JustifyItem[], width: number, targetHeight: numbe
   for (let i = 0; i < items.length; i++) {
     aspectSum += items[i]!.aspect
     const gaps = gap * (i - start)
-    if (aspectSum * targetHeight + gaps >= width) {
-      closeRow(i + 1, (width - gaps) / aspectSum)
+    if (aspectSum * targetHeight + gaps < width) {
+      continue
     }
+    const withIt = (width - gaps) / aspectSum
+    if (i > start) {
+      const without = (width - gaps + gap) / (aspectSum - items[i]!.aspect)
+      if (without <= targetHeight * MAX_STRETCH && without / targetHeight < targetHeight / withIt) {
+        closeRow(i, without)
+        // The item starts the next row, and may overflow it alone.
+        i--
+        continue
+      }
+    }
+    closeRow(i + 1, withIt)
   }
   if (start < items.length) {
     closeRow(items.length, targetHeight)

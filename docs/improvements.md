@@ -187,3 +187,26 @@ Plan for Google Takeout:
 Steps 0 to 4 make a working import, released on their own. Versions come next, and descriptions, favorites and the archive each as a change of its own.
 
 iCloud later: the parts of a copy from privacy.apple.com hold the files, `Photo Details.csv` (`imgName`, `fileChecksum`, `favorite`, `hidden`, `deleted`, `originalCreationDate`, `importDate`) and `Albums/*.csv`. Rows are matched to files by name, and by `fileChecksum` when a name repeats in a part. Live Photos are paired by `ContentIdentifier` as they are now.
+
+## 11. Grid tile size
+
+**Status:** done.
+
+Before this improvement tiles were 200 CSS pixels in both grid modes, a constant in `lib/timeline.ts`. Rows that keep each photo's shape closed as soon as they overflowed the width, so a row was never taller than 200 and usually a little shorter, on a phone too. Squares aimed at 200, or 130 on a grid narrower than 600. The grid preview size on the administration page sets only the resolution of the preview files, which decides how sharp the tiles are, not their size.
+
+Settled with the user on 2026-11-15:
+
+- One setting drives both modes: a size of small, medium or large, chosen in the profile and stored per user in the database, next to the switch for squares. The default is medium.
+- On a grid 600 pixels wide or more the levels aim at 150, 200 and 280 CSS pixels: the height of a row that keeps each photo's shape, and the side of a square. Medium is what a wide grid shows now.
+- On a narrower grid the levels give 4, 3 and 2 squares in a row, and rows that keep each photo's shape aim at the side of those squares. This changes the phone grid: medium rows become about 120 pixels tall instead of up to 200, the same as the squares, and a grid between 500 and 600 pixels gets 3 squares instead of 4.
+- A row that keeps each photo's shape breaks where its height comes closest to the target, before or after the photo that overflows, so rows are a little taller or shorter than the target instead of never taller.
+- The range is limited so that tiles stay sharp, rather than warning about blurry ones: the largest tile is about 400 CSS pixels, which the largest grid preview, 800, covers on a 2× screen.
+- `GET /settings/grid` goes: nothing has read it since squares stopped depending on the grid preview size.
+
+Work:
+
+1. Backend. A migration adds `users.grid_size` (`small`, `medium`, `large`, default `medium`, with a check). `PATCH /me` takes `gridSize` and checks it before any write, as it does `language`, so an invalid request changes nothing. The OpenAPI user gets it as an enum in its required fields. The comment in `00012_grid_squares.sql` that says the size comes from the grid preview size is edited. `GET /settings/grid` goes with its handler, route, OpenAPI path and test.
+2. `lib/justify.ts`. When a photo overflows the row, compare the height with it and without it and take the one closer to the target by ratio. There is no choice when the photo is the first in its row, and a photo pushed to the next row is checked again at once, since a panorama may overflow alone. A row is at most 1.4 times the target, so a panorama after a single photo does not make a row a thousand pixels tall; the last row of a month keeps the target height.
+3. `lib/timeline.ts` and `PhotoGrid.vue`. The target comes from the level and the width instead of `TARGET_HEIGHT` and `squareSide`: in `rowsOf` and its cache key, `rowHeight`, `estimate` and `--row-height`.
+4. Profile. A three-button toggle inside `AppFormGroup`, labelled above, under the squares switch, with English and Russian strings. The administration hint of the grid preview size says that it controls sharpness, not tile size: about 200 × the screen density for medium tiles and 280 × the density for large ones; after raising it, `render-grid` remakes the previews of existing photos.
+5. Checks. The API tests cover the `gridSize` round trip and the rejection of an unknown value. The browser flow checks that large squares are wider than medium ones. The break choice of `justify` is checked with a throwaway script in the scratchpad, not a committed test. `docs/architecture.md` updates the "Grid tiles" and "Grid preview size" rows and the `users` table.

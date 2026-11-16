@@ -140,6 +140,7 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 		GridSquares              *bool `json:"gridSquares"`
 		TimelineIncludesShared   *bool `json:"timelineIncludesShared"`
 
+		GridSize *string `json:"gridSize"`
 		Language *string `json:"language"`
 	}
 	if !readJSON(w, r, &req) {
@@ -155,6 +156,10 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Language != nil && !slices.Contains(languages, *req.Language) {
 		writeError(w, http.StatusBadRequest, "unknown language")
+		return
+	}
+	if req.GridSize != nil && !slices.Contains(gridSizes, *req.GridSize) {
+		writeError(w, http.StatusBadRequest, "unknown grid size")
 		return
 	}
 	user := currentUser(r)
@@ -207,6 +212,17 @@ func (s *server) updateMe(w http.ResponseWriter, r *http.Request) {
 		user, err = s.Queries.SetUserGridSquares(r.Context(), store.SetUserGridSquaresParams{
 			ID:          user.ID,
 			GridSquares: *req.GridSquares,
+		})
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+	}
+	if req.GridSize != nil {
+		var err error
+		user, err = s.Queries.SetUserGridSize(r.Context(), store.SetUserGridSizeParams{
+			ID:       user.ID,
+			GridSize: *req.GridSize,
 		})
 		if err != nil {
 			internalError(w, r, err)

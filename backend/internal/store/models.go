@@ -202,6 +202,7 @@ type User struct {
 	GridSquares              bool
 	TimelineIncludesShared   bool
 	Language                 string
+	GridSize                 string
 }
 
 type VideoSetting struct {

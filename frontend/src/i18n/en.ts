@@ -284,6 +284,8 @@ export default {
     grid: 'Photo grid',
     squares: 'Show square previews',
     squaresHint: 'All previews are the same size, cropped to a square.',
+    gridSize: 'Preview size',
+    gridSizes: { small: 'Small', medium: 'Medium', large: 'Large' },
     viewer: 'Viewer',
     originals: 'Load originals when zooming in',
     originalsHint:
@@ -380,7 +382,8 @@ export default {
     qualityHint: 'From 1 to 100. Higher looks better and takes more space.',
     effortHint: 'From 0 to 6. Higher makes smaller files, but takes longer.',
     gridEdge: 'Grid preview size',
-    gridEdgeHint: 'Shortest side, from 200 to 800 pixels.',
+    gridEdgeHint:
+      'Shortest side, from 200 to 800 pixels. It sets how sharp the grid looks, not the size of tiles: about 200 × the screen density for medium tiles, 280 × for large ones. The render-grid command remakes the previews of existing photos.',
     viewerEdge: 'Viewer preview size',
     viewerEdgeHint: 'Longest side, from 1024 to 4096 pixels.',
     range: 'Enter a whole number from {min} to {max}',
