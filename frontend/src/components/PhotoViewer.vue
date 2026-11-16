@@ -556,6 +556,17 @@ function onPointerMove(event: PointerEvent) {
   }
 }
 
+// Chrome on Android turns a swipe into a scroll with a fling even under
+// touch-action: none, and the first tap after it only stops the fling: the
+// buttons took no click for most of a second after a swipe. A cancelled
+// touchmove starts no scroll. The video's controls, which make no gesture,
+// keep their touches.
+function onTouchMove(event: TouchEvent) {
+  if (gesture && event.cancelable) {
+    event.preventDefault()
+  }
+}
+
 function onPointerUp(event: PointerEvent) {
   if (!pointers.delete(event.pointerId)) {
     return
@@ -674,6 +685,7 @@ onBeforeUnmount(() => {
       class="stage"
       :class="{ zoomable, zoomed }"
       @pointerdown="onPointerDown"
+      @touchmove="onTouchMove"
       @click="onClick"
       @wheel.prevent="onWheel"
     >
