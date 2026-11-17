@@ -27,8 +27,8 @@ async function submit() {
 </script>
 
 <template>
-  <v-container class="fill-height justify-center">
-    <v-card width="380" title="Fuchsia Photos" :subtitle="t('login.subtitle')">
+  <v-container class="fill-height justify-center loginForm">
+    <v-card class="loginForm__card" title="Fuchsia Photos" :subtitle="t('login.subtitle')">
       <template #prepend>
         <v-avatar :image="logo" size="48" />
       </template>
@@ -41,9 +41,23 @@ async function submit() {
           <AppFormGroup v-slot="field" :label="t('login.password')" required>
             <v-text-field v-bind="field" v-model="password" type="password" autocomplete="current-password" />
           </AppFormGroup>
-          <v-btn type="submit" color="primary" block :text="t('login.submit')" :loading="submitting" :disabled="!login || !password" />
+          <v-btn type="submit" color="primary" block :text="t('login.submit')" :loading="submitting"
+            :disabled="!login || !password" />
         </v-card-text>
       </v-form>
     </v-card>
   </v-container>
 </template>
+
+<style scoped>
+.loginForm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.loginForm__card {
+  max-width: 380px;
+  width: calc(100% - 20px);
+}
+</style>
