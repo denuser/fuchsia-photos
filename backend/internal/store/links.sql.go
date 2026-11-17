@@ -55,6 +55,7 @@ original_marked AS (
 UPDATE photos e
 SET visibility = CASE WHEN o.visibility = 'all' THEN 'all' ELSE e.visibility END,
     has_motion = e.has_motion OR o.has_motion,
+    description = CASE WHEN e.description = '' THEN o.description ELSE e.description END,
     updated_at = now()
 FROM link
 JOIN photos o ON o.id = link.hidden_id
@@ -69,7 +70,8 @@ type LinkEditedVersionParams struct {
 // Hides an original under its edited copy, if both are still as
 // ListVersionCandidates found them. The copy takes over what the original
 // had, so that nobody loses the photo: its albums, the album covers it was,
-// its direct shares, visibility to all users, its tags and its motion. The
+// its direct shares, visibility to all users, its tags, its motion and its
+// description, if the copy has none. The
 // video of a Live Photo paired with the copy moves to the original, which it
 // belongs to, when the original has none. Both move updated_at, so that open
 // pages drop the original. Run under LockPhotoLinks.

@@ -226,3 +226,17 @@ ON CONFLICT DO NOTHING;
 
 -- name: CountRestoredPhotos :exec
 UPDATE import_runs SET restored = restored + @restored WHERE id = @id;
+
+-- Gives the photos whose newest JSON came from this run the description in
+-- it, if they have none. An import never replaces a description, so the
+-- owner's edits stay.
+-- name: FillImportedDescriptions :exec
+UPDATE photos p
+SET description = clean_description(m.sidecar ->> 'description'), updated_at = now()
+FROM imported_metadata m
+WHERE m.run_id = @run_id
+  AND m.photo_id = p.id
+  AND p.description = ''
+  AND p.purged_at IS NULL
+  AND jsonb_typeof(m.sidecar -> 'description') = 'string'
+  AND clean_description(m.sidecar ->> 'description') <> '';

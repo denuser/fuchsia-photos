@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 	// Time zones are checked against the copy built into the binary, as the
 	// image has no time zone database.
 	_ "time/tzdata"
@@ -69,9 +70,15 @@ type photoJSON struct {
 	// null while no copy has been tried.
 	VideoCopy *string `json:"videoCopy"`
 
+	// The description everyone who can see the photo sees; empty for none.
+	Description string `json:"description"`
+
 	Camera   *metadata.Camera   `json:"camera"`
 	Location *metadata.Location `json:"location"`
 }
+
+// maxDescription is the longest description, in characters.
+const maxDescription = 2000
 
 func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 	camera, location := metadata.Details(p.Exif)
@@ -109,6 +116,7 @@ func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 		Duration:       p.Duration,
 		HasMotion:      p.HasMotion,
 		VideoCopy:      p.VideoCopy,
+		Description:    p.Description,
 	}
 }
 
@@ -741,4 +749,48 @@ func (s *server) serveFile(w http.ResponseWriter, r *http.Request, path string) 
 		return
 	}
 	http.ServeContent(w, r, "", info.ModTime(), file)
+}
+
+// updatePhoto changes what the owner may change of a photo: its description.
+func (s *server) updatePhoto(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Description *string `json:"description"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.Description == nil {
+		writeError(w, http.StatusBadRequest, "nothing to change")
+		return
+	}
+	if utf8.RuneCountInString(strings.TrimSpace(*req.Description)) > maxDescription {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("a description is at most %d characters", maxDescription))
+		return
+	}
+	// PostgreSQL text holds no NUL; clean_description makes the other
+	// control characters spaces.
+	description := strings.ReplaceAll(*req.Description, "\x00", " ")
+	photo, err := s.Queries.SetPhotoDescription(r.Context(), store.SetPhotoDescriptionParams{
+		ID:          id,
+		OwnerID:     currentUser(r).ID,
+		Description: description,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	showLocation, err := s.showLocation(r.Context())
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toPhotoJSON(photo, showLocation))
 }

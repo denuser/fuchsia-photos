@@ -541,7 +541,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Change the description of one of the current user's photos
+         * @description The description is stored with line breaks kept, other control characters as spaces and spaces at both ends trimmed. An empty one clears it.
+         */
+        patch: operations["updatePhoto"];
         trace?: never;
     };
     "/photos/{id}/tags": {
@@ -1402,6 +1406,8 @@ export interface components {
              * @enum {string|null}
              */
             videoCopy: "ready" | "not_needed" | "failed" | null;
+            /** @description The photo's description, which everyone who can see the photo sees and only its owner changes. Empty for none */
+            description: string;
             /** @description Shooting details from EXIF. Null when the photo has none */
             camera: components["schemas"]["Camera"] | null;
             /** @description Where the photo was taken. Null when it has no location or an administrator hides locations */
@@ -2504,6 +2510,36 @@ export interface operations {
                     "application/json": components["schemas"]["Photo"];
                 };
             };
+            404: components["responses"]["Error"];
+        };
+    };
+    updatePhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    description: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The changed photo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Photo"];
+                };
+            };
+            400: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };

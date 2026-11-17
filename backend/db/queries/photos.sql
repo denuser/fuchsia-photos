@@ -539,3 +539,11 @@ FROM (
            unnest(@latitudes::double precision[]) AS latitude, unnest(@longitudes::double precision[]) AS longitude
 ) u
 WHERE p.id = u.id;
+
+-- Sets the description of one of the owner's photos, cleaned as
+-- clean_description does. Moves updated_at, so that open pages get it.
+-- name: SetPhotoDescription :one
+UPDATE photos
+SET description = clean_description(@description::text), updated_at = now()
+WHERE id = @id AND owner_id = @owner_id AND purged_at IS NULL
+RETURNING *;

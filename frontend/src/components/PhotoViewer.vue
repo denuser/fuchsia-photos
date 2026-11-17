@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useDisplay } from 'vuetify'
 
 import { api, copyUrl, isVideo, motionUrl, originalUrl, previewUrl, videoUrl, type Camera, type Photo, type ViewerField } from '../api/client'
 import { formatDateTime, intlLocale, t } from '../i18n'
+import { apiError } from '../i18n/apiErrors'
 import { formatDuration } from '../lib/duration'
 import { useAuthStore } from '../stores/auth'
+import { usePhotosStore } from '../stores/photos'
+import AppDialog from './AppDialog.vue'
+import AppFormGroup from './AppFormGroup.vue'
 import { useUsersStore } from '../stores/users'
 
 // paused leaves the keyboard to a dialog opened over the viewer.
@@ -58,6 +63,75 @@ watch(
   },
   { immediate: true },
 )
+
+// The description goes with the photo to everyone who sees it; its owner
+// edits it in a dialog, which keeps the keyboard while it is open.
+const MAX_DESCRIPTION = 2000
+const photosStore = usePhotosStore()
+const saved = reactive(new Map<number, string>())
+const description = computed(() => saved.get(shown.value.id) ?? shown.value.description)
+const canEditDescription = computed(() => shown.value.ownerId === auth.user?.id)
+const descriptionOpen = ref(false)
+const descriptionDraft = ref('')
+const descriptionSaving = ref(false)
+const descriptionError = ref('')
+
+function editDescription() {
+  descriptionDraft.value = description.value
+  descriptionError.value = ''
+  descriptionOpen.value = true
+}
+
+async function saveDescription() {
+  const photo = shown.value
+  descriptionSaving.value = true
+  const { data, error } = await api.PATCH('/photos/{id}', {
+    params: { path: { id: photo.id } },
+    body: { description: descriptionDraft.value },
+  })
+  descriptionSaving.value = false
+  if (!data) {
+    descriptionError.value = apiError(error)
+    return
+  }
+  saved.set(data.id, data.description)
+  // A hidden original is not in the lists and must not join them.
+  if (data.id === props.photo.id) {
+    photosStore.merge([data])
+  }
+  descriptionOpen.value = false
+}
+
+// Actions used less often. On a phone they fold into a "⋮" menu, as the
+// selection bar's do, so that the bar keeps one row; wider screens show
+// them as buttons.
+const { xs } = useDisplay()
+// The menu takes Escape and the arrows while it is open.
+const moreOpen = ref(false)
+interface ViewerAction {
+  key: string
+  icon: string
+  text: string
+  click: () => void
+  active?: boolean
+}
+const secondaryActions = computed<ViewerAction[]>(() => [
+  ...(props.canFindSimilar ? [{ key: 'similar', icon: 'fa-clone', text: t('viewer.similar'), click: () => emit('similar', props.photo) }] : []),
+  ...(original.value
+    ? [
+        {
+          key: 'original',
+          icon: 'fa-clock-rotate-left',
+          text: showingOriginal.value ? t('viewer.showEdited') : t('viewer.showOriginal'),
+          click: () => (showingOriginal.value = !showingOriginal.value),
+          active: showingOriginal.value,
+        },
+      ]
+    : []),
+  ...(canEditDescription.value ? [{ key: 'description', icon: 'fa-pen', text: t('viewer.editDescription'), click: editDescription }] : []),
+  ...(props.canTag ? [{ key: 'tags', icon: 'fa-tag', text: t('browser.tags'), click: () => emit('tags', props.photo) }] : []),
+  ...(props.canManage ? [{ key: 'share', icon: 'fa-share-nodes', text: t('browser.share'), click: () => emit('share', props.photo) }] : []),
+])
 
 const ready = computed(() => props.photos.filter((p) => p.status === 'ready'))
 const index = computed(() => ready.value.findIndex((p) => p.id === props.photo.id))
@@ -675,7 +749,7 @@ function onClick(event: MouseEvent) {
 }
 
 function onKey(event: KeyboardEvent) {
-  if (props.paused) {
+  if (props.paused || descriptionOpen.value || moreOpen.value) {
     return
   }
   if (event.key === 'Escape' && zoomed.value) {
@@ -801,15 +875,8 @@ onBeforeUnmount(() => {
       <div class="info">
         <div class="name">{{ shown.name }}</div>
         <div class="details">{{ details }}</div>
+        <div v-if="description" class="description" data-testid="viewer-description">{{ description }}</div>
       </div>
-      <v-btn
-        v-if="canFindSimilar"
-        icon="fa-clone"
-        variant="text"
-        :aria-label="t('viewer.similar')"
-        :title="t('viewer.similar')"
-        @click="emit('similar', photo)"
-      />
       <v-btn
         v-if="shown.hasMotion && !video"
         :icon="motionPlaying ? 'fa-stop' : 'fa-regular-circle-dot'"
@@ -819,22 +886,37 @@ onBeforeUnmount(() => {
         :title="motionPlaying ? t('viewer.stopMotion') : t('viewer.playMotion')"
         @click="toggleMotion"
       />
-      <v-btn
-        v-if="original"
-        icon="fa-clock-rotate-left"
-        variant="text"
-        :active="showingOriginal"
-        data-testid="viewer-original-button"
-        :aria-label="showingOriginal ? t('viewer.showEdited') : t('viewer.showOriginal')"
-        :title="showingOriginal ? t('viewer.showEdited') : t('viewer.showOriginal')"
-        :aria-pressed="showingOriginal"
-        @click="showingOriginal = !showingOriginal"
-      />
-      <v-btn v-if="canTag" icon="fa-tag" variant="text" :aria-label="t('browser.tags')" @click="emit('tags', photo)" />
-      <template v-if="canManage">
-        <v-btn icon="fa-share-nodes" variant="text" :aria-label="t('browser.share')" @click="emit('share', photo)" />
-        <v-btn icon="fa-trash-can" variant="text" :aria-label="t('browser.moveToTrash')" @click="emit('trash', photo)" />
+      <v-menu v-if="xs && secondaryActions.length" v-model="moreOpen">
+        <template #activator="{ props: menu }">
+          <v-btn v-bind="menu" icon="fa-ellipsis-vertical" variant="text" data-testid="viewer-more" :aria-label="t('viewer.moreActions')" />
+        </template>
+        <v-list density="compact">
+          <v-list-item
+            v-for="action in secondaryActions"
+            :key="action.key"
+            :title="action.text"
+            :prepend-icon="action.icon"
+            :active="action.active"
+            :data-testid="`viewer-${action.key}-button`"
+            @click="action.click"
+          />
+        </v-list>
+      </v-menu>
+      <template v-else>
+        <v-btn
+          v-for="action in secondaryActions"
+          :key="action.key"
+          :icon="action.icon"
+          variant="text"
+          :active="action.active"
+          :aria-pressed="action.active"
+          :data-testid="`viewer-${action.key}-button`"
+          :aria-label="action.text"
+          :title="action.text"
+          @click="action.click"
+        />
       </template>
+      <v-btn v-if="canManage" icon="fa-trash-can" variant="text" :aria-label="t('browser.moveToTrash')" @click="emit('trash', photo)" />
       <v-btn :href="originalUrl(shown.id)" icon="fa-download" variant="text" :aria-label="t('viewer.download')" />
       <v-btn icon="fa-xmark" variant="text" :aria-label="t('common.close')" @click="emit('close')" />
     </div>
@@ -870,6 +952,29 @@ onBeforeUnmount(() => {
       :aria-label="t('viewer.next')"
       @click="emit('navigate', next)"
     />
+    <AppDialog
+      v-model="descriptionOpen"
+      :title="t('viewer.editDescription')"
+      :action="t('common.save')"
+      :error="descriptionError"
+      :loading="descriptionSaving"
+      :disabled="descriptionDraft.trim().length > MAX_DESCRIPTION"
+      :form="false"
+      :max-width="560"
+      @submit="saveDescription"
+    >
+      <AppFormGroup v-slot="field" :label="t('viewer.description')">
+        <v-textarea
+          v-bind="field"
+          v-model="descriptionDraft"
+          data-testid="description-field"
+          rows="4"
+          auto-grow
+          autofocus
+          :counter="MAX_DESCRIPTION"
+        />
+      </AppFormGroup>
+    </AppDialog>
   </div>
 </template>
 
@@ -1000,6 +1105,15 @@ onBeforeUnmount(() => {
 .info {
   flex: 1;
   min-width: 0;
+}
+
+/* A long description scrolls within a few lines, so the photo keeps the screen. */
+.description {
+  max-height: 4.5em;
+  overflow-y: auto;
+  margin-top: 4px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
 /* On a narrow screen the buttons take a row of their own above the name and

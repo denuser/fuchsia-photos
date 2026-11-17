@@ -214,6 +214,26 @@ func (q *Queries) FailImportRun(ctx context.Context, arg FailImportRunParams) er
 	return err
 }
 
+const fillImportedDescriptions = `-- name: FillImportedDescriptions :exec
+UPDATE photos p
+SET description = clean_description(m.sidecar ->> 'description'), updated_at = now()
+FROM imported_metadata m
+WHERE m.run_id = $1
+  AND m.photo_id = p.id
+  AND p.description = ''
+  AND p.purged_at IS NULL
+  AND jsonb_typeof(m.sidecar -> 'description') = 'string'
+  AND clean_description(m.sidecar ->> 'description') <> ''
+`
+
+// Gives the photos whose newest JSON came from this run the description in
+// it, if they have none. An import never replaces a description, so the
+// owner's edits stay.
+func (q *Queries) FillImportedDescriptions(ctx context.Context, runID *int64) error {
+	_, err := q.db.Exec(ctx, fillImportedDescriptions, runID)
+	return err
+}
+
 const findAlbumByName = `-- name: FindAlbumByName :one
 SELECT id FROM albums WHERE owner_id = $1 AND name = $2 ORDER BY id LIMIT 1
 `

@@ -122,6 +122,7 @@ type Photo struct {
 	VideoCopy         *string
 	ImportedLatitude  *float64
 	ImportedLongitude *float64
+	Description       string
 }
 
 type PhotoEmbedding struct {

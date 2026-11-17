@@ -883,6 +883,34 @@ paths:
                 $ref: "#/components/schemas/Photo"
         "404":
           $ref: "#/components/responses/Error"
+    patch:
+      operationId: updatePhoto
+      summary: Change the description of one of the current user's photos
+      description: The description is stored with line breaks kept, other control characters as spaces and spaces at both ends trimmed. An empty one clears it.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [description]
+              properties:
+                description:
+                  type: string
+                  maxLength: 2000
+      responses:
+        "200":
+          description: The changed photo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Photo"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /photos/{id}/tags:
     get:
       operationId: getPhotoTags
@@ -1969,7 +1997,7 @@ components:
     Photo:
       type: object
       description: A photo or a video, which the MIME type tells apart
-      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, duration, hasMotion, hiddenUnder, videoCopy, camera, location]
+      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, duration, hasMotion, hiddenUnder, videoCopy, description, camera, location]
       properties:
         id:
           type: integer
@@ -2026,6 +2054,9 @@ components:
           description: The H.264 copy of what the item plays, the video or the motion, served from /photos/{id}/copy when ready. not_needed when the video plays as it is or the graphics cannot decode it. Null while no copy has been tried
           type: [string, "null"]
           enum: [ready, not_needed, failed, null]
+        description:
+          description: The photo's description, which everyone who can see the photo sees and only its owner changes. Empty for none
+          type: string
         camera:
           description: Shooting details from EXIF. Null when the photo has none
           oneOf:

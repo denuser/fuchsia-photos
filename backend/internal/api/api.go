@@ -102,6 +102,7 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("POST /api/v1/photos/purge", s.authenticated(s.purgePhotos))
 	mux.HandleFunc("POST /api/v1/photos/tags", s.authenticated(s.changePhotoTags))
 	mux.HandleFunc("GET /api/v1/photos/{id}", s.authenticated(s.getPhoto))
+	mux.HandleFunc("PATCH /api/v1/photos/{id}", s.authenticated(s.updatePhoto))
 	mux.HandleFunc("GET /api/v1/photos/{id}/tags", s.authenticated(s.getPhotoTags))
 	mux.HandleFunc("GET /api/v1/photos/{id}/sharing", s.authenticated(s.getPhotoSharing))
 	mux.HandleFunc("GET /api/v1/photos/{id}/previews/{kind}", s.authenticated(s.getPreview))
