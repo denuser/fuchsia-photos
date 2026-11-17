@@ -18,6 +18,9 @@ export interface PhotoQuery {
   withShared?: boolean
   // Only the current user's favorites.
   favorites?: boolean
+  // Only the photos in the current user's archive, which other lists of the
+  // user's photos leave out, except albums and favorites.
+  archived?: boolean
   tags?: number[]
   cameras?: string[]
   lenses?: string[]
@@ -161,10 +164,11 @@ function fetchMonths(query: PhotoQuery) {
 }
 
 // The filters of the user's own list, other than the album and the dates. An empty one is left out.
-export function listFilters({ withShared, favorites, tags, cameras, lenses, kinds }: PhotoQuery) {
+export function listFilters({ withShared, favorites, archived, tags, cameras, lenses, kinds }: PhotoQuery) {
   return {
     withShared: withShared || undefined,
     favorites: favorites || undefined,
+    archived: archived || undefined,
     tag: tags?.length ? tags : undefined,
     camera: cameras?.length ? cameras : undefined,
     lens: lenses?.length ? lenses : undefined,
@@ -193,11 +197,12 @@ export const usePhotosStore = defineStore('photos', () => {
   // Only the whole library and the trash can tell from a photo alone that it
   // belongs in the list. Other lists learn about new members by loading.
   const unfiltered = computed(() => {
-    const { shared, everyone, album, favorites, tags, cameras, lenses, kinds, from, to } = query.value
+    const { shared, everyone, album, favorites, archived, tags, cameras, lenses, kinds, from, to } = query.value
     return (
       !ranked(query.value) &&
       !shared &&
       !favorites &&
+      !archived &&
       !everyone &&
       album === undefined &&
       !tags?.length &&
@@ -476,6 +481,29 @@ export const usePhotosStore = defineStore('photos', () => {
     }
   }
 
+  // Whether archiving, or taking out of the archive, makes photos leave the
+  // open list: the Archive page loses what leaves the archive, and a list of
+  // the user's photos that leaves out the archive loses what goes in. Albums,
+  // favorites, search and other users' photos keep them.
+  function archiveLeaves(value: boolean) {
+    const q = query.value
+    if (q.archived) {
+      return !value
+    }
+    return value && !q.trash && !q.shared && !q.everyone && q.album === undefined && !q.favorites && !ranked(q)
+  }
+
+  // Like a favorite mark, the archive sends no event. Returns whether the
+  // photos left the list.
+  async function archive(ids: number[], value: boolean) {
+    await inBatches(ids, (batch) => api.POST('/photos/archive', { body: { ids: batch, archived: value } }))
+    const leaves = archiveLeaves(value)
+    if (leaves) {
+      remove(ids)
+    }
+    return leaves
+  }
+
   async function purge(ids: number[]) {
     await inBatches(ids, (batch) => api.POST('/photos/purge', { body: { ids: batch } }))
     remove(ids)
@@ -533,6 +561,7 @@ export const usePhotosStore = defineStore('photos', () => {
     trash,
     restore,
     favorite,
+    archive,
     purge,
     connect,
     disconnect,

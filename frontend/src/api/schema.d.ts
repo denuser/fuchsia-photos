@@ -390,6 +390,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/photos/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Put photos into the current user's archive, or take them out
+         * @description The archive is the user's own. An archived photo leaves the user's timeline and stays in albums, favorites, search and the photos shared with the user. Photos the user cannot see, hidden versions and photos in the trash are not archived. It sends no event.
+         */
+        post: operations["changeArchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/photos/months": {
         parameters: {
             query?: never;
@@ -1421,6 +1441,8 @@ export interface components {
             hiddenUnder: "live" | "edited" | null;
             /** @description Whether the photo is the current user's favorite. Only GET /photos/{id} gives it */
             favorite?: boolean;
+            /** @description Whether the photo is in the current user's archive. Only GET /photos/{id} gives it */
+            archived?: boolean;
             /** @description The files hidden right under the photo, such as the original of an edited copy. Only GET /photos/{id} gives them, and only to the photo's owner; a hidden file is opened through its own id */
             versions?: components["schemas"]["PhotoVersion"][];
             /**
@@ -2094,6 +2116,8 @@ export interface operations {
                 withShared?: boolean;
                 /** @description Only the current user's favorites. With `withShared`, also other users' photos the user marked. Cannot be combined with `album` */
                 favorites?: boolean;
+                /** @description Only the photos in the current user's archive. Without it, the list leaves them out, unless it is an album or `favorites`. Cannot be combined with `album` */
+                archived?: boolean;
             };
             header?: never;
             path?: never;
@@ -2305,6 +2329,32 @@ export interface operations {
             400: components["responses"]["Error"];
         };
     };
+    changeArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    ids: components["schemas"]["PhotoIds"];
+                    archived: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The archive is changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
     countPhotoMonths: {
         parameters: {
             query: {
@@ -2328,6 +2378,8 @@ export interface operations {
                 withShared?: boolean;
                 /** @description Only the current user's favorites. With `withShared`, also other users' photos the user marked. Cannot be combined with `album` */
                 favorites?: boolean;
+                /** @description Only the photos in the current user's archive. Without it, the list leaves them out, unless it is an album or `favorites`. Cannot be combined with `album` */
+                archived?: boolean;
             };
             header?: never;
             path?: never;
@@ -2389,6 +2441,8 @@ export interface operations {
                 withShared?: boolean;
                 /** @description Only the current user's favorites. With `withShared`, also other users' photos the user marked. Cannot be combined with `album` */
                 favorites?: boolean;
+                /** @description Only the photos in the current user's archive. Without it, the list leaves them out, unless it is an album or `favorites`. Cannot be combined with `album` */
+                archived?: boolean;
             };
             header?: never;
             path?: never;

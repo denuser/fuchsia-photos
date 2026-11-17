@@ -149,6 +149,31 @@ function favoriteSelected(value: boolean) {
   void run(() => photos.favorite(ids, value), t(value ? 'browser.favorited' : 'browser.unfavorited', ids.length))
 }
 
+function archiveSelected(value: boolean) {
+  const ids = selectedIds.value
+  void run(async () => void (await photos.archive(ids, value)), t(value ? 'browser.archived' : 'browser.unarchived', ids.length))
+}
+
+// Archiving the open photo where it leaves the list moves the viewer to a
+// neighbour, as trashing does. done tells the viewer the new state when the
+// photo stays.
+async function archiveOpened(photo: Photo, value: boolean, done: (ok: boolean) => void) {
+  const ready = viewerPhotos.value.filter((p) => p.status === 'ready')
+  const index = ready.findIndex((p) => p.id === photo.id)
+  const neighbour = ready[index + 1] ?? ready[index - 1] ?? null
+  try {
+    const left = await photos.archive([photo.id], value)
+    if (left) {
+      opened.value = neighbour
+    }
+    done(true)
+    say(t(value ? 'browser.archived' : 'browser.unarchived', 1))
+  } catch (failure) {
+    done(false)
+    say(apiError((failure as Error).message), 'error')
+  }
+}
+
 function purgeSelected() {
   const ids = selectedIds.value
   void run(() => photos.purge(ids), t('browser.deleted', ids.length))
@@ -251,6 +276,12 @@ const selectionActions = computed<SelectionAction[]>(() => {
         click: () => favoriteSelected(false),
         spins: true,
       })
+      // The Archive page takes photos out; other pages put them in.
+      list.push(
+        photos.query.archived
+          ? { key: 'unarchive', icon: 'fa-box-open', text: t('browser.unarchive'), click: () => archiveSelected(false), spins: true }
+          : { key: 'archive', icon: 'fa-box-archive', text: t('browser.archive'), click: () => archiveSelected(true), spins: true },
+      )
     }
     list.push(
       { key: 'share', icon: 'fa-share-nodes', text: t('browser.share'), click: openSelectionSharing },
@@ -338,10 +369,12 @@ defineExpose({ clearSelection, say })
       :can-tag="viewerCanTag"
       :can-manage="viewerCanManage"
       :can-find-similar="props.mode !== 'trash'"
+      :can-archive="props.mode !== 'trash' && props.mode !== 'admin'"
       :paused="dialogOpen"
       @close="opened = null"
       @navigate="opened = $event"
       @trash="trashOpened"
+      @archive="archiveOpened"
       @tags="openViewerTags"
       @share="openViewerSharing"
       @similar="findSimilar"

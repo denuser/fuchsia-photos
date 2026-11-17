@@ -56,6 +56,7 @@ const navItems = computed(() => [
   { to: '/favorites', icon: 'fa-star', title: t('nav.favorites') },
   { to: '/shared', icon: 'fa-users', title: t('nav.shared') },
   { to: '/tags', icon: 'fa-tags', title: t('nav.tags') },
+  { to: '/archive', icon: 'fa-box-archive', title: t('nav.archive') },
   { to: '/trash', icon: 'fa-trash-can', title: t('nav.trash') },
   ...(auth.isAdmin ? [{ to: '/all', icon: 'fa-user-shield', title: t('nav.all') }] : []),
 ])

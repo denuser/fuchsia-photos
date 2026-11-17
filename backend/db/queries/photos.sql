@@ -40,6 +40,13 @@ WHERE (p.owner_id = @owner_id
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT @favorites::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = @owner_id))
+  -- The user's archived photos leave the timeline and stay in albums and
+  -- favorites; the archived filter lists only them.
+  AND (CASE WHEN @archived::boolean
+            THEN EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = @owner_id)
+            WHEN sqlc.narg(album_id)::bigint IS NULL AND NOT @favorites::boolean
+            THEN NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = @owner_id)
+            ELSE true END)
   AND (sqlc.narg(after_sort_at)::timestamptz IS NULL
        OR (p.sort_at, p.id) < (sqlc.narg(after_sort_at)::timestamptz, sqlc.narg(after_id)::bigint))
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
@@ -68,6 +75,13 @@ WHERE (p.owner_id = @owner_id
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT @favorites::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = @owner_id))
+  -- The user's archived photos leave the timeline and stay in albums and
+  -- favorites; the archived filter lists only them.
+  AND (CASE WHEN @archived::boolean
+            THEN EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = @owner_id)
+            WHEN sqlc.narg(album_id)::bigint IS NULL AND NOT @favorites::boolean
+            THEN NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = @owner_id)
+            ELSE true END)
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
   AND (sqlc.narg(album_id)::bigint IS NULL
@@ -95,6 +109,13 @@ WHERE (p.owner_id = @owner_id
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT @favorites::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = @owner_id))
+  -- The user's archived photos leave the timeline and stay in albums and
+  -- favorites; the archived filter lists only them.
+  AND (CASE WHEN @archived::boolean
+            THEN EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = @owner_id)
+            WHEN sqlc.narg(album_id)::bigint IS NULL AND NOT @favorites::boolean
+            THEN NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = @owner_id)
+            ELSE true END)
   AND p.camera IS NOT NULL
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
@@ -118,6 +139,13 @@ WHERE (p.owner_id = @owner_id
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT @favorites::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = @owner_id))
+  -- The user's archived photos leave the timeline and stay in albums and
+  -- favorites; the archived filter lists only them.
+  AND (CASE WHEN @archived::boolean
+            THEN EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = @owner_id)
+            WHEN sqlc.narg(album_id)::bigint IS NULL AND NOT @favorites::boolean
+            THEN NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = @owner_id)
+            ELSE true END)
   AND p.lens IS NOT NULL
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
@@ -141,6 +169,13 @@ WHERE (p.owner_id = @owner_id
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT @favorites::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = @owner_id))
+  -- The user's archived photos leave the timeline and stay in albums and
+  -- favorites; the archived filter lists only them.
+  AND (CASE WHEN @archived::boolean
+            THEN EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = @owner_id)
+            WHEN sqlc.narg(album_id)::bigint IS NULL AND NOT @favorites::boolean
+            THEN NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = @owner_id)
+            ELSE true END)
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
   AND (sqlc.narg(album_id)::bigint IS NULL
@@ -283,6 +318,7 @@ RETURNING *;
 -- name: DeletePhotoMemberships :exec
 WITH albums_removed AS (DELETE FROM album_photos ap WHERE ap.photo_id = @id),
      favorites_removed AS (DELETE FROM photo_favorites f WHERE f.photo_id = @id),
+     archive_removed AS (DELETE FROM photo_archive a WHERE a.photo_id = @id),
      tags_removed AS (DELETE FROM photo_tags pt WHERE pt.photo_id = @id),
      covers_cleared AS (UPDATE albums a SET cover_photo_id = NULL WHERE a.cover_photo_id = @id),
      embeddings_removed AS (DELETE FROM photo_embeddings e WHERE e.photo_id = @id),
@@ -579,3 +615,22 @@ DELETE FROM photo_favorites WHERE user_id = @user_id AND photo_id = ANY (@ids::b
 
 -- name: IsFavorite :one
 SELECT EXISTS (SELECT 1 FROM photo_favorites WHERE user_id = @user_id AND photo_id = @photo_id);
+
+-- Archives photos the user can see, for the user. Photos hidden under another
+-- one, in the trash or purged are left out.
+-- name: AddToArchive :exec
+INSERT INTO photo_archive (user_id, photo_id)
+SELECT @user_id::bigint, p.id
+FROM photos p
+WHERE p.id = ANY (@ids::bigint[])
+  AND p.deleted_at IS NULL
+  AND p.purged_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
+  AND photo_visible_to(p, @user_id::bigint, false)
+ON CONFLICT DO NOTHING;
+
+-- name: RemoveFromArchive :exec
+DELETE FROM photo_archive WHERE user_id = @user_id AND photo_id = ANY (@ids::bigint[]);
+
+-- name: IsArchived :one
+SELECT EXISTS (SELECT 1 FROM photo_archive WHERE user_id = @user_id AND photo_id = @photo_id);

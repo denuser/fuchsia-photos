@@ -20,12 +20,15 @@ const props = defineProps<{
   canManage: boolean
   // Whether the viewer offers to find photos that look like this one.
   canFindSimilar: boolean
+  // Whether the viewer offers to archive the photo: not in the trash.
+  canArchive: boolean
   paused: boolean
 }>()
 const emit = defineEmits<{
   close: []
   navigate: [photo: Photo]
   trash: [photo: Photo]
+  archive: [photo: Photo, value: boolean, done: (ok: boolean) => void]
   tags: [photo: Photo]
   share: [photo: Photo]
   similar: [photo: Photo]
@@ -47,6 +50,9 @@ const shown = computed(() => (showingOriginal.value && original.value) || props.
 // address tells. The star acts on the photo of the list, also while its
 // original is shown.
 const favorite = ref<boolean | null>(null)
+// Whether the photo is in the user's archive, which the photo's own address
+// tells too.
+const archived = ref<boolean | null>(null)
 
 watch(
   () => props.photo.id,
@@ -54,11 +60,13 @@ watch(
     showingOriginal.value = false
     original.value = null
     favorite.value = null
+    archived.value = null
     const { data } = await api.GET('/photos/{id}', { params: { path: { id } } })
     if (!data || id !== props.photo.id) {
       return
     }
     favorite.value = data.favorite ?? null
+    archived.value = data.archived ?? null
     const version = data.versions?.find((v) => v.kind === 'edited')
     if (!version) {
       return
@@ -137,6 +145,16 @@ const secondaryActions = computed<ViewerAction[]>(() => [
     : []),
   ...(canEditDescription.value ? [{ key: 'description', icon: 'fa-pen', text: t('viewer.editDescription'), click: editDescription }] : []),
   ...(props.canTag ? [{ key: 'tags', icon: 'fa-tag', text: t('browser.tags'), click: () => emit('tags', props.photo) }] : []),
+  ...(archived.value !== null && props.canArchive
+    ? [
+        {
+          key: 'archive',
+          icon: archived.value ? 'fa-box-open' : 'fa-box-archive',
+          text: archived.value ? t('browser.unarchive') : t('browser.archive'),
+          click: toggleArchive,
+        },
+      ]
+    : []),
   ...(props.canManage ? [{ key: 'share', icon: 'fa-share-nodes', text: t('browser.share'), click: () => emit('share', props.photo) }] : []),
 ])
 
@@ -149,6 +167,16 @@ async function toggleFavorite() {
   if (response.ok && id === props.photo.id) {
     favorite.value = value
   }
+}
+
+function toggleArchive() {
+  const id = props.photo.id
+  const value = !archived.value
+  emit('archive', props.photo, value, (ok) => {
+    if (ok && id === props.photo.id) {
+      archived.value = value
+    }
+  })
 }
 
 const ready = computed(() => props.photos.filter((p) => p.status === 'ready'))

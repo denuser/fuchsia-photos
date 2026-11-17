@@ -66,9 +66,10 @@ type photoJSON struct {
 	// The versions hidden right under the photo, given only to its owner and
 	// only for one photo, as the viewer loads it.
 	Versions []versionJSON `json:"versions,omitempty"`
-	// Whether the photo is the current user's favorite, given only for one
-	// photo, as the viewer loads it.
+	// Whether the photo is the current user's favorite, and in the user's
+	// archive, given only for one photo, as the viewer loads it.
 	Favorite *bool `json:"favorite,omitempty"`
+	Archived *bool `json:"archived,omitempty"`
 	// The H.264 copy of what the item plays: ready, not_needed, failed, or
 	// null while no copy has been tried.
 	VideoCopy *string `json:"videoCopy"`
@@ -175,6 +176,7 @@ func (s *server) countPhotoMonths(w http.ResponseWriter, r *http.Request) {
 		OwnerID:    filter.OwnerID,
 		WithShared: filter.WithShared,
 		Favorites:  filter.Favorites,
+		Archived:   filter.Archived,
 		FromTime:   filter.FromTime,
 		ToTime:     filter.ToTime,
 		AlbumID:    filter.AlbumID,
@@ -238,10 +240,19 @@ func (s *server) timelineFilter(w http.ResponseWriter, r *http.Request) (store.L
 		writeError(w, http.StatusBadRequest, "invalid favorites")
 		return params, false
 	}
+	switch query.Get("archived") {
+	case "", "false":
+	case "true":
+		params.Archived = true
+	default:
+		writeError(w, http.StatusBadRequest, "invalid archived")
+		return params, false
+	}
 	if text := query.Get("album"); text != "" {
-		// Favorites are the current user's, an album is its owner's.
-		if params.Favorites {
-			writeError(w, http.StatusBadRequest, "an album cannot be listed by favorites")
+		// Favorites and the archive are the current user's, an album is its
+		// owner's.
+		if params.Favorites || params.Archived {
+			writeError(w, http.StatusBadRequest, "an album cannot be listed by favorites or the archive")
 			return params, false
 		}
 		// An album is one owner's, and its own sharing decides who sees it.
@@ -289,6 +300,7 @@ func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
 		OwnerID:    filter.OwnerID,
 		WithShared: filter.WithShared,
 		Favorites:  filter.Favorites,
+		Archived:   filter.Archived,
 		FromTime:   filter.FromTime,
 		ToTime:     filter.ToTime,
 		AlbumID:    filter.AlbumID,
@@ -304,6 +316,7 @@ func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
 		OwnerID:    filter.OwnerID,
 		WithShared: filter.WithShared,
 		Favorites:  filter.Favorites,
+		Archived:   filter.Archived,
 		FromTime:   filter.FromTime,
 		ToTime:     filter.ToTime,
 		AlbumID:    filter.AlbumID,
@@ -319,6 +332,7 @@ func (s *server) listCameras(w http.ResponseWriter, r *http.Request) {
 		OwnerID:    filter.OwnerID,
 		WithShared: filter.WithShared,
 		Favorites:  filter.Favorites,
+		Archived:   filter.Archived,
 		FromTime:   filter.FromTime,
 		ToTime:     filter.ToTime,
 		AlbumID:    filter.AlbumID,
@@ -674,6 +688,12 @@ func (s *server) getPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out.Favorite = &favorite
+	archived, err := s.Queries.IsArchived(r.Context(), store.IsArchivedParams{UserID: currentUser(r).ID, PhotoID: photo.ID})
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	out.Archived = &archived
 	if photo.OwnerID == currentUser(r).ID {
 		versions, err := s.Queries.ListPhotoVersions(r.Context(), photo.ID)
 		if err != nil {
@@ -845,6 +865,37 @@ func (s *server) changeFavorites(w http.ResponseWriter, r *http.Request) {
 		err = s.Queries.AddFavorites(r.Context(), store.AddFavoritesParams{UserID: user, Ids: req.IDs})
 	} else {
 		err = s.Queries.RemoveFavorites(r.Context(), store.RemoveFavoritesParams{UserID: user, Ids: req.IDs})
+	}
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// changeArchive archives photos the current user can see, for the user, or
+// takes them out of the archive. Like a favorite mark, it sends no event.
+func (s *server) changeArchive(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs      []int64 `json:"ids"`
+		Archived *bool   `json:"archived"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.Archived == nil {
+		writeError(w, http.StatusBadRequest, "archived is required")
+		return
+	}
+	if !validBulkIDs(w, req.IDs) {
+		return
+	}
+	user := currentUser(r).ID
+	var err error
+	if *req.Archived {
+		err = s.Queries.AddToArchive(r.Context(), store.AddToArchiveParams{UserID: user, Ids: req.IDs})
+	} else {
+		err = s.Queries.RemoveFromArchive(r.Context(), store.RemoveFromArchiveParams{UserID: user, Ids: req.IDs})
 	}
 	if err != nil {
 		internalError(w, r, err)

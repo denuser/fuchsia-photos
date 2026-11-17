@@ -5,6 +5,7 @@ import AdminView from './views/AdminView.vue'
 import AllPhotosView from './views/AllPhotosView.vue'
 import AlbumsView from './views/AlbumsView.vue'
 import AlbumView from './views/AlbumView.vue'
+import ArchiveView from './views/ArchiveView.vue'
 import FavoritesView from './views/FavoritesView.vue'
 import ImportView from './views/ImportView.vue'
 import LoginView from './views/LoginView.vue'
@@ -25,6 +26,7 @@ export const router = createRouter({
     { path: '/albums', component: AlbumsView },
     { path: '/albums/:id(\\d+)', component: AlbumView },
     { path: '/favorites', component: FavoritesView },
+    { path: '/archive', component: ArchiveView },
     { path: '/shared', component: SharedView },
     { path: '/tags', component: TagsView },
     { path: '/trash', component: TrashView },

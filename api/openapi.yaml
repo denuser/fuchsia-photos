@@ -417,6 +417,12 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: archived
+          in: query
+          description: Only the photos in the current user's archive. Without it, the list leaves them out, unless it is an album or `favorites`. Cannot be combined with `album`
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: One page of photos
@@ -580,6 +586,28 @@ paths:
           description: The marks are changed
         "400":
           $ref: "#/components/responses/Error"
+  /photos/archive:
+    post:
+      operationId: changeArchive
+      summary: Put photos into the current user's archive, or take them out
+      description: The archive is the user's own. An archived photo leaves the user's timeline and stays in albums, favorites, search and the photos shared with the user. Photos the user cannot see, hidden versions and photos in the trash are not archived. It sends no event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, archived]
+              properties:
+                ids:
+                  $ref: "#/components/schemas/PhotoIds"
+                archived:
+                  type: boolean
+      responses:
+        "204":
+          description: The archive is changed
+        "400":
+          $ref: "#/components/responses/Error"
   /photos/months:
     get:
       operationId: countPhotoMonths
@@ -648,6 +676,12 @@ paths:
         - name: favorites
           in: query
           description: Only the current user's favorites. With `withShared`, also other users' photos the user marked. Cannot be combined with `album`
+          schema:
+            type: boolean
+            default: false
+        - name: archived
+          in: query
+          description: Only the photos in the current user's archive. Without it, the list leaves them out, unless it is an album or `favorites`. Cannot be combined with `album`
           schema:
             type: boolean
             default: false
@@ -736,6 +770,12 @@ paths:
         - name: favorites
           in: query
           description: Only the current user's favorites. With `withShared`, also other users' photos the user marked. Cannot be combined with `album`
+          schema:
+            type: boolean
+            default: false
+        - name: archived
+          in: query
+          description: Only the photos in the current user's archive. Without it, the list leaves them out, unless it is an album or `favorites`. Cannot be combined with `album`
           schema:
             type: boolean
             default: false
@@ -2087,6 +2127,9 @@ components:
           enum: [live, edited, null]
         favorite:
           description: Whether the photo is the current user's favorite. Only GET /photos/{id} gives it
+          type: boolean
+        archived:
+          description: Whether the photo is in the current user's archive. Only GET /photos/{id} gives it
           type: boolean
         versions:
           description: The files hidden right under the photo, such as the original of an edited copy. Only GET /photos/{id} gives them, and only to the photo's owner; a hidden file is opened through its own id

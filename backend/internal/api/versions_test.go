@@ -106,6 +106,7 @@ func TestEditedVersions(t *testing.T) {
 	sharePhoto(t, anna, original, map[string]any{"add": []int64{boris.ID}})
 	favorite(t, anna, true, original)
 	favorite(t, borisBrowser, true, original)
+	archive(t, borisBrowser, true, original)
 
 	recordEdited(t, e, edited, original)
 	if linked := linkVersions(t, e); linked != 1 {
@@ -137,6 +138,7 @@ func TestEditedVersions(t *testing.T) {
 	wantIDs(t, anna.photoIDs("/api/v1/photos?tag="+itoa(tag)), edited)
 	wantIDs(t, anna.photoIDs("/api/v1/photos?favorites=true"), edited)
 	wantIDs(t, borisBrowser.photoIDs("/api/v1/photos?favorites=true&withShared=true"), edited)
+	wantIDs(t, borisBrowser.photoIDs("/api/v1/photos?archived=true&withShared=true"), edited)
 
 	// The owner's viewer gets the original as a version; the copy plays the
 	// original's video.
@@ -160,6 +162,7 @@ func TestEditedVersions(t *testing.T) {
 
 	// Others see the copy, which took the original's share, but not the
 	// original, and get no versions.
+	archive(t, borisBrowser, false, edited)
 	wantIDs(t, borisBrowser.photoIDs("/api/v1/photos/shared"), edited)
 	if got := decode[photoJSON](t, borisBrowser.get("/api/v1/photos/"+itoa(edited))); len(got.Versions) != 0 {
 		t.Errorf("versions shown to another user: %+v", got.Versions)

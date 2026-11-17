@@ -34,6 +34,30 @@ func (q *Queries) AddFavorites(ctx context.Context, arg AddFavoritesParams) erro
 	return err
 }
 
+const addToArchive = `-- name: AddToArchive :exec
+INSERT INTO photo_archive (user_id, photo_id)
+SELECT $1::bigint, p.id
+FROM photos p
+WHERE p.id = ANY ($2::bigint[])
+  AND p.deleted_at IS NULL
+  AND p.purged_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
+  AND photo_visible_to(p, $1::bigint, false)
+ON CONFLICT DO NOTHING
+`
+
+type AddToArchiveParams struct {
+	UserID int64
+	Ids    []int64
+}
+
+// Archives photos the user can see, for the user. Photos hidden under another
+// one, in the trash or purged are left out.
+func (q *Queries) AddToArchive(ctx context.Context, arg AddToArchiveParams) error {
+	_, err := q.db.Exec(ctx, addToArchive, arg.UserID, arg.Ids)
+	return err
+}
+
 const bumpPreviewVersion = `-- name: BumpPreviewVersion :exec
 UPDATE photos
 SET preview_version = preview_version + 1,
@@ -77,16 +101,23 @@ WHERE (p.owner_id = $2
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT $4::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = $2))
-  AND ($5::timestamptz IS NULL OR p.sort_at >= $5::timestamptz)
-  AND ($6::timestamptz IS NULL OR p.sort_at < $6::timestamptz)
-  AND ($7::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $7::bigint))
-  AND ($8::bigint[] IS NULL
+  -- The user's archived photos leave the timeline and stay in albums and
+  -- favorites; the archived filter lists only them.
+  AND (CASE WHEN $5::boolean
+            THEN EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = $2)
+            WHEN $6::bigint IS NULL AND NOT $4::boolean
+            THEN NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = $2)
+            ELSE true END)
+  AND ($7::timestamptz IS NULL OR p.sort_at >= $7::timestamptz)
+  AND ($8::timestamptz IS NULL OR p.sort_at < $8::timestamptz)
+  AND ($6::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $6::bigint))
+  AND ($9::bigint[] IS NULL
        OR (p.owner_id = $2
-           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($8::bigint[]))))
-  AND ($9::text[] IS NULL OR p.camera = ANY ($9::text[]))
-  AND ($10::text[] IS NULL OR p.lens = ANY ($10::text[]))
-  AND ($11::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($11::text[]))
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($9::bigint[]))))
+  AND ($10::text[] IS NULL OR p.camera = ANY ($10::text[]))
+  AND ($11::text[] IS NULL OR p.lens = ANY ($11::text[]))
+  AND ($12::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($12::text[]))
 GROUP BY 1
 ORDER BY 1 DESC
 `
@@ -96,9 +127,10 @@ type CountTimelineMonthsParams struct {
 	OwnerID    int64
 	WithShared bool
 	Favorites  bool
+	Archived   bool
+	AlbumID    *int64
 	FromTime   *time.Time
 	ToTime     *time.Time
-	AlbumID    *int64
 	TagIds     []int64
 	Cameras    []string
 	Lenses     []string
@@ -118,9 +150,10 @@ func (q *Queries) CountTimelineMonths(ctx context.Context, arg CountTimelineMont
 		arg.OwnerID,
 		arg.WithShared,
 		arg.Favorites,
+		arg.Archived,
+		arg.AlbumID,
 		arg.FromTime,
 		arg.ToTime,
-		arg.AlbumID,
 		arg.TagIds,
 		arg.Cameras,
 		arg.Lenses,
@@ -147,6 +180,7 @@ func (q *Queries) CountTimelineMonths(ctx context.Context, arg CountTimelineMont
 const deletePhotoMemberships = `-- name: DeletePhotoMemberships :exec
 WITH albums_removed AS (DELETE FROM album_photos ap WHERE ap.photo_id = $1),
      favorites_removed AS (DELETE FROM photo_favorites f WHERE f.photo_id = $1),
+     archive_removed AS (DELETE FROM photo_archive a WHERE a.photo_id = $1),
      tags_removed AS (DELETE FROM photo_tags pt WHERE pt.photo_id = $1),
      covers_cleared AS (UPDATE albums a SET cover_photo_id = NULL WHERE a.cover_photo_id = $1),
      embeddings_removed AS (DELETE FROM photo_embeddings e WHERE e.photo_id = $1),
@@ -529,6 +563,22 @@ func (q *Queries) InsertPhoto(ctx context.Context, arg InsertPhotoParams) (Photo
 	return i, err
 }
 
+const isArchived = `-- name: IsArchived :one
+SELECT EXISTS (SELECT 1 FROM photo_archive WHERE user_id = $1 AND photo_id = $2)
+`
+
+type IsArchivedParams struct {
+	UserID  int64
+	PhotoID int64
+}
+
+func (q *Queries) IsArchived(ctx context.Context, arg IsArchivedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isArchived, arg.UserID, arg.PhotoID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const isFavorite = `-- name: IsFavorite :one
 SELECT EXISTS (SELECT 1 FROM photo_favorites WHERE user_id = $1 AND photo_id = $2)
 `
@@ -555,16 +605,23 @@ WHERE (p.owner_id = $1
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT $3::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = $1))
+  -- The user's archived photos leave the timeline and stay in albums and
+  -- favorites; the archived filter lists only them.
+  AND (CASE WHEN $4::boolean
+            THEN EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = $1)
+            WHEN $5::bigint IS NULL AND NOT $3::boolean
+            THEN NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = $1)
+            ELSE true END)
   AND p.camera IS NOT NULL
-  AND ($4::timestamptz IS NULL OR p.sort_at >= $4::timestamptz)
-  AND ($5::timestamptz IS NULL OR p.sort_at < $5::timestamptz)
-  AND ($6::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $6::bigint))
-  AND ($7::bigint[] IS NULL
+  AND ($6::timestamptz IS NULL OR p.sort_at >= $6::timestamptz)
+  AND ($7::timestamptz IS NULL OR p.sort_at < $7::timestamptz)
+  AND ($5::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $5::bigint))
+  AND ($8::bigint[] IS NULL
        OR (p.owner_id = $1
-           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($7::bigint[]))))
-  AND ($8::text[] IS NULL OR p.lens = ANY ($8::text[]))
-  AND ($9::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($9::text[]))
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($8::bigint[]))))
+  AND ($9::text[] IS NULL OR p.lens = ANY ($9::text[]))
+  AND ($10::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($10::text[]))
 GROUP BY p.camera
 ORDER BY p.camera
 `
@@ -573,9 +630,10 @@ type ListCamerasParams struct {
 	OwnerID    int64
 	WithShared bool
 	Favorites  bool
+	Archived   bool
+	AlbumID    *int64
 	FromTime   *time.Time
 	ToTime     *time.Time
-	AlbumID    *int64
 	TagIds     []int64
 	Lenses     []string
 	Kinds      []string
@@ -595,9 +653,10 @@ func (q *Queries) ListCameras(ctx context.Context, arg ListCamerasParams) ([]Lis
 		arg.OwnerID,
 		arg.WithShared,
 		arg.Favorites,
+		arg.Archived,
+		arg.AlbumID,
 		arg.FromTime,
 		arg.ToTime,
-		arg.AlbumID,
 		arg.TagIds,
 		arg.Lenses,
 		arg.Kinds,
@@ -817,15 +876,22 @@ WHERE (p.owner_id = $1
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT $3::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = $1))
-  AND ($4::timestamptz IS NULL OR p.sort_at >= $4::timestamptz)
-  AND ($5::timestamptz IS NULL OR p.sort_at < $5::timestamptz)
-  AND ($6::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $6::bigint))
-  AND ($7::bigint[] IS NULL
+  -- The user's archived photos leave the timeline and stay in albums and
+  -- favorites; the archived filter lists only them.
+  AND (CASE WHEN $4::boolean
+            THEN EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = $1)
+            WHEN $5::bigint IS NULL AND NOT $3::boolean
+            THEN NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = $1)
+            ELSE true END)
+  AND ($6::timestamptz IS NULL OR p.sort_at >= $6::timestamptz)
+  AND ($7::timestamptz IS NULL OR p.sort_at < $7::timestamptz)
+  AND ($5::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $5::bigint))
+  AND ($8::bigint[] IS NULL
        OR (p.owner_id = $1
-           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($7::bigint[]))))
-  AND ($8::text[] IS NULL OR p.camera = ANY ($8::text[]))
-  AND ($9::text[] IS NULL OR p.lens = ANY ($9::text[]))
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($8::bigint[]))))
+  AND ($9::text[] IS NULL OR p.camera = ANY ($9::text[]))
+  AND ($10::text[] IS NULL OR p.lens = ANY ($10::text[]))
 GROUP BY 1
 ORDER BY 1
 `
@@ -834,9 +900,10 @@ type ListKindsParams struct {
 	OwnerID    int64
 	WithShared bool
 	Favorites  bool
+	Archived   bool
+	AlbumID    *int64
 	FromTime   *time.Time
 	ToTime     *time.Time
-	AlbumID    *int64
 	TagIds     []int64
 	Cameras    []string
 	Lenses     []string
@@ -852,9 +919,10 @@ func (q *Queries) ListKinds(ctx context.Context, arg ListKindsParams) ([]ListKin
 		arg.OwnerID,
 		arg.WithShared,
 		arg.Favorites,
+		arg.Archived,
+		arg.AlbumID,
 		arg.FromTime,
 		arg.ToTime,
-		arg.AlbumID,
 		arg.TagIds,
 		arg.Cameras,
 		arg.Lenses,
@@ -887,16 +955,23 @@ WHERE (p.owner_id = $1
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT $3::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = $1))
+  -- The user's archived photos leave the timeline and stay in albums and
+  -- favorites; the archived filter lists only them.
+  AND (CASE WHEN $4::boolean
+            THEN EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = $1)
+            WHEN $5::bigint IS NULL AND NOT $3::boolean
+            THEN NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = $1)
+            ELSE true END)
   AND p.lens IS NOT NULL
-  AND ($4::timestamptz IS NULL OR p.sort_at >= $4::timestamptz)
-  AND ($5::timestamptz IS NULL OR p.sort_at < $5::timestamptz)
-  AND ($6::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $6::bigint))
-  AND ($7::bigint[] IS NULL
+  AND ($6::timestamptz IS NULL OR p.sort_at >= $6::timestamptz)
+  AND ($7::timestamptz IS NULL OR p.sort_at < $7::timestamptz)
+  AND ($5::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $5::bigint))
+  AND ($8::bigint[] IS NULL
        OR (p.owner_id = $1
-           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($7::bigint[]))))
-  AND ($8::text[] IS NULL OR p.camera = ANY ($8::text[]))
-  AND ($9::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($9::text[]))
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($8::bigint[]))))
+  AND ($9::text[] IS NULL OR p.camera = ANY ($9::text[]))
+  AND ($10::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($10::text[]))
 GROUP BY p.lens
 ORDER BY p.lens
 `
@@ -905,9 +980,10 @@ type ListLensesParams struct {
 	OwnerID    int64
 	WithShared bool
 	Favorites  bool
+	Archived   bool
+	AlbumID    *int64
 	FromTime   *time.Time
 	ToTime     *time.Time
-	AlbumID    *int64
 	TagIds     []int64
 	Cameras    []string
 	Kinds      []string
@@ -923,9 +999,10 @@ func (q *Queries) ListLenses(ctx context.Context, arg ListLensesParams) ([]ListL
 		arg.OwnerID,
 		arg.WithShared,
 		arg.Favorites,
+		arg.Archived,
+		arg.AlbumID,
 		arg.FromTime,
 		arg.ToTime,
-		arg.AlbumID,
 		arg.TagIds,
 		arg.Cameras,
 		arg.Kinds,
@@ -1162,31 +1239,39 @@ WHERE (p.owner_id = $1
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT $3::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = $1))
-  AND ($4::timestamptz IS NULL
-       OR (p.sort_at, p.id) < ($4::timestamptz, $5::bigint))
-  AND ($6::timestamptz IS NULL OR p.sort_at >= $6::timestamptz)
-  AND ($7::timestamptz IS NULL OR p.sort_at < $7::timestamptz)
-  AND ($8::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $8::bigint))
-  AND ($9::bigint[] IS NULL
+  -- The user's archived photos leave the timeline and stay in albums and
+  -- favorites; the archived filter lists only them.
+  AND (CASE WHEN $4::boolean
+            THEN EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = $1)
+            WHEN $5::bigint IS NULL AND NOT $3::boolean
+            THEN NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = $1)
+            ELSE true END)
+  AND ($6::timestamptz IS NULL
+       OR (p.sort_at, p.id) < ($6::timestamptz, $7::bigint))
+  AND ($8::timestamptz IS NULL OR p.sort_at >= $8::timestamptz)
+  AND ($9::timestamptz IS NULL OR p.sort_at < $9::timestamptz)
+  AND ($5::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $5::bigint))
+  AND ($10::bigint[] IS NULL
        OR (p.owner_id = $1
-           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($9::bigint[]))))
-  AND ($10::text[] IS NULL OR p.camera = ANY ($10::text[]))
-  AND ($11::text[] IS NULL OR p.lens = ANY ($11::text[]))
-  AND ($12::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($12::text[]))
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($10::bigint[]))))
+  AND ($11::text[] IS NULL OR p.camera = ANY ($11::text[]))
+  AND ($12::text[] IS NULL OR p.lens = ANY ($12::text[]))
+  AND ($13::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($13::text[]))
 ORDER BY p.sort_at DESC, p.id DESC
-LIMIT $13
+LIMIT $14
 `
 
 type ListTimelineParams struct {
 	OwnerID     int64
 	WithShared  bool
 	Favorites   bool
+	Archived    bool
+	AlbumID     *int64
 	AfterSortAt *time.Time
 	AfterID     *int64
 	FromTime    *time.Time
 	ToTime      *time.Time
-	AlbumID     *int64
 	TagIds      []int64
 	Cameras     []string
 	Lenses      []string
@@ -1207,11 +1292,12 @@ func (q *Queries) ListTimeline(ctx context.Context, arg ListTimelineParams) ([]P
 		arg.OwnerID,
 		arg.WithShared,
 		arg.Favorites,
+		arg.Archived,
+		arg.AlbumID,
 		arg.AfterSortAt,
 		arg.AfterID,
 		arg.FromTime,
 		arg.ToTime,
-		arg.AlbumID,
 		arg.TagIds,
 		arg.Cameras,
 		arg.Lenses,
@@ -1686,6 +1772,20 @@ type RemoveFavoritesParams struct {
 
 func (q *Queries) RemoveFavorites(ctx context.Context, arg RemoveFavoritesParams) error {
 	_, err := q.db.Exec(ctx, removeFavorites, arg.UserID, arg.Ids)
+	return err
+}
+
+const removeFromArchive = `-- name: RemoveFromArchive :exec
+DELETE FROM photo_archive WHERE user_id = $1 AND photo_id = ANY ($2::bigint[])
+`
+
+type RemoveFromArchiveParams struct {
+	UserID int64
+	Ids    []int64
+}
+
+func (q *Queries) RemoveFromArchive(ctx context.Context, arg RemoveFromArchiveParams) error {
+	_, err := q.db.Exec(ctx, removeFromArchive, arg.UserID, arg.Ids)
 	return err
 }
 

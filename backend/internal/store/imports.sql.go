@@ -214,6 +214,25 @@ func (q *Queries) FailImportRun(ctx context.Context, arg FailImportRunParams) er
 	return err
 }
 
+const fillImportedArchive = `-- name: FillImportedArchive :exec
+INSERT INTO photo_archive (user_id, photo_id)
+SELECT p.owner_id, t.id
+FROM imported_metadata m
+JOIN photos p ON p.id = m.photo_id
+JOIN photos t ON t.id = photo_top(m.photo_id)
+WHERE m.run_id = $1
+  AND m.sidecar -> 'archived' = 'true'::jsonb
+  AND t.purged_at IS NULL
+ON CONFLICT DO NOTHING
+`
+
+// Archives for the owner the photos whose newest JSON came from this run with
+// "archived": true, as FillImportedFavorites marks favorites.
+func (q *Queries) FillImportedArchive(ctx context.Context, runID *int64) error {
+	_, err := q.db.Exec(ctx, fillImportedArchive, runID)
+	return err
+}
+
 const fillImportedDescriptions = `-- name: FillImportedDescriptions :exec
 UPDATE photos p
 SET description = clean_description(m.sidecar ->> 'description'), updated_at = now()

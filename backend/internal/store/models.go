@@ -125,6 +125,12 @@ type Photo struct {
 	Description       string
 }
 
+type PhotoArchive struct {
+	UserID    int64
+	PhotoID   int64
+	CreatedAt time.Time
+}
+
 type PhotoEmbedding struct {
 	PhotoID   int64
 	Model     string

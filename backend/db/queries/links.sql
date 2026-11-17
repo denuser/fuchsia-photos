@@ -23,9 +23,9 @@ ORDER BY m.original_id, m.photo_id;
 -- ListVersionCandidates found them. The copy takes over what the original
 -- had, so that nobody loses the photo: its albums, the album covers it was,
 -- its direct shares, visibility to all users, its tags, every user's
--- favorite mark, its motion and its description, if the copy has none. The
--- video of a Live Photo paired with the copy moves to the original, which it
--- belongs to, when the original has none. Both move updated_at, so that open
+-- favorite marks and archive, its motion, and its description if the copy
+-- has none. The video of a Live Photo paired with the copy moves to the
+-- original, which it belongs to, when the original has none. Both move updated_at, so that open
 -- pages drop the original. Run under LockPhotoLinks.
 -- name: LinkEditedVersion :execrows
 WITH link AS (
@@ -55,6 +55,11 @@ shares_added AS (
 favorites_moved AS (
     INSERT INTO photo_favorites (user_id, photo_id)
     SELECT f.user_id, link.shown_id FROM photo_favorites f JOIN link ON f.photo_id = link.hidden_id
+    ON CONFLICT DO NOTHING
+),
+archive_moved AS (
+    INSERT INTO photo_archive (user_id, photo_id)
+    SELECT a.user_id, link.shown_id FROM photo_archive a JOIN link ON a.photo_id = link.hidden_id
     ON CONFLICT DO NOTHING
 ),
 tags_added AS (

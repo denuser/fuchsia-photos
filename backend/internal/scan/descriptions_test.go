@@ -7,7 +7,8 @@ import (
 
 // An import gives a photo the description in its JSON, cleaned, and never
 // replaces a description the photo has, so the owner's edits stay. It marks
-// the photos Google had as favorites as the owner's.
+// the photos Google had as favorites as the owner's, and archives those
+// Google had archived.
 func TestTakeoutFillsDescriptions(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
@@ -15,7 +16,7 @@ func TestTakeoutFillsDescriptions(t *testing.T) {
 		{yearFolder + "IMG_1.jpg", e.fixture("landscape.jpg")},
 		{yearFolder + "IMG_1.jpg.supplemental-metadata.json", []byte(`{"title": "IMG_1.jpg", "photoTakenTime": {"timestamp": "1569055192"}, "description": " Море\r\nи\tгоры \n", "favorited": true}`)},
 		{yearFolder + "IMG_2.jpg", e.fixture("rotated.jpg")},
-		{yearFolder + "IMG_2.jpg.supplemental-metadata.json", []byte(`{"title": "IMG_2.jpg", "photoTakenTime": {"timestamp": "1569055192"}, "description": ""}`)},
+		{yearFolder + "IMG_2.jpg.supplemental-metadata.json", []byte(`{"title": "IMG_2.jpg", "photoTakenTime": {"timestamp": "1569055192"}, "description": "", "archived": true}`)},
 	}
 	e.write("takeout-20261115T073434Z-1-001.zip", makeZip(t, files))
 	if run := e.finish(e.startKind("", KindTakeout).ID); run.Status != "finished" {
@@ -49,6 +50,10 @@ func TestTakeoutFillsDescriptions(t *testing.T) {
 	}
 	if len(favorites) != 1 || favorites[0] != described {
 		t.Errorf("favorites = %v, want %d", favorites, described)
+	}
+	var archived int64
+	if err := e.service.Ingest.Pool.QueryRow(ctx, `SELECT photo_id FROM photo_archive WHERE user_id = $1`, e.owner).Scan(&archived); err != nil || archived != plain {
+		t.Errorf("archived %d, err = %v, want %d", archived, err, plain)
 	}
 
 	// The owner's edit stays when the export is imported again.

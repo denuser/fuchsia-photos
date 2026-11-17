@@ -288,6 +288,18 @@ const steps = {
     await expectRequest('/photos/favorites', () => button('Remove from favorites').click())
     await page.getByTestId('empty-state').waitFor()
   },
+  'archive a photo out of the timeline and take it back on the Archive page': async () => {
+    await page.goto(BASE)
+    await previews(5)
+    await select(0)
+    await expectRequest('/photos/archive', () => button('Archive').click())
+    await tiles(4)
+    await page.goto(`${BASE}/archive`)
+    await tiles(1)
+    await select(0)
+    await expectRequest('/photos/archive', () => button('Take out of the archive').click())
+    await page.getByTestId('empty-state').waitFor()
+  },
   'trash a photo from the viewer and stay in the viewer': async () => {
     await page.goto(BASE)
     await previews(5)

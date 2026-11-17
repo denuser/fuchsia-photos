@@ -254,3 +254,16 @@ WHERE m.run_id = @run_id
   AND m.sidecar -> 'favorited' = 'true'::jsonb
   AND t.purged_at IS NULL
 ON CONFLICT DO NOTHING;
+
+-- Archives for the owner the photos whose newest JSON came from this run with
+-- "archived": true, as FillImportedFavorites marks favorites.
+-- name: FillImportedArchive :exec
+INSERT INTO photo_archive (user_id, photo_id)
+SELECT p.owner_id, t.id
+FROM imported_metadata m
+JOIN photos p ON p.id = m.photo_id
+JOIN photos t ON t.id = photo_top(m.photo_id)
+WHERE m.run_id = @run_id
+  AND m.sidecar -> 'archived' = 'true'::jsonb
+  AND t.purged_at IS NULL
+ON CONFLICT DO NOTHING;
