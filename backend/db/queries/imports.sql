@@ -149,7 +149,7 @@ WHERE e.run_id = @run_id AND e.export = m.export AND e.path = m.path;
 UPDATE import_runs
 SET status = 'finished', finished_at = now(),
     without_sidecar = @without_sidecar, unmatched_sidecars = @unmatched_sidecars, edited = @edited,
-    albums = @albums
+    albums = @albums, trashed = @trashed
 WHERE id = @id AND status = 'matching';
 
 -- Keeps the JSON of each photo of a run, from the newest export that has it.
@@ -267,3 +267,30 @@ WHERE m.run_id = @run_id
   AND m.sidecar -> 'archived' = 'true'::jsonb
   AND t.purged_at IS NULL
 ON CONFLICT DO NOTHING;
+
+-- Moves to the trash the photos this run added to the library whose newest
+-- JSON, from this run, has "trashed": true, with the photos hidden under
+-- them, dated when the run started. A photo the library had before is never
+-- trashed by an import, so a photo the owner restored stays restored when the
+-- export is imported again; a photo already in the trash keeps its date. Run
+-- after the albums, so that a photo "add and restore" brought back for an
+-- album but that Google trashed ends in the trash.
+-- name: TrashImportedPhotos :execrows
+WITH RECURSIVE tops AS (
+    SELECT DISTINCT photo_top(m.photo_id) AS id
+    FROM imported_metadata m
+    WHERE m.run_id = @run_id
+      AND m.sidecar -> 'trashed' = 'true'::jsonb
+      AND EXISTS (SELECT 1 FROM takeout_entries e
+                  WHERE e.run_id = @run_id AND e.photo_id = m.photo_id AND e.outcome = 'added')
+),
+chain AS (
+    SELECT id FROM tops
+    UNION
+    SELECT l.hidden_id FROM photo_links l JOIN chain c ON l.shown_id = c.id
+)
+UPDATE photos p
+SET deleted_at = (SELECT r.created_at FROM import_runs r WHERE r.id = @run_id), updated_at = now()
+WHERE p.id IN (SELECT id FROM chain)
+  AND p.deleted_at IS NULL
+  AND p.purged_at IS NULL;

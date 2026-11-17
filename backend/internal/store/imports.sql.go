@@ -139,7 +139,7 @@ func (q *Queries) CountRestoredPhotos(ctx context.Context, arg CountRestoredPhot
 const createImportRun = `-- name: CreateImportRun :one
 INSERT INTO import_runs (owner_id, started_by, folder, kind, album_trash)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited, album_trash, albums, restored
+RETURNING id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited, album_trash, albums, restored, trashed
 `
 
 type CreateImportRunParams struct {
@@ -185,6 +185,7 @@ func (q *Queries) CreateImportRun(ctx context.Context, arg CreateImportRunParams
 		&i.AlbumTrash,
 		&i.Albums,
 		&i.Restored,
+		&i.Trashed,
 	)
 	return i, err
 }
@@ -343,8 +344,8 @@ const finishMatching = `-- name: FinishMatching :exec
 UPDATE import_runs
 SET status = 'finished', finished_at = now(),
     without_sidecar = $1, unmatched_sidecars = $2, edited = $3,
-    albums = $4
-WHERE id = $5 AND status = 'matching'
+    albums = $4, trashed = $5
+WHERE id = $6 AND status = 'matching'
 `
 
 type FinishMatchingParams struct {
@@ -352,6 +353,7 @@ type FinishMatchingParams struct {
 	UnmatchedSidecars int64
 	Edited            int64
 	Albums            int64
+	Trashed           int64
 	ID                int64
 }
 
@@ -361,13 +363,14 @@ func (q *Queries) FinishMatching(ctx context.Context, arg FinishMatchingParams) 
 		arg.UnmatchedSidecars,
 		arg.Edited,
 		arg.Albums,
+		arg.Trashed,
 		arg.ID,
 	)
 	return err
 }
 
 const getImportRun = `-- name: GetImportRun :one
-SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited, album_trash, albums, restored FROM import_runs WHERE id = $1
+SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited, album_trash, albums, restored, trashed FROM import_runs WHERE id = $1
 `
 
 func (q *Queries) GetImportRun(ctx context.Context, id int64) (ImportRun, error) {
@@ -399,6 +402,7 @@ func (q *Queries) GetImportRun(ctx context.Context, id int64) (ImportRun, error)
 		&i.AlbumTrash,
 		&i.Albums,
 		&i.Restored,
+		&i.Trashed,
 	)
 	return i, err
 }
@@ -451,7 +455,7 @@ func (q *Queries) ListImportProblems(ctx context.Context, arg ListImportProblems
 }
 
 const listImportRuns = `-- name: ListImportRuns :many
-SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited, album_trash, albums, restored FROM import_runs ORDER BY id DESC LIMIT $1
+SELECT id, owner_id, started_by, folder, status, error, found, added, duplicates, in_trash, purged, unsupported, changing, failed, settle_at, created_at, finished_at, kind, sidecars, without_sidecar, unmatched_sidecars, edited, album_trash, albums, restored, trashed FROM import_runs ORDER BY id DESC LIMIT $1
 `
 
 func (q *Queries) ListImportRuns(ctx context.Context, maxRows int32) ([]ImportRun, error) {
@@ -489,6 +493,7 @@ func (q *Queries) ListImportRuns(ctx context.Context, maxRows int32) ([]ImportRu
 			&i.AlbumTrash,
 			&i.Albums,
 			&i.Restored,
+			&i.Trashed,
 		); err != nil {
 			return nil, err
 		}
@@ -885,6 +890,42 @@ WHERE id = $1 AND status IN ('listing', 'importing', 'matching')
 
 func (q *Queries) StopImportRun(ctx context.Context, id int64) (int64, error) {
 	result, err := q.db.Exec(ctx, stopImportRun, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const trashImportedPhotos = `-- name: TrashImportedPhotos :execrows
+WITH RECURSIVE tops AS (
+    SELECT DISTINCT photo_top(m.photo_id) AS id
+    FROM imported_metadata m
+    WHERE m.run_id = $1
+      AND m.sidecar -> 'trashed' = 'true'::jsonb
+      AND EXISTS (SELECT 1 FROM takeout_entries e
+                  WHERE e.run_id = $1 AND e.photo_id = m.photo_id AND e.outcome = 'added')
+),
+chain AS (
+    SELECT id FROM tops
+    UNION
+    SELECT l.hidden_id FROM photo_links l JOIN chain c ON l.shown_id = c.id
+)
+UPDATE photos p
+SET deleted_at = (SELECT r.created_at FROM import_runs r WHERE r.id = $1), updated_at = now()
+WHERE p.id IN (SELECT id FROM chain)
+  AND p.deleted_at IS NULL
+  AND p.purged_at IS NULL
+`
+
+// Moves to the trash the photos this run added to the library whose newest
+// JSON, from this run, has "trashed": true, with the photos hidden under
+// them, dated when the run started. A photo the library had before is never
+// trashed by an import, so a photo the owner restored stays restored when the
+// export is imported again; a photo already in the trash keeps its date. Run
+// after the albums, so that a photo "add and restore" brought back for an
+// album but that Google trashed ends in the trash.
+func (q *Queries) TrashImportedPhotos(ctx context.Context, runID int64) (int64, error) {
+	result, err := q.db.Exec(ctx, trashImportedPhotos, runID)
 	if err != nil {
 		return 0, err
 	}

@@ -1307,6 +1307,11 @@ export interface components {
             restored: number;
             /**
              * Format: int64
+             * @description Photos a Takeout scan added that Google had in the trash, which it moved to the trash, dated when the scan started
+             */
+            trashed: number;
+            /**
+             * Format: int64
              * @description Files that changed during the scan, probably still being copied
              */
             changing: number;

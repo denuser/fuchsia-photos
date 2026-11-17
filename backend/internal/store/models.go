@@ -73,6 +73,7 @@ type ImportRun struct {
 	AlbumTrash        string
 	Albums            int64
 	Restored          int64
+	Trashed           int64
 }
 
 type ImportedMetadatum struct {

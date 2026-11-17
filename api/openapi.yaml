@@ -1864,7 +1864,7 @@ components:
           description: Longest side of a viewer preview, in pixels
     ImportRun:
       type: object
-      required: [id, ownerId, folder, kind, status, error, found, added, duplicates, inTrash, purged, unsupported, sidecars, withoutSidecar, unmatchedSidecars, edited, albumTrash, albums, restored, changing, failed, createdAt, finishedAt]
+      required: [id, ownerId, folder, kind, status, error, found, added, duplicates, inTrash, purged, unsupported, sidecars, withoutSidecar, unmatchedSidecars, edited, albumTrash, albums, restored, trashed, changing, failed, createdAt, finishedAt]
       properties:
         id:
           type: integer
@@ -1930,6 +1930,10 @@ components:
           format: int64
         restored:
           description: Photos of albums a Takeout scan took out of the trash
+          type: integer
+          format: int64
+        trashed:
+          description: Photos a Takeout scan added that Google had in the trash, which it moved to the trash, dated when the scan started
           type: integer
           format: int64
         changing:

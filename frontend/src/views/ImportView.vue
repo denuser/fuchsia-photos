@@ -178,6 +178,9 @@ async function openDetails(run: ImportRun) {
                     {{ t('import.albums', { n: run.albums }, run.albums) }}<template v-if="run.restored > 0">,
                       {{ t('import.restored', { n: run.restored }, run.restored) }}</template>
                   </div>
+                  <div v-if="run.trashed > 0" data-testid="trashed">
+                    {{ t('import.trashed', { n: run.trashed }, run.trashed) }}
+                  </div>
                 </div>
               </template>
             </td>

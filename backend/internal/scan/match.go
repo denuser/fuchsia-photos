@@ -315,6 +315,12 @@ func (s *Service) match(ctx context.Context, run store.ImportRun) (bool, error) 
 		return false, err
 	}
 	finish.Albums = int64(albums)
+	// What Google had in the trash goes to the trash, after the albums.
+	trashed, err := store.New(tx).TrashImportedPhotos(ctx, run.ID)
+	if err != nil {
+		return false, fmt.Errorf("trash photos: %w", err)
+	}
+	finish.Trashed = trashed
 	if err := tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("commit: %w", err)
 	}

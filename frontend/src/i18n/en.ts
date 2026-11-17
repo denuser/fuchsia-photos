@@ -390,6 +390,7 @@ export default {
     albumTrashes: { skip: 'Leave out of the album', add: 'Add to the album', restore: 'Add and restore' },
     albums: '{n} album | {n} albums',
     restored: '{n} photo restored from the trash | {n} photos restored from the trash',
+    trashed: '{n} photo moved to the trash, as in Google | {n} photos moved to the trash, as in Google',
     problems: 'Problems',
     progress: '{done} of {total}',
     stop: 'Stop',

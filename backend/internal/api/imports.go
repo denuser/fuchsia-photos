@@ -37,6 +37,7 @@ type importRunJSON struct {
 	Edited            int64      `json:"edited"`
 	Albums            int64      `json:"albums"`
 	Restored          int64      `json:"restored"`
+	Trashed           int64      `json:"trashed"`
 	Changing          int64      `json:"changing"`
 	Failed            int64      `json:"failed"`
 	CreatedAt         time.Time  `json:"createdAt"`
@@ -70,6 +71,7 @@ func toImportRunJSON(r store.ImportRun) importRunJSON {
 		Edited:            r.Edited,
 		Albums:            r.Albums,
 		Restored:          r.Restored,
+		Trashed:           r.Trashed,
 		Changing:          r.Changing,
 		Failed:            r.Failed,
 		CreatedAt:         r.CreatedAt,
