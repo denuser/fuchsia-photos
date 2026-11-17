@@ -211,19 +211,6 @@ const steps = {
     await expectRequest('/photos/remove', () => button('Remove from album').click())
     await tiles(2)
   },
-  'mark a favorite in the viewer and take it off on the Favorites page': async () => {
-    await page.goto(BASE)
-    await previews(5)
-    await page.getByTestId('tile-open').first().click()
-    await expectRequest('/photos/favorites', () => button('Add to favorites').click())
-    await button('Remove from favorites').waitFor()
-    await page.keyboard.press('Escape')
-    await page.goto(`${BASE}/favorites`)
-    await tiles(1)
-    await select(0)
-    await expectRequest('/photos/favorites', () => button('Remove from favorites').click())
-    await page.getByTestId('empty-state').waitFor()
-  },
   'share an album and a photo with a second user': async () => {
     const created = await page.request.post(`${BASE}/api/v1/users`, { data: { login: 'guest', password: PASSWORD, role: 'user' } })
     if (!created.ok()) {
@@ -287,6 +274,19 @@ const steps = {
   'an administrator sees the photos of all users': async () => {
     await page.goto(`${BASE}/all`)
     await previews(5)
+  },
+  'mark a favorite in the viewer and take it off on the Favorites page': async () => {
+    await page.goto(BASE)
+    await previews(5)
+    await page.getByTestId('tile-open').first().click()
+    await expectRequest('/photos/favorites', () => button('Add to favorites').click())
+    await button('Remove from favorites').waitFor()
+    await page.keyboard.press('Escape')
+    await page.goto(`${BASE}/favorites`)
+    await tiles(1)
+    await select(0)
+    await expectRequest('/photos/favorites', () => button('Remove from favorites').click())
+    await page.getByTestId('empty-state').waitFor()
   },
   'trash a photo from the viewer and stay in the viewer': async () => {
     await page.goto(BASE)
