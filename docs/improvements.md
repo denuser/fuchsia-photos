@@ -127,7 +127,7 @@ Motion photos play for Google's formats (Motion Photo and the older MicroVideo, 
 
 ## 10. Import from Google Takeout and iCloud
 
-**Status:** steps 0 to 4 done and merged into `master`; step 5, versions, built on the branch `takeout-versions` and covered by backend tests, not merged yet: the check on the development stack with the real exports and the timeline speed check are still to do. Steps 1 to 3 were checked on 2026-11-15 on the development stack with the user's real exports: 2333 files, 1135 JSON files, 70 edited copies, no file without JSON and no JSON without a file, and dates and places applied as the rules say. Google Takeout comes first, iCloud after it.
+**Status:** steps 0 to 4 done and merged into `master`; step 5, versions, done and merged into `master` on 2026-11-17, checked on the development stack with the user's real exports (65 edited copies linked, 2 Live Photo pairs kept); the timeline speed on a large library is still to check. Step 6 is next. Steps 1 to 3 were checked on 2026-11-15 on the development stack with the user's real exports: 2333 files, 1135 JSON files, 70 edited copies, no file without JSON and no JSON without a file, and dates and places applied as the rules say. Google Takeout comes first, iCloud after it.
 
 People leaving Google Photos or iCloud take their library with them as an export. The files are there, but part of what the service knew about them is not in the files: dates and locations of photos without EXIF, places the owner corrected, descriptions, favorites, the archive and albums. An import reads these next to the files.
 
