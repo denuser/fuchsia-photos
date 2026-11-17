@@ -169,6 +169,11 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) err
 			slog.Warn("pair live photo", "photo", photo.ID, "error", err)
 		}
 	}
+	// So may the original of an edited copy, or the copy of an original.
+	if _, err := LinkVersions(ctx, w.pool, &photo.OwnerID, []int64{photo.ID}); err != nil {
+		// The pair_live_photos job tries again.
+		slog.Warn("link versions", "photo", photo.ID, "error", err)
+	}
 	if w.processed != nil {
 		w.processed(ctx, photo.ID, video, hasMotion || meta.ContentIdentifier != "")
 	}
@@ -187,7 +192,7 @@ func PairLivePhotos(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, con
 		var rows []store.PairLivePhotosRow
 		err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 			queries := store.New(tx)
-			if err := queries.LockLivePhotoPairing(ctx); err != nil {
+			if err := queries.LockPhotoLinks(ctx); err != nil {
 				return err
 			}
 			var err error
@@ -198,10 +203,13 @@ func PairLivePhotos(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, con
 			if err != nil || len(rows) > 0 {
 				return err
 			}
-			return queries.RepairLivePhotoMotion(ctx, store.RepairLivePhotoMotionParams{
-				OwnerID:           ownerID,
-				ContentIdentifier: contentIdentifier,
-			})
+			if ownerID != nil && contentIdentifier != nil {
+				return queries.RepairLinkedMotionOf(ctx, store.RepairLinkedMotionOfParams{
+					OwnerID:           *ownerID,
+					ContentIdentifier: *contentIdentifier,
+				})
+			}
+			return queries.RepairLinkedMotion(ctx, ownerID)
 		})
 		if err != nil {
 			return paired, fmt.Errorf("pair live photos: %w", err)
@@ -211,6 +219,47 @@ func PairLivePhotos(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, con
 		}
 		paired += len(rows)
 	}
+}
+
+// LinkVersions hides the originals of edited copies that an import recorded
+// under their copies, those of one owner and, when ids are given, those that
+// one of the given photos is in, and returns how many it linked. Both photos
+// must be processed and have the same EXIF date, as for the metadata the copy
+// takes from its original, so that a file whose name only looks like a
+// copy's stays a photo of its own. Each link is made under the lock of
+// PairLivePhotos.
+func LinkVersions(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, ids []int64) (int, error) {
+	candidates, err := store.New(pool).ListVersionCandidates(ctx, store.ListVersionCandidatesParams{
+		OwnerID: ownerID,
+		Ids:     ids,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("list versions: %w", err)
+	}
+	linked := 0
+	for _, c := range candidates {
+		if !sameTakenAt(c.EditedExif, c.EditedMime, c.OriginalExif, c.OriginalMime) {
+			continue
+		}
+		err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+			queries := store.New(tx)
+			if err := queries.LockPhotoLinks(ctx); err != nil {
+				return err
+			}
+			n, err := queries.LinkEditedVersion(ctx, store.LinkEditedVersionParams{EditedID: c.EditedID, OriginalID: c.OriginalID})
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				linked++
+			}
+			return nil
+		})
+		if err != nil {
+			return linked, fmt.Errorf("link version: %w", err)
+		}
+	}
+	return linked, nil
 }
 
 // renderVideo makes the previews of a video from its poster frame. A missing
@@ -492,7 +541,8 @@ func (w *backfillMotionWorker) Work(ctx context.Context, _ *river.Job[BackfillMo
 
 // PairLivePhotosArgs queues the pairing of Live Photos that processing did
 // not pair: files processed before the application paired them, and files
-// whose pairing failed. It runs at every start and once a day.
+// whose pairing failed. It links the versions processing did not link too.
+// It runs at every start and once a day.
 type PairLivePhotosArgs struct{}
 
 // Kind implements river.JobArgs.
@@ -512,6 +562,13 @@ func (w *pairLivePhotosWorker) Work(ctx context.Context, _ *river.Job[PairLivePh
 	paired, err := PairLivePhotos(ctx, w.pool, nil, nil)
 	if paired > 0 {
 		slog.Info("paired live photos", "pairs", paired)
+	}
+	if err != nil {
+		return err
+	}
+	linked, err := LinkVersions(ctx, w.pool, nil, nil)
+	if linked > 0 {
+		slog.Info("linked versions", "versions", linked)
 	}
 	return err
 }

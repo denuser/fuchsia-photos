@@ -1969,7 +1969,7 @@ components:
     Photo:
       type: object
       description: A photo or a video, which the MIME type tells apart
-      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, duration, hasMotion, livePhotoId, videoCopy, camera, location]
+      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, duration, hasMotion, hiddenUnder, videoCopy, camera, location]
       properties:
         id:
           type: integer
@@ -2013,10 +2013,15 @@ components:
         hasMotion:
           description: Whether a motion photo or a Live Photo has a video to play from /photos/{id}/motion
           type: boolean
-        livePhotoId:
-          description: Set on the video of a Live Photo to the photo it plays as the motion of. Lists leave such videos out; only events carry them, so that pages drop them
-          type: [integer, "null"]
-          format: int64
+        hiddenUnder:
+          description: Set on a file hidden under another photo to the kind of link, live for the video of a Live Photo and edited for the original of an edited copy. Lists leave such files out; only events carry them, so that pages drop them
+          type: [string, "null"]
+          enum: [live, edited, null]
+        versions:
+          description: The files hidden right under the photo, such as the original of an edited copy. Only GET /photos/{id} gives them, and only to the photo's owner; a hidden file is opened through its own id
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotoVersion"
         videoCopy:
           description: The H.264 copy of what the item plays, the video or the motion, served from /photos/{id}/copy when ready. not_needed when the video plays as it is or the graphics cannot decode it. Null while no copy has been tried
           type: [string, "null"]
@@ -2031,6 +2036,16 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Location"
             - type: "null"
+    PhotoVersion:
+      type: object
+      required: [id, kind]
+      properties:
+        id:
+          type: integer
+          format: int64
+        kind:
+          description: live for the video of a Live Photo, which plays as the photo's motion, and edited for the original of an edited copy. Clients leave out kinds they do not know
+          type: string
     Camera:
       description: Each field is present only when the photo has it
       type: object

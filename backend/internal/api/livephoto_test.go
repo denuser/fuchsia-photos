@@ -10,9 +10,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/auth"
 	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
+	"github.com/denuser/fuchsia-photos/backend/internal/storage"
+	"github.com/denuser/fuchsia-photos/backend/internal/store"
 )
 
 // markLive marks a file processed with the ContentIdentifier of a Live Photo,
@@ -68,17 +73,27 @@ func TestLivePhoto(t *testing.T) {
 	}
 
 	got := decode[photoJSON](t, anna.get("/api/v1/photos/"+itoa(still)))
-	if !got.HasMotion || got.LivePhotoID != nil {
-		t.Errorf("photo: has motion = %v, live photo = %v", got.HasMotion, got.LivePhotoID)
+	if !got.HasMotion || got.HiddenUnder != nil {
+		t.Errorf("photo: has motion = %v, hidden under = %v", got.HasMotion, got.HiddenUnder)
+	}
+	if shown := liveShownID(t, e, video); shown == nil || *shown != still {
+		t.Fatalf("video: live photo = %v", shown)
 	}
 	hidden, err := e.queries.GetPhoto(ctx, video)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hidden.LivePhotoID == nil || *hidden.LivePhotoID != still {
-		t.Fatalf("video: live photo = %v", hidden.LivePhotoID)
+	changed, err := e.queries.ListChangedPhotos(ctx, store.ListChangedPhotosParams{OwnerID: hidden.OwnerID, Since: time.Time{}, MaxRows: 100})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if toPhotoJSON(hidden, false).LivePhotoID == nil {
+	dropped := false
+	for _, p := range changedPhotosJSON(changed, false) {
+		if p.ID == video && p.HiddenUnder != nil && *p.HiddenUnder == storage.LinkLive {
+			dropped = true
+		}
+	}
+	if !dropped {
 		t.Error("events would not tell pages to drop the video")
 	}
 
@@ -186,7 +201,7 @@ func TestLivePhotoNeedsTheSameOwner(t *testing.T) {
 		t.Errorf("paired %d across owners", paired)
 	}
 	var count int
-	err := e.pool.QueryRow(context.Background(), `SELECT count(*) FROM photos WHERE live_photo_id IS NOT NULL OR has_motion`).Scan(&count)
+	err := e.pool.QueryRow(context.Background(), `SELECT (SELECT count(*) FROM photo_links) + (SELECT count(*) FROM photos WHERE has_motion)`).Scan(&count)
 	if err != nil || count != 0 {
 		t.Errorf("%d photos paired, err = %v", count, err)
 	}
@@ -221,7 +236,6 @@ func TestLivePhotoPairsOnRestore(t *testing.T) {
 	e := setup(t)
 	e.addUser("anna", auth.RoleUser)
 	anna := e.loggedIn("anna")
-	ctx := context.Background()
 
 	for _, restore := range []string{"from the trash", "by upload"} {
 		t.Run(restore, func(t *testing.T) {
@@ -238,12 +252,8 @@ func TestLivePhotoPairsOnRestore(t *testing.T) {
 			} else {
 				wantStatus(t, anna.json(http.MethodPost, "/api/v1/photos/restore", ids(still)), http.StatusNoContent)
 			}
-			current, err := e.queries.GetPhoto(ctx, video)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if current.LivePhotoID == nil || *current.LivePhotoID != still {
-				t.Errorf("live photo = %v, want %d", current.LivePhotoID, still)
+			if shown := liveShownID(t, e, video); shown == nil || *shown != still {
+				t.Errorf("live photo = %v, want %d", shown, still)
 			}
 
 			// The next run starts from nothing.
@@ -251,4 +261,21 @@ func TestLivePhotoPairsOnRestore(t *testing.T) {
 			wantStatus(t, anna.json(http.MethodPost, "/api/v1/photos/trash/empty", nil), http.StatusNoContent)
 		})
 	}
+}
+
+// liveShownID returns the photo a file is hidden under as the video of its
+// Live Photo, or nil.
+func liveShownID(t *testing.T, e *env, id int64) *int64 {
+	t.Helper()
+	link, err := e.queries.GetLinkAbove(context.Background(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if link.Kind != storage.LinkLive {
+		t.Fatalf("photo %d is hidden as %s", id, link.Kind)
+	}
+	return &link.ShownID
 }

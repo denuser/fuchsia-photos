@@ -119,7 +119,6 @@ type Photo struct {
 	Duration          *float64
 	HasMotion         bool
 	ContentIdentifier *string
-	LivePhotoID       *int64
 	VideoCopy         *string
 	ImportedLatitude  *float64
 	ImportedLongitude *float64
@@ -138,6 +137,13 @@ type PhotoEmbeddingFailure struct {
 	Attempts int32
 	Error    string
 	FailedAt time.Time
+}
+
+type PhotoLink struct {
+	HiddenID  int64
+	ShownID   int64
+	Kind      string
+	CreatedAt time.Time
 }
 
 type PhotoShare struct {

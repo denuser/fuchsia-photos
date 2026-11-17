@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
 	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
@@ -254,14 +256,13 @@ func TestLivePhotoPairsWhenProcessed(t *testing.T) {
 	}
 	// Pairing follows the update that marks the video ready.
 	deadline := time.Now().Add(10 * time.Second)
-	for video.LivePhotoID == nil && time.Now().Before(deadline) {
+	shown := liveShownID(t, e.queries, video.ID)
+	for shown == nil && time.Now().Before(deadline) {
 		time.Sleep(50 * time.Millisecond)
-		if video, err = e.queries.GetPhoto(ctx, video.ID); err != nil {
-			t.Fatal(err)
-		}
+		shown = liveShownID(t, e.queries, video.ID)
 	}
-	if video.LivePhotoID == nil || *video.LivePhotoID != still.ID {
-		t.Fatalf("live photo = %v, want %d", video.LivePhotoID, still.ID)
+	if shown == nil || *shown != still.ID {
+		t.Fatalf("live photo = %v, want %d", shown, still.ID)
 	}
 	if still, err = e.queries.GetPhoto(ctx, still.ID); err != nil || !still.HasMotion {
 		t.Fatalf("has motion = %v, err = %v", still.HasMotion, err)
@@ -322,13 +323,9 @@ func TestPairLivePhotosJob(t *testing.T) {
 	}
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		current, err := e.queries.GetPhoto(ctx, mov.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if current.LivePhotoID != nil {
-			if *current.LivePhotoID != photo.ID {
-				t.Errorf("the video paired with %d, want the oldest photo %d", *current.LivePhotoID, photo.ID)
+		if shown := liveShownID(t, e.queries, mov.ID); shown != nil {
+			if *shown != photo.ID {
+				t.Errorf("the video paired with %d, want the oldest photo %d", *shown, photo.ID)
 			}
 			break
 		}
@@ -342,7 +339,7 @@ func TestPairLivePhotosJob(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if current.HasMotion || current.LivePhotoID != nil {
+		if current.HasMotion || liveShownID(t, e.queries, id) != nil {
 			t.Errorf("photo %d was paired", id)
 		}
 	}
@@ -351,4 +348,18 @@ func TestPairLivePhotosJob(t *testing.T) {
 	if paired, err := jobs.PairLivePhotos(ctx, e.pool, nil, nil); err != nil || paired != 0 {
 		t.Errorf("paired %d again, err = %v", paired, err)
 	}
+}
+
+// liveShownID returns the photo a file is hidden under as the video of its
+// Live Photo, or nil.
+func liveShownID(t *testing.T, queries *store.Queries, id int64) *int64 {
+	t.Helper()
+	link, err := queries.GetLinkAbove(context.Background(), id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &link.ShownID
 }

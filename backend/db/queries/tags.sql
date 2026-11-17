@@ -2,7 +2,7 @@
 SELECT t.id, t.name,
        (SELECT count(*)
         FROM photo_tags pt JOIN photos p ON p.id = pt.photo_id
-        WHERE pt.tag_id = t.id AND p.deleted_at IS NULL AND p.live_photo_id IS NULL)::bigint AS photo_count
+        WHERE pt.tag_id = t.id AND p.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id))::bigint AS photo_count
 FROM tags t
 WHERE t.owner_id = @owner_id
 ORDER BY lower(t.name);

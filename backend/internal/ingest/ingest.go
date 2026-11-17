@@ -229,26 +229,32 @@ func (s *Service) Purge(ctx context.Context, ownerID, photoID int64) error {
 	if _, err := queries.PurgePhoto(ctx, store.PurgePhotoParams{ID: photoID, OwnerID: ownerID}); err != nil {
 		return fmt.Errorf("delete photo: %w", err)
 	}
-	if err := queries.DeletePhotoLinks(ctx, photoID); err != nil {
-		return fmt.Errorf("delete photo links: %w", err)
+	if err := queries.DeletePhotoMemberships(ctx, photoID); err != nil {
+		return fmt.Errorf("delete photo memberships: %w", err)
 	}
 	purged := []store.Photo{photo}
 
-	video, err := queries.GetLivePhotoVideo(ctx, &photoID)
-	switch {
-	case err == nil:
-		if err := queries.LockPhotoFile(ctx, store.LockPhotoFileParams{OwnerID: video.OwnerID, Sha256: video.Sha256}); err != nil {
-			return fmt.Errorf("lock video: %w", err)
+	// The versions hidden under the photo, such as the video of a Live Photo
+	// or the original of an edited copy, go with it.
+	hidden, err := queries.ListHiddenVersions(ctx, photoID)
+	if err != nil {
+		return fmt.Errorf("look up versions: %w", err)
+	}
+	for _, version := range hidden {
+		if err := queries.LockPhotoFile(ctx, store.LockPhotoFileParams{OwnerID: version.OwnerID, Sha256: version.Sha256}); err != nil {
+			return fmt.Errorf("lock version: %w", err)
 		}
-		if _, err := queries.PurgeLivePhotoVideo(ctx, store.PurgeLivePhotoVideoParams{ID: video.ID, PhotoID: &photoID}); err != nil {
-			return fmt.Errorf("delete video: %w", err)
+		version, err := queries.PurgeHiddenPhoto(ctx, version.ID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
 		}
-		if err := queries.DeletePhotoLinks(ctx, video.ID); err != nil {
-			return fmt.Errorf("delete video links: %w", err)
+		if err != nil {
+			return fmt.Errorf("delete version: %w", err)
 		}
-		purged = append(purged, video)
-	case !errors.Is(err, pgx.ErrNoRows):
-		return fmt.Errorf("look up video: %w", err)
+		if err := queries.DeletePhotoMemberships(ctx, version.ID); err != nil {
+			return fmt.Errorf("delete version memberships: %w", err)
+		}
+		purged = append(purged, version)
 	}
 
 	// The record goes only if the file does. A commit that fails after this leaves
@@ -361,16 +367,18 @@ func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhot
 }
 
 // duplicate handles a file the owner already has. Uploading a photo from the
-// trash again means the owner wants it back. The video of a Live Photo is
-// answered with its photo and brings nothing back: restoring the photo would
-// need the lock on its file too, which a purge takes before the video's.
+// trash again means the owner wants it back. A file hidden under another
+// photo, such as the video of a Live Photo or the original of an edited copy,
+// is answered with the photo shown at the top and brings nothing back:
+// restoring that photo would need the lock on its file too, which a purge
+// takes before the hidden one's.
 func (s *Service) duplicate(ctx context.Context, tx pgx.Tx, queries *store.Queries, photo store.Photo) (Result, error) {
-	if photo.LivePhotoID != nil {
-		still, err := queries.GetPhoto(ctx, *photo.LivePhotoID)
-		if err != nil {
-			return Result{}, fmt.Errorf("look up live photo: %w", err)
-		}
-		return Result{Photo: still, Duplicate: true}, nil
+	shown, err := queries.GetShownPhoto(ctx, photo.ID)
+	if err != nil {
+		return Result{}, fmt.Errorf("look up shown photo: %w", err)
+	}
+	if shown.ID != photo.ID {
+		return Result{Photo: shown, Duplicate: true}, nil
 	}
 	if photo.DeletedAt == nil {
 		return Result{Photo: photo, Duplicate: true}, nil
@@ -387,6 +395,10 @@ func (s *Service) duplicate(ctx context.Context, tx pgx.Tx, queries *store.Queri
 		if _, err := jobs.PairLivePhotos(ctx, s.Pool, &restored.OwnerID, restored.ContentIdentifier); err != nil {
 			slog.Warn("pair live photo", "photo", restored.ID, "error", err)
 		}
+	}
+	// So may the edited copy of an original, or the original of a copy.
+	if _, err := jobs.LinkVersions(ctx, s.Pool, &restored.OwnerID, []int64{restored.ID}); err != nil {
+		slog.Warn("link versions", "photo", restored.ID, "error", err)
 	}
 	return Result{Photo: restored, Duplicate: true, Restored: true}, nil
 }

@@ -331,14 +331,18 @@ func (w *worker) Work(ctx context.Context, job *river.Job[Args]) error {
 	}
 	// The video of a Live Photo plays as its photo's motion, which gets the
 	// copy.
-	if photo.LivePhotoID != nil {
-		photo, err = s.Queries.GetPhoto(ctx, *photo.LivePhotoID)
+	link, err := s.Queries.GetLinkAbove(ctx, photo.ID)
+	switch {
+	case err == nil && link.Kind == storage.LinkLive:
+		photo, err = s.Queries.GetPhoto(ctx, link.ShownID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
 		if err != nil {
 			return fmt.Errorf("load photo: %w", err)
 		}
+	case err != nil && !errors.Is(err, pgx.ErrNoRows):
+		return fmt.Errorf("look up link: %w", err)
 	}
 	if photo.Status != "ready" || photo.PurgedAt != nil || photo.VideoCopy != nil {
 		return nil
@@ -377,15 +381,27 @@ func (s *Service) source(ctx context.Context, photo store.Photo) (string, error)
 	if !photo.HasMotion {
 		return "", nil
 	}
-	video, err := s.Queries.GetLivePhotoVideo(ctx, &photo.ID)
-	switch {
-	case err == nil:
-		return s.Layout.Original(video.OwnerID, video.Sha256, video.Mime), nil
-	case errors.Is(err, pgx.ErrNoRows):
-		return s.Layout.Motion(photo.ID), nil
-	default:
-		return "", fmt.Errorf("look up live photo video: %w", err)
+	return MotionSource(ctx, s.Queries, s.Layout, photo.ID)
+}
+
+// MotionSource returns the file a photo with motion plays: the video of its
+// Live Photo, the motion extracted from it, or, for an edited copy, either of
+// those of its original. The motion of the photo itself comes first.
+func MotionSource(ctx context.Context, queries *store.Queries, layout storage.Layout, photoID int64) (string, error) {
+	sources, err := queries.ListMotionSources(ctx, photoID)
+	if err != nil {
+		return "", fmt.Errorf("look up motion: %w", err)
 	}
+	for _, source := range sources {
+		if source.VideoOwnerID != nil && source.VideoMime != nil {
+			return layout.Original(*source.VideoOwnerID, source.VideoSha256, *source.VideoMime), nil
+		}
+		path := layout.Motion(source.PhotoID)
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+	return layout.Motion(photoID), nil
 }
 
 // makeCopy writes the copy of the video at source, if it needs one, and

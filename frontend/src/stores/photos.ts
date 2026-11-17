@@ -357,8 +357,9 @@ export const usePhotosStore = defineStore('photos', () => {
     const gone = new Set<number>()
     const arriving: Photo[] = []
     for (const photo of changed) {
-      // The video of a Live Photo now plays as the motion of its photo.
-      if (photo.livePhotoId !== null || Boolean(photo.deletedAt) !== inTrash) {
+      // A file hidden under another photo, such as the video of a Live Photo
+      // or the original of an edited copy, now shows through that photo.
+      if (photo.hiddenUnder !== null || Boolean(photo.deletedAt) !== inTrash) {
         gone.add(photo.id)
       } else if (known.has(photo.id) && ranked(query.value)) {
         // A search result keeps its place.

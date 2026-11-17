@@ -26,8 +26,38 @@ const emit = defineEmits<{
   similar: [photo: Photo]
 }>()
 
+
 const auth = useAuthStore()
 const users = useUsersStore()
+
+// The owner of an edited copy can switch to its original, which the photo
+// lists leave out. The viewer shows the original's image, details and
+// download in place of the copy's; the list, navigation and the actions
+// stay with the copy.
+const original = ref<Photo | null>(null)
+const showingOriginal = ref(false)
+const shown = computed(() => (showingOriginal.value && original.value) || props.photo)
+
+watch(
+  () => props.photo.id,
+  async (id) => {
+    showingOriginal.value = false
+    original.value = null
+    if (props.photo.ownerId !== auth.user?.id) {
+      return
+    }
+    const { data } = await api.GET('/photos/{id}', { params: { path: { id } } })
+    const version = data?.versions?.find((v) => v.kind === 'edited')
+    if (!version || id !== props.photo.id) {
+      return
+    }
+    const { data: photo } = await api.GET('/photos/{id}', { params: { path: { id: version.id } } })
+    if (photo && id === props.photo.id) {
+      original.value = photo
+    }
+  },
+  { immediate: true },
+)
 
 const ready = computed(() => props.photos.filter((p) => p.status === 'ready'))
 const index = computed(() => ready.value.findIndex((p) => p.id === props.photo.id))
@@ -35,20 +65,20 @@ const previous = computed(() => ready.value[index.value - 1])
 const next = computed(() => ready.value[index.value + 1])
 
 const details = computed(() => {
-  const date = new Date(props.photo.takenAt ?? props.photo.createdAt)
-  const owner = props.photo.ownerId === auth.user?.id ? null : users.login(props.photo.ownerId)
-  const duration = props.photo.duration !== null && formatDuration(props.photo.duration)
-  return [owner && t('viewer.sharedBy', { owner }), formatDateTime(date), props.photo.width && `${props.photo.width} × ${props.photo.height}`, duration]
+  const date = new Date(shown.value.takenAt ?? shown.value.createdAt)
+  const owner = shown.value.ownerId === auth.user?.id ? null : users.login(shown.value.ownerId)
+  const duration = shown.value.duration !== null && formatDuration(shown.value.duration)
+  return [showingOriginal.value && t('viewer.originalVersion'), owner && t('viewer.sharedBy', { owner }), formatDateTime(date), shown.value.width && `${shown.value.width} × ${shown.value.height}`, duration]
     .filter(Boolean)
     .join(' · ')
 })
 
 const hidden = computed(() => new Set<ViewerField>(auth.user?.viewerHiddenFields ?? []))
 
-const camera = computed(() => (props.photo.camera ? describeCamera(props.photo.camera) : ''))
+const camera = computed(() => (shown.value.camera ? describeCamera(shown.value.camera) : ''))
 
 const location = computed(() => {
-  const l = props.photo.location
+  const l = shown.value.location
   if (!l || hidden.value.has('location')) {
     return null
   }
@@ -121,18 +151,18 @@ function canShowOriginal(photo: Photo) {
 // H.264 copy when there is one, and its original until then. When the browser
 // cannot play the original, such as HEVC in some browsers, the viewer shows
 // the poster and offers the download, and waits for the copy if one is coming.
-const video = computed(() => isVideo(props.photo))
+const video = computed(() => isVideo(shown.value))
 const videoElement = ref<HTMLVideoElement | null>(null)
 const unplayable = ref(false)
 
 // The state of the copy, which the viewer learns again while it waits.
-const videoCopy = ref(props.photo.videoCopy)
+const videoCopy = ref(shown.value.videoCopy)
 const copyReady = computed(() => videoCopy.value === 'ready')
 // What the video element plays, chosen when the item opens, so that a copy
 // made meanwhile does not interrupt the original playing.
 const videoSource = ref(playSource())
 function playSource() {
-  return props.photo.videoCopy === 'ready' ? copyUrl(props.photo.id) : videoUrl(props.photo.id)
+  return shown.value.videoCopy === 'ready' ? copyUrl(shown.value.id) : videoUrl(shown.value.id)
 }
 // Whether a copy was asked for and is still being made.
 const copyComing = ref(false)
@@ -143,13 +173,13 @@ let copyPoll = 0
 // graphics allow, so the answer may be that none is coming.
 let copyAsked = 0
 async function askForCopy() {
-  const id = props.photo.id
+  const id = shown.value.id
   if (videoCopy.value !== null || copyAsked === id) {
     return
   }
   copyAsked = id
   const { data } = await api.POST('/photos/{id}/copy', { params: { path: { id } } })
-  if (id === props.photo.id && data?.queued) {
+  if (id === shown.value.id && data?.queued) {
     copyComing.value = true
     pollCopy(id)
   }
@@ -159,7 +189,7 @@ function pollCopy(id: number) {
   clearTimeout(copyPoll)
   copyPoll = window.setTimeout(async () => {
     const { data } = await api.GET('/photos/{id}', { params: { path: { id } } })
-    if (id !== props.photo.id) {
+    if (id !== shown.value.id) {
       return
     }
     if (data?.videoCopy == null) {
@@ -178,15 +208,15 @@ function copyArrived(state: NonNullable<Photo['videoCopy']>) {
   const element = videoElement.value
   const started = element !== null && (!element.paused || element.currentTime > 0)
   if (state === 'ready' && (unplayable.value || !started)) {
-    videoSource.value = copyUrl(props.photo.id)
+    videoSource.value = copyUrl(shown.value.id)
     unplayable.value = false
   }
 }
 
 function onVideoUnplayable() {
   // A copy made since the item opened plays instead.
-  if (copyReady.value && videoSource.value !== copyUrl(props.photo.id)) {
-    videoSource.value = copyUrl(props.photo.id)
+  if (copyReady.value && videoSource.value !== copyUrl(shown.value.id)) {
+    videoSource.value = copyUrl(shown.value.id)
     return
   }
   unplayable.value = true
@@ -215,7 +245,7 @@ function toggleMotion() {
     return
   }
   resetView()
-  motionSource.value = copyReady.value ? copyUrl(props.photo.id) : motionUrl(props.photo.id, props.photo.previewVersion)
+  motionSource.value = copyReady.value ? copyUrl(shown.value.id) : motionUrl(shown.value.id, shown.value.previewVersion)
   motionPlaying.value = true
   askForCopy()
 }
@@ -251,12 +281,12 @@ function onMotionMetadata(event: Event) {
 }
 
 watch(
-  () => props.photo.id,
+  () => shown.value.id,
   () => {
     unplayable.value = false
     motionPlaying.value = false
     motionFailed.value = false
-    videoCopy.value = props.photo.videoCopy
+    videoCopy.value = shown.value.videoCopy
     videoSource.value = playSource()
     copyComing.value = false
     clearTimeout(copyPoll)
@@ -265,7 +295,7 @@ watch(
 
 // Events bring the copy too, for the owner's own items.
 watch(
-  () => props.photo.videoCopy,
+  () => shown.value.videoCopy,
   (state) => {
     if (state !== null && videoCopy.value === null) {
       copyArrived(state)
@@ -284,7 +314,7 @@ const originalShown = ref(false)
 let originalRequested = 0
 
 function loadOriginal() {
-  const photo = props.photo
+  const photo = shown.value
   if (originalShown.value || originalRequested === photo.id || !canShowOriginal(photo)) {
     return
   }
@@ -293,7 +323,7 @@ function loadOriginal() {
   image.src = originalUrl(photo.id)
   image.decode().then(
     () => {
-      if (props.photo.id === photo.id) {
+      if (shown.value.id === photo.id) {
         originalShown.value = true
       }
     },
@@ -303,7 +333,7 @@ function loadOriginal() {
   )
 }
 
-const source = computed(() => (originalShown.value ? originalUrl(props.photo.id) : previewUrl(props.photo.id, 'viewer')))
+const source = computed(() => (originalShown.value ? originalUrl(shown.value.id) : previewUrl(shown.value.id, 'viewer')))
 
 // Loads the neighbours ahead of time, so that stepping through photos feels instant.
 watch(
@@ -329,14 +359,14 @@ const stageSize = ref({ width: 0, height: 0 })
 const naturalSize = ref<{ width: number; height: number } | null>(null)
 
 const photoSize = computed(() =>
-  props.photo.width && props.photo.height ? { width: props.photo.width, height: props.photo.height } : naturalSize.value,
+  shown.value.width && shown.value.height ? { width: shown.value.width, height: shown.value.height } : naturalSize.value,
 )
 
 // Zooming shows the original only when the profile asks for it and the
 // browser can decode it. Otherwise it enlarges the preview, which goes no
 // further than the preview's own resolution: past it the photo only blurs.
 const zoomSize = computed(() =>
-  showOriginals.value && canShowOriginal(props.photo) ? photoSize.value : naturalSize.value,
+  showOriginals.value && canShowOriginal(shown.value) ? photoSize.value : naturalSize.value,
 )
 
 // A video keeps clear of the bar with the camera details at the bottom, which
@@ -412,7 +442,7 @@ function zoomAround(scale: number, start: View, from: Point, to: Point, animate 
 }
 
 // Zoomed out for each photo and each screen size.
-watch([() => props.photo.id, () => stageSize.value.width, () => stageSize.value.height], () => {
+watch([() => shown.value.id, () => stageSize.value.width, () => stageSize.value.height], () => {
   view.value = { scale: 1, x: 0, y: 0 }
   animated.value = false
 })
@@ -425,14 +455,14 @@ watch(() => fit.value?.maxScale, () => {
 })
 
 watch(
-  () => props.photo.id,
+  () => shown.value.id,
   () => {
     originalShown.value = false
     naturalSize.value = null
   },
 )
 
-watch([() => props.photo.id, showOriginals, zoomed], () => {
+watch([() => shown.value.id, showOriginals, zoomed], () => {
   if (showOriginals.value && zoomed.value) {
     loadOriginal()
   }
@@ -619,7 +649,7 @@ function finishSlide(target: Photo | null) {
 }
 
 watch(
-  () => props.photo.id,
+  () => shown.value.id,
   () => {
     clearTimeout(slideFallback)
     slideTarget = null
@@ -679,7 +709,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="viewer" data-testid="viewer" role="dialog" aria-modal="true" :aria-label="photo.name">
+  <div class="viewer" data-testid="viewer" role="dialog" aria-modal="true" :aria-label="shown.name">
     <div
       ref="stage"
       class="stage"
@@ -702,9 +732,9 @@ onBeforeUnmount(() => {
           <video
             v-if="!unplayable"
             ref="videoElement"
-            :key="photo.id"
+            :key="shown.id"
             :src="videoSource"
-            :poster="previewUrl(photo.id, 'viewer')"
+            :poster="previewUrl(shown.id, 'viewer')"
             :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
             class="image"
             data-testid="viewer-video"
@@ -717,8 +747,8 @@ onBeforeUnmount(() => {
           />
           <template v-else>
             <img
-              :src="previewUrl(photo.id, 'viewer')"
-              :alt="photo.name"
+              :src="previewUrl(shown.id, 'viewer')"
+              :alt="shown.name"
               :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
               class="image"
               draggable="false"
@@ -729,14 +759,14 @@ onBeforeUnmount(() => {
                 <v-progress-circular indeterminate size="16" width="2" class="mr-2" />{{ t('viewer.videoCopyComing') }}
               </div>
               <div v-else class="details">{{ t('viewer.videoUnsupportedText') }}</div>
-              <v-btn :href="originalUrl(photo.id)" prepend-icon="fa-download" variant="flat" class="mt-3" :text="t('viewer.download')" />
+              <v-btn :href="originalUrl(shown.id)" prepend-icon="fa-download" variant="flat" class="mt-3" :text="t('viewer.download')" />
             </div>
           </template>
         </div>
         <div v-else class="slide">
           <video
             v-if="motionPlaying"
-            :key="`motion-${photo.id}`"
+            :key="`motion-${shown.id}`"
             :src="motionSource"
             :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
             class="image motion"
@@ -749,9 +779,9 @@ onBeforeUnmount(() => {
           />
           <img
             ref="image"
-            :key="photo.id"
+            :key="shown.id"
             :src="source"
-            :alt="photo.name"
+            :alt="shown.name"
             :data-source="originalShown ? 'original' : 'preview'"
             :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px`, transform } : undefined"
             :class="{ animated }"
@@ -769,7 +799,7 @@ onBeforeUnmount(() => {
 
     <div class="bar">
       <div class="info">
-        <div class="name">{{ photo.name }}</div>
+        <div class="name">{{ shown.name }}</div>
         <div class="details">{{ details }}</div>
       </div>
       <v-btn
@@ -781,7 +811,7 @@ onBeforeUnmount(() => {
         @click="emit('similar', photo)"
       />
       <v-btn
-        v-if="photo.hasMotion && !video"
+        v-if="shown.hasMotion && !video"
         :icon="motionPlaying ? 'fa-stop' : 'fa-regular-circle-dot'"
         variant="text"
         data-testid="viewer-motion-button"
@@ -789,12 +819,23 @@ onBeforeUnmount(() => {
         :title="motionPlaying ? t('viewer.stopMotion') : t('viewer.playMotion')"
         @click="toggleMotion"
       />
+      <v-btn
+        v-if="original"
+        icon="fa-clock-rotate-left"
+        variant="text"
+        :active="showingOriginal"
+        data-testid="viewer-original-button"
+        :aria-label="showingOriginal ? t('viewer.showEdited') : t('viewer.showOriginal')"
+        :title="showingOriginal ? t('viewer.showEdited') : t('viewer.showOriginal')"
+        :aria-pressed="showingOriginal"
+        @click="showingOriginal = !showingOriginal"
+      />
       <v-btn v-if="canTag" icon="fa-tag" variant="text" :aria-label="t('browser.tags')" @click="emit('tags', photo)" />
       <template v-if="canManage">
         <v-btn icon="fa-share-nodes" variant="text" :aria-label="t('browser.share')" @click="emit('share', photo)" />
         <v-btn icon="fa-trash-can" variant="text" :aria-label="t('browser.moveToTrash')" @click="emit('trash', photo)" />
       </template>
-      <v-btn :href="originalUrl(photo.id)" icon="fa-download" variant="text" :aria-label="t('viewer.download')" />
+      <v-btn :href="originalUrl(shown.id)" icon="fa-download" variant="text" :aria-label="t('viewer.download')" />
       <v-btn icon="fa-xmark" variant="text" :aria-label="t('common.close')" @click="emit('close')" />
     </div>
 

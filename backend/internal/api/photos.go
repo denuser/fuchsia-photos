@@ -23,6 +23,7 @@ import (
 	"github.com/denuser/fuchsia-photos/backend/internal/metadata"
 	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/fuchsia-photos/backend/internal/transcode"
 )
 
 const (
@@ -57,9 +58,13 @@ type photoJSON struct {
 	Duration *float64 `json:"duration"`
 	// Whether a motion photo or a Live Photo has a video to play.
 	HasMotion bool `json:"hasMotion"`
-	// Set on the video of a Live Photo, which plays as the motion of that
-	// photo. Only events carry such videos, so that pages drop them.
-	LivePhotoID *int64 `json:"livePhotoId"`
+	// The kind of link a photo is hidden under another one with: live for the
+	// video of a Live Photo, edited for the original of an edited copy. Only
+	// events carry hidden photos, so that pages drop them.
+	HiddenUnder *string `json:"hiddenUnder"`
+	// The versions hidden right under the photo, given only to its owner and
+	// only for one photo, as the viewer loads it.
+	Versions []versionJSON `json:"versions,omitempty"`
 	// The H.264 copy of what the item plays: ready, not_needed, failed, or
 	// null while no copy has been tried.
 	VideoCopy *string `json:"videoCopy"`
@@ -103,9 +108,13 @@ func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 		Location:       location,
 		Duration:       p.Duration,
 		HasMotion:      p.HasMotion,
-		LivePhotoID:    p.LivePhotoID,
 		VideoCopy:      p.VideoCopy,
 	}
+}
+
+type versionJSON struct {
+	ID   int64  `json:"id"`
+	Kind string `json:"kind"`
 }
 
 func toPhotosJSON(photos []store.Photo, showLocation bool) []photoJSON {
@@ -472,9 +481,13 @@ func (s *server) restorePhotos(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err)
 		return
 	}
-	// A video may have come in while its photo was in the trash.
+	// A video may have come in while its photo was in the trash, and so may
+	// the edited copy of an original.
 	if _, err := jobs.PairLivePhotos(r.Context(), s.Ingest.Pool, &owner, nil); err != nil {
 		slog.Warn("pair live photos", "error", err)
+	}
+	if _, err := jobs.LinkVersions(r.Context(), s.Ingest.Pool, &owner, ids); err != nil {
+		slog.Warn("link versions", "error", err)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -626,7 +639,18 @@ func (s *server) getPhoto(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toPhotoJSON(photo, showLocation))
+	out := toPhotoJSON(photo, showLocation)
+	if photo.OwnerID == currentUser(r).ID {
+		versions, err := s.Queries.ListPhotoVersions(r.Context(), photo.ID)
+		if err != nil {
+			internalError(w, r, err)
+			return
+		}
+		for _, v := range versions {
+			out.Versions = append(out.Versions, versionJSON{ID: v.ID, Kind: v.Kind})
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *server) getPreview(w http.ResponseWriter, r *http.Request) {
@@ -691,12 +715,8 @@ func (s *server) getMotion(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "the photo has no motion")
 		return
 	}
-	path := s.Layout.Motion(photo.ID)
-	video, err := s.Queries.GetLivePhotoVideo(r.Context(), &photo.ID)
-	switch {
-	case err == nil:
-		path = s.Layout.Original(video.OwnerID, video.Sha256, video.Mime)
-	case !errors.Is(err, pgx.ErrNoRows):
+	path, err := transcode.MotionSource(r.Context(), s.Queries, s.Layout, photo.ID)
+	if err != nil {
 		internalError(w, r, err)
 		return
 	}

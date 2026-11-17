@@ -87,7 +87,7 @@ func TestTrash(t *testing.T) {
 		}
 		found := false
 		for _, p := range changed {
-			found = found || (p.ID == trashed && p.DeletedAt != nil)
+			found = found || (p.Photo.ID == trashed && p.Photo.DeletedAt != nil)
 		}
 		if !found {
 			t.Errorf("changed photos %+v do not report the trashed photo", changed)

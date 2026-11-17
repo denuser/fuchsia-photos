@@ -543,7 +543,7 @@ func (q *Queries) ListTakeoutAlbumFiles(ctx context.Context, runID int64) ([]Lis
 
 const listTakeoutAlbumPhotos = `-- name: ListTakeoutAlbumPhotos :many
 SELECT DISTINCT f.album_id::bigint AS album_id, p.id AS photo_id,
-       (p.deleted_at IS NOT NULL)::boolean AS trashed, (p.live_photo_id IS NULL)::boolean AS shown
+       (p.deleted_at IS NOT NULL)::boolean AS trashed, (NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id))::boolean AS shown
 FROM (
     SELECT unnest($1::text[]) AS export, unnest($2::text[]) AS folder, unnest($3::bigint[]) AS album_id
 ) f

@@ -15,7 +15,7 @@ SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE $1::text), 'YYYY-MM'):
        count(*) AS count
 FROM photos p
 WHERE p.deleted_at IS NULL
-  AND p.live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND ($2::bigint IS NULL OR p.owner_id = $2::bigint)
 GROUP BY 1
 ORDER BY 1 DESC
@@ -58,7 +58,7 @@ SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE $1::text), 'YYYY-MM'):
 FROM photos p
 WHERE p.owner_id <> $2::bigint
   AND p.deleted_at IS NULL
-  AND p.live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND p.status = 'ready'
   AND (photo_shared_directly(p, $2::bigint)
        OR ($3::boolean AND photo_in_visible_album(p, $2::bigint)))
@@ -168,10 +168,10 @@ func (q *Queries) ListAlbumShareUsers(ctx context.Context, albumID int64) ([]Lis
 }
 
 const listAllPhotos = `-- name: ListAllPhotos :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id, p.video_copy, p.imported_latitude, p.imported_longitude
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude
 FROM photos p
 WHERE p.deleted_at IS NULL
-  AND p.live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND ($1::bigint IS NULL OR p.owner_id = $1::bigint)
   AND ($2::timestamptz IS NULL OR p.sort_at >= $2::timestamptz)
   AND ($3::timestamptz IS NULL OR p.sort_at < $3::timestamptz)
@@ -233,7 +233,6 @@ func (q *Queries) ListAllPhotos(ctx context.Context, arg ListAllPhotosParams) ([
 			&i.Duration,
 			&i.HasMotion,
 			&i.ContentIdentifier,
-			&i.LivePhotoID,
 			&i.VideoCopy,
 			&i.ImportedLatitude,
 			&i.ImportedLongitude,
@@ -281,11 +280,11 @@ func (q *Queries) ListPhotoShareUsers(ctx context.Context, photoID int64) ([]Lis
 }
 
 const listSharedPhotos = `-- name: ListSharedPhotos :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id, p.video_copy, p.imported_latitude, p.imported_longitude
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude
 FROM photos p
 WHERE p.owner_id <> $1::bigint
   AND p.deleted_at IS NULL
-  AND p.live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND p.status = 'ready'
   AND (photo_shared_directly(p, $1::bigint)
        OR ($2::boolean AND photo_in_visible_album(p, $1::bigint)))
@@ -352,7 +351,6 @@ func (q *Queries) ListSharedPhotos(ctx context.Context, arg ListSharedPhotosPara
 			&i.Duration,
 			&i.HasMotion,
 			&i.ContentIdentifier,
-			&i.LivePhotoID,
 			&i.VideoCopy,
 			&i.ImportedLatitude,
 			&i.ImportedLongitude,

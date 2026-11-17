@@ -328,6 +328,11 @@ func (s *Service) match(ctx context.Context, run store.ImportRun) (bool, error) 
 			return false, err
 		}
 	}
+	// Edited copies processed while the parts were read are linked to their
+	// originals now; the others are linked by processing.
+	if _, err := jobs.LinkVersions(ctx, s.Ingest.Pool, &run.OwnerID, nil); err != nil {
+		return false, fmt.Errorf("link versions: %w", err)
+	}
 	if err := queries.FinishMatching(ctx, finish); err != nil {
 		return false, fmt.Errorf("finish run: %w", err)
 	}

@@ -207,7 +207,7 @@ SELECT id FROM albums WHERE owner_id = @owner_id AND name = @name ORDER BY id LI
 -- folder only. Purged photos stay out; trashed tells those in the trash.
 -- name: ListTakeoutAlbumPhotos :many
 SELECT DISTINCT f.album_id::bigint AS album_id, p.id AS photo_id,
-       (p.deleted_at IS NOT NULL)::boolean AS trashed, (p.live_photo_id IS NULL)::boolean AS shown
+       (p.deleted_at IS NOT NULL)::boolean AS trashed, (NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id))::boolean AS shown
 FROM (
     SELECT unnest(@exports::text[]) AS export, unnest(@folders::text[]) AS folder, unnest(@album_ids::bigint[]) AS album_id
 ) f

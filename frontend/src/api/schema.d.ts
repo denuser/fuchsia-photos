@@ -1391,10 +1391,12 @@ export interface components {
             /** @description Whether a motion photo or a Live Photo has a video to play from /photos/{id}/motion */
             hasMotion: boolean;
             /**
-             * Format: int64
-             * @description Set on the video of a Live Photo to the photo it plays as the motion of. Lists leave such videos out; only events carry them, so that pages drop them
+             * @description Set on a file hidden under another photo to the kind of link, live for the video of a Live Photo and edited for the original of an edited copy. Lists leave such files out; only events carry them, so that pages drop them
+             * @enum {string|null}
              */
-            livePhotoId: number | null;
+            hiddenUnder: "live" | "edited" | null;
+            /** @description The files hidden right under the photo, such as the original of an edited copy. Only GET /photos/{id} gives them, and only to the photo's owner; a hidden file is opened through its own id */
+            versions?: components["schemas"]["PhotoVersion"][];
             /**
              * @description The H.264 copy of what the item plays, the video or the motion, served from /photos/{id}/copy when ready. not_needed when the video plays as it is or the graphics cannot decode it. Null while no copy has been tried
              * @enum {string|null}
@@ -1404,6 +1406,12 @@ export interface components {
             camera: components["schemas"]["Camera"] | null;
             /** @description Where the photo was taken. Null when it has no location or an administrator hides locations */
             location: components["schemas"]["Location"] | null;
+        };
+        PhotoVersion: {
+            /** Format: int64 */
+            id: number;
+            /** @description live for the video of a Live Photo, which plays as the photo's motion, and edited for the original of an edited copy. Clients leave out kinds they do not know */
+            kind: string;
         };
         /** @description Each field is present only when the photo has it */
         Camera: {

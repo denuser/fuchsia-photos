@@ -329,7 +329,10 @@ func TestLivePhotoCopy(t *testing.T) {
 	if data, err = os.ReadFile(path); err != nil {
 		t.Fatal(err)
 	}
-	video := waitFor(t, e, upload(t, e, "live.mov", data).ID, "pairing", func(p store.Photo) bool { return p.LivePhotoID != nil })
+	video := waitFor(t, e, upload(t, e, "live.mov", data).ID, "pairing", func(p store.Photo) bool {
+		_, err := e.queries.GetLinkAbove(context.Background(), p.ID)
+		return err == nil
+	})
 
 	if queued, err := e.service.Request(ctx, video.ID); err != nil || !queued {
 		t.Fatalf("request: queued %v, %v", queued, err)

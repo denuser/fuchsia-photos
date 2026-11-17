@@ -58,8 +58,11 @@ func importedDetails(row store.ListImportedForApplyRow) (*time.Time, *metadata.L
 	own := metadata.TakenAt(row.Exif, storage.IsVideo(row.Mime))
 	applies := true
 	if row.Edited {
-		original := metadata.TakenAt(row.OriginalExif, row.OriginalMime != nil && storage.IsVideo(*row.OriginalMime))
-		applies = own.Raw != "" && own.Raw == original.Raw
+		originalMime := ""
+		if row.OriginalMime != nil {
+			originalMime = *row.OriginalMime
+		}
+		applies = sameTakenAt(row.Exif, row.Mime, row.OriginalExif, originalMime)
 	}
 	if !applies {
 		return own.At, nil
@@ -74,4 +77,12 @@ func importedDetails(row store.ListImportedForApplyRow) (*time.Time, *metadata.L
 		location = &metadata.Location{Latitude: *row.Latitude, Longitude: *row.Longitude}
 	}
 	return takenAt, location
+}
+
+// sameTakenAt tells whether an edited copy and its original have the same
+// date in their EXIF, as written there. A file without a date matches none.
+func sameTakenAt(exif []byte, mime string, originalExif []byte, originalMime string) bool {
+	own := metadata.TakenAt(exif, storage.IsVideo(mime))
+	original := metadata.TakenAt(originalExif, storage.IsVideo(originalMime))
+	return own.Raw != "" && own.Raw == original.Raw
 }

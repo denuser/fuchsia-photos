@@ -14,9 +14,9 @@ const countEmbeddings = `-- name: CountEmbeddings :one
 SELECT
     (SELECT count(*) FROM photos p
      WHERE p.status = 'ready' AND p.purged_at IS NULL AND p.preview_format IS NOT NULL
-       AND p.live_photo_id IS NULL)::bigint AS photos,
+       AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id))::bigint AS photos,
     (SELECT count(*) FROM photo_embeddings e JOIN photos p ON p.id = e.photo_id
-     WHERE e.model = $1 AND p.purged_at IS NULL AND p.live_photo_id IS NULL)::bigint AS embedded,
+     WHERE e.model = $1 AND p.purged_at IS NULL AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id))::bigint AS embedded,
     (SELECT count(*) FROM photo_embedding_failures f
      WHERE f.model = $1 AND f.attempts >= $2::integer)::bigint AS failed
 `
@@ -105,7 +105,7 @@ SELECT p.id, p.preview_format::text AS preview_format
 FROM photos p
 WHERE p.status = 'ready'
   AND p.purged_at IS NULL
-  AND p.live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND p.preview_format IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM photo_embeddings e WHERE e.photo_id = p.id AND e.model = $1)
   AND NOT EXISTS (SELECT 1 FROM photo_embedding_failures f
@@ -197,13 +197,13 @@ func (q *Queries) SaveEmbedding(ctx context.Context, arg SaveEmbeddingParams) er
 }
 
 const searchPhotosByVector = `-- name: SearchPhotosByVector :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id, p.video_copy, p.imported_latitude, p.imported_longitude, (e.embedding <=> CAST($1::text AS halfvec))::float8 AS distance
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, (e.embedding <=> CAST($1::text AS halfvec))::float8 AS distance
 FROM photo_embeddings e
 JOIN photos p ON p.id = e.photo_id
 WHERE e.model = $2
   AND p.status = 'ready'
   AND p.deleted_at IS NULL
-  AND p.live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND photo_visible_to(p, $3::bigint, false)
   AND ($4::float8 IS NULL
        OR e.embedding <=> CAST($1::text AS halfvec) <= $4::float8)
@@ -268,7 +268,6 @@ func (q *Queries) SearchPhotosByVector(ctx context.Context, arg SearchPhotosByVe
 			&i.Photo.Duration,
 			&i.Photo.HasMotion,
 			&i.Photo.ContentIdentifier,
-			&i.Photo.LivePhotoID,
 			&i.Photo.VideoCopy,
 			&i.Photo.ImportedLatitude,
 			&i.Photo.ImportedLongitude,
@@ -285,7 +284,7 @@ func (q *Queries) SearchPhotosByVector(ctx context.Context, arg SearchPhotosByVe
 }
 
 const searchSimilarPhotos = `-- name: SearchSimilarPhotos :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.live_photo_id, p.video_copy, p.imported_latitude, p.imported_longitude, (e.embedding <=> s.embedding)::float8 AS distance
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, (e.embedding <=> s.embedding)::float8 AS distance
 FROM photo_embeddings s
 JOIN photo_embeddings e ON e.model = s.model AND e.photo_id <> s.photo_id
 JOIN photos p ON p.id = e.photo_id
@@ -293,7 +292,7 @@ WHERE s.photo_id = $1
   AND s.model = $2
   AND p.status = 'ready'
   AND p.deleted_at IS NULL
-  AND p.live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND photo_visible_to(p, $3::bigint, false)
 ORDER BY e.embedding <=> s.embedding, p.id
 LIMIT $4
@@ -352,7 +351,6 @@ func (q *Queries) SearchSimilarPhotos(ctx context.Context, arg SearchSimilarPhot
 			&i.Photo.Duration,
 			&i.Photo.HasMotion,
 			&i.Photo.ContentIdentifier,
-			&i.Photo.LivePhotoID,
 			&i.Photo.VideoCopy,
 			&i.Photo.ImportedLatitude,
 			&i.Photo.ImportedLongitude,

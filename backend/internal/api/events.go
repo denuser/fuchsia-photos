@@ -50,7 +50,7 @@ func (s *server) photoEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		// When the batch is full, continue from its end rather than skip the rest.
 		if len(changed) == maxEventPhotos {
-			since = changed[len(changed)-1].UpdatedAt
+			since = changed[len(changed)-1].Photo.UpdatedAt
 		} else {
 			since = now.Add(-eventOverlap)
 		}
@@ -65,7 +65,7 @@ func (s *server) photoEvents(w http.ResponseWriter, r *http.Request) {
 			payload, err := json.Marshal(map[string]any{
 				"pending": counts.Pending,
 				"failed":  counts.Failed,
-				"photos":  toPhotosJSON(changed, showLocation),
+				"photos":  changedPhotosJSON(changed, showLocation),
 			})
 			if err != nil {
 				return
@@ -146,4 +146,13 @@ func (s *server) queueEvents(w http.ResponseWriter, r *http.Request) {
 		case <-ticker.C:
 		}
 	}
+}
+
+func changedPhotosJSON(rows []store.ListChangedPhotosRow, showLocation bool) []photoJSON {
+	out := make([]photoJSON, len(rows))
+	for i, row := range rows {
+		out[i] = toPhotoJSON(row.Photo, showLocation)
+		out[i].HiddenUnder = row.HiddenKind
+	}
+	return out
 }

@@ -15,7 +15,12 @@ FROM photos p
 WHERE p.id = @id
   AND p.purged_at IS NULL
   AND (p.deleted_at IS NULL OR p.owner_id = @viewer_id::bigint)
-  AND photo_visible_to(p, @viewer_id::bigint, @viewer_is_admin::boolean);
+  AND photo_visible_to(p, @viewer_id::bigint, @viewer_is_admin::boolean)
+  -- A version hidden under another photo is opened only by its owner: the
+  -- original of an edited copy may show what the edit took out. Others play
+  -- the video of a Live Photo through its photo.
+  AND (p.owner_id = @viewer_id::bigint OR @viewer_is_admin::boolean
+       OR NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id));
 
 -- The photos of one owner: the current user, or the owner of an album the
 -- user can see. With with_shared, which the API allows only without an album,
@@ -30,7 +35,7 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
-  AND p.live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (sqlc.narg(after_sort_at)::timestamptz IS NULL
        OR (p.sort_at, p.id) < (sqlc.narg(after_sort_at)::timestamptz, sqlc.narg(after_id)::bigint))
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
@@ -56,7 +61,7 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
-  AND p.live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
   AND (sqlc.narg(album_id)::bigint IS NULL
@@ -81,7 +86,7 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
-  AND p.live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND p.camera IS NOT NULL
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
@@ -102,7 +107,7 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
-  AND p.live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND p.lens IS NOT NULL
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
@@ -123,7 +128,7 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
-  AND p.live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
   AND (sqlc.narg(to_time)::timestamptz IS NULL OR p.sort_at < sqlc.narg(to_time)::timestamptz)
   AND (sqlc.narg(album_id)::bigint IS NULL
@@ -142,18 +147,20 @@ FROM photos
 WHERE owner_id = @owner_id
   AND deleted_at IS NOT NULL
   AND purged_at IS NULL
-  AND live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = photos.id)
   AND (sqlc.narg(after_deleted_at)::timestamptz IS NULL
        OR (deleted_at, id) < (sqlc.narg(after_deleted_at)::timestamptz, sqlc.narg(after_id)::bigint))
 ORDER BY deleted_at DESC, id DESC
 LIMIT @max_rows;
 
--- Includes photos moved to the trash, so that other open pages can remove them.
+-- Includes photos moved to the trash, and photos hidden under another one with
+-- the kind of their link, so that other open pages can remove them.
 -- name: ListChangedPhotos :many
-SELECT *
-FROM photos
-WHERE owner_id = @owner_id AND updated_at > @since AND purged_at IS NULL
-ORDER BY updated_at
+SELECT sqlc.embed(p), l.kind AS hidden_kind
+FROM photos p
+LEFT JOIN photo_links l ON l.hidden_id = p.id
+WHERE p.owner_id = @owner_id AND p.updated_at > @since AND p.purged_at IS NULL
+ORDER BY p.updated_at
 LIMIT @max_rows;
 
 -- name: CountPhotosByStatus :one
@@ -173,36 +180,59 @@ SET status = 'ready',
     exif = @exif,
     preview_format = @preview_format,
     duration = sqlc.narg(duration),
-    -- The video of a Live Photo is its motion too.
-    has_motion = @has_motion OR EXISTS (SELECT 1 FROM photos v WHERE v.live_photo_id = p.id),
+    -- The video of a Live Photo is its motion too, and an edited copy plays
+    -- the motion of its original.
+    has_motion = @has_motion OR photo_has_linked_motion(p.id),
     updated_at = now()
 WHERE p.id = @id AND p.purged_at IS NULL;
 
 -- name: MarkPhotoFailed :exec
 UPDATE photos SET status = 'failed', error = @error, updated_at = now() WHERE id = @id AND purged_at IS NULL;
 
--- The video of a Live Photo goes into the trash and out of it with its photo,
--- and not on its own.
+-- Photos hidden under another one, such as the video of a Live Photo or the
+-- original of an edited copy, go into the trash and out of it with the photo
+-- shown above them, and not on their own.
 -- name: TrashPhotos :exec
+WITH RECURSIVE chain AS (
+    SELECT p.id
+    FROM photos p
+    WHERE p.id = ANY (@ids::bigint[])
+      AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
+      AND (p.owner_id = @actor_id::bigint OR @actor_is_admin::boolean)
+    UNION
+    SELECT l.hidden_id FROM photo_links l JOIN chain c ON l.shown_id = c.id
+)
 UPDATE photos
 SET deleted_at = now(), updated_at = now()
-WHERE (id = ANY (@ids::bigint[]) AND live_photo_id IS NULL OR live_photo_id = ANY (@ids::bigint[]))
-  AND deleted_at IS NULL
-  AND (owner_id = @actor_id::bigint OR @actor_is_admin::boolean);
+WHERE id IN (SELECT id FROM chain) AND deleted_at IS NULL;
 
 -- name: RestorePhotos :exec
-UPDATE photos
+WITH RECURSIVE chain AS (
+    SELECT p.id
+    FROM photos p
+    WHERE p.id = ANY (@ids::bigint[])
+      AND p.owner_id = @owner_id
+      AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
+    UNION
+    SELECT l.hidden_id FROM photo_links l JOIN chain c ON l.shown_id = c.id
+)
+UPDATE photos u
 SET deleted_at = NULL, updated_at = now()
-WHERE owner_id = @owner_id
-  AND (id = ANY (@ids::bigint[]) AND live_photo_id IS NULL OR live_photo_id = ANY (@ids::bigint[]))
-  AND deleted_at IS NOT NULL
-  AND purged_at IS NULL;
+WHERE u.id IN (SELECT id FROM chain)
+  AND u.owner_id = @owner_id
+  AND u.deleted_at IS NOT NULL
+  AND u.purged_at IS NULL;
 
 -- name: RestorePhoto :one
-WITH video_restored AS (
+WITH RECURSIVE chain AS (
+    SELECT l.hidden_id AS id FROM photo_links l WHERE l.shown_id = @id
+    UNION
+    SELECT l.hidden_id FROM photo_links l JOIN chain c ON l.shown_id = c.id
+),
+versions_restored AS (
     UPDATE photos v
     SET deleted_at = NULL, updated_at = now()
-    WHERE v.live_photo_id = @id AND v.deleted_at IS NOT NULL AND v.purged_at IS NULL
+    WHERE v.id IN (SELECT id FROM chain) AND v.deleted_at IS NOT NULL AND v.purged_at IS NULL
 )
 UPDATE photos p
 SET deleted_at = NULL, updated_at = now()
@@ -215,7 +245,7 @@ FROM photos
 WHERE owner_id = @owner_id
   AND deleted_at IS NOT NULL
   AND purged_at IS NULL
-  AND live_photo_id IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = photos.id)
 ORDER BY id
 LIMIT @max_rows;
 
@@ -238,7 +268,7 @@ SET purged_at = now(),
 WHERE id = @id AND owner_id = @owner_id AND deleted_at IS NOT NULL AND purged_at IS NULL
 RETURNING *;
 
--- name: DeletePhotoLinks :exec
+-- name: DeletePhotoMemberships :exec
 WITH albums_removed AS (DELETE FROM album_photos ap WHERE ap.photo_id = @id),
      tags_removed AS (DELETE FROM photo_tags pt WHERE pt.photo_id = @id),
      covers_cleared AS (UPDATE albums a SET cover_photo_id = NULL WHERE a.cover_photo_id = @id),
@@ -255,10 +285,11 @@ DELETE FROM photos WHERE id = @id AND purged_at IS NOT NULL;
 -- name: LockPhotoFile :exec
 SELECT pg_advisory_xact_lock(hashtextextended(format('%s/%s', @owner_id::bigint, encode(@sha256::bytea, 'hex')), 0));
 
--- The video of a Live Photo is purged with its photo, and not on its own.
+-- A photo hidden under another one is purged with it, and not on its own.
 -- name: GetTrashedPhoto :one
 SELECT * FROM photos
-WHERE id = @id AND owner_id = @owner_id AND deleted_at IS NOT NULL AND purged_at IS NULL AND live_photo_id IS NULL;
+WHERE id = @id AND owner_id = @owner_id AND deleted_at IS NOT NULL AND purged_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = photos.id);
 
 -- name: ListReadyPhotoIDs :many
 SELECT id FROM photos WHERE status = 'ready' AND purged_at IS NULL ORDER BY id;
@@ -285,21 +316,74 @@ WHERE status = 'ready'
 ORDER BY id
 LIMIT @max_rows;
 
--- Moves updated_at too, so that open pages learn of the motion.
+-- Moves updated_at too, so that open pages learn of the motion. An edited
+-- copy shown above the photo plays the same motion.
 -- name: SetPhotoMotion :exec
 UPDATE photos
 SET has_motion = true,
     updated_at = now()
-WHERE id = @id AND status = 'ready' AND purged_at IS NULL;
+WHERE (id = @id OR id IN (SELECT l.shown_id FROM photo_links l WHERE l.hidden_id = @id AND l.kind = 'edited'))
+  AND status = 'ready' AND purged_at IS NULL;
 
 -- The video of a Live Photo, which plays as the photo's motion.
 -- name: GetLivePhotoVideo :one
-SELECT * FROM photos WHERE live_photo_id = @photo_id AND purged_at IS NULL;
+SELECT v.*
+FROM photo_links l
+JOIN photos v ON v.id = l.hidden_id
+WHERE l.shown_id = @photo_id AND l.kind = 'live' AND v.purged_at IS NULL;
 
--- Purges the video of a Live Photo with its photo, like PurgePhoto. It does not
--- ask for the video to be in the trash: a video paired while its photo was
--- being moved there may have stayed out of it.
--- name: PurgeLivePhotoVideo :one
+-- Where the motion of a photo may come from, in order: the photo itself and
+-- the original of an edited copy, each with the video of its Live Photo if it
+-- has one. A photo without such a video plays the motion extracted from it.
+-- name: ListMotionSources :many
+SELECT c.id AS photo_id, v.owner_id AS video_owner_id, v.sha256 AS video_sha256, v.mime AS video_mime
+FROM (
+    SELECT @photo_id::bigint AS id, 0 AS rank
+    UNION ALL
+    SELECT e.hidden_id, 1
+    FROM photo_links e
+    JOIN photos o ON o.id = e.hidden_id
+    WHERE e.shown_id = @photo_id AND e.kind = 'edited' AND o.has_motion AND o.purged_at IS NULL
+) c
+LEFT JOIN photo_links l ON l.shown_id = c.id AND l.kind = 'live'
+LEFT JOIN photos v ON v.id = l.hidden_id AND v.purged_at IS NULL
+ORDER BY c.rank;
+
+-- The photos hidden under a photo, the whole chain down, that are not purged.
+-- name: ListHiddenVersions :many
+WITH RECURSIVE chain AS (
+    SELECT l.hidden_id AS id FROM photo_links l WHERE l.shown_id = @photo_id
+    UNION
+    SELECT l.hidden_id FROM photo_links l JOIN chain c ON l.shown_id = c.id
+)
+SELECT p.* FROM photos p WHERE p.id IN (SELECT id FROM chain) AND p.purged_at IS NULL ORDER BY p.id;
+
+-- The photo shown at the top of the chain a photo is hidden in, or the photo
+-- itself when it is not hidden.
+-- name: GetShownPhoto :one
+WITH RECURSIVE up AS (
+    SELECT @id::bigint AS id, 0 AS depth
+    UNION ALL
+    SELECT l.shown_id, up.depth + 1 FROM photo_links l JOIN up ON l.hidden_id = up.id WHERE up.depth < 16
+)
+SELECT p.* FROM photos p JOIN up ON up.id = p.id ORDER BY up.depth DESC LIMIT 1;
+
+-- The link a photo is hidden under, if any.
+-- name: GetLinkAbove :one
+SELECT shown_id, kind FROM photo_links WHERE hidden_id = @id;
+
+-- The versions right under a photo, for its owner's viewer.
+-- name: ListPhotoVersions :many
+SELECT l.hidden_id AS id, l.kind
+FROM photo_links l
+JOIN photos v ON v.id = l.hidden_id
+WHERE l.shown_id = @photo_id AND v.purged_at IS NULL
+ORDER BY l.kind, l.hidden_id;
+
+-- Purges a photo hidden under another one with the photo above it, like
+-- PurgePhoto. It does not ask for the photo to be in the trash: a video paired
+-- while its photo was being moved there may have stayed out of it.
+-- name: PurgeHiddenPhoto :one
 UPDATE photos
 SET purged_at = now(),
     deleted_at = COALESCE(deleted_at, now()),
@@ -315,20 +399,25 @@ SET purged_at = now(),
     duration = NULL,
     has_motion = false,
     video_copy = NULL
-WHERE id = @id AND live_photo_id = @photo_id AND purged_at IS NULL
+WHERE id = @id AND purged_at IS NULL
+  AND EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = photos.id)
 RETURNING *;
 
--- Serializes pairing, so that two workers that finish the two files of one
--- Live Photo at once cannot pair either of them twice.
--- name: LockLivePhotoPairing :exec
+-- Serializes changes to links, so that two workers that finish the two files
+-- of one Live Photo at once cannot pair either of them twice, and a version
+-- is not linked while its photo is being paired.
+-- name: LockPhotoLinks :exec
 SELECT pg_advisory_xact_lock(hashtextextended('live_photo_pairing', 0));
 
 -- Pairs the photos and videos of Live Photos that share a ContentIdentifier
 -- and have no pair yet, optionally only those of one owner and identifier.
 -- Each run pairs the oldest photo with the oldest video of each identifier, so
 -- it is run until it pairs nothing. Neither file may be in the trash: a video
--- pairs with its photo when the photo is restored. The photo takes the video
--- as its motion, and both move updated_at, so that open pages drop the video.
+-- pairs with its photo when the photo is restored. An edited copy that an
+-- import recorded is not the photo of a video while its original, with the
+-- same identifier, is there: the video belongs to the original. The photo
+-- takes the video as its motion, and so does an edited copy shown above it;
+-- all move updated_at, so that open pages drop the video.
 -- name: PairLivePhotos :many
 WITH stills AS (
     SELECT DISTINCT ON (s.owner_id, s.content_identifier) s.id, s.owner_id, s.content_identifier
@@ -337,8 +426,10 @@ WITH stills AS (
       AND s.mime NOT LIKE 'video/%'
       AND s.status = 'ready'
       AND s.deleted_at IS NULL
-      AND s.live_photo_id IS NULL
-      AND NOT EXISTS (SELECT 1 FROM photos o WHERE o.live_photo_id = s.id)
+      AND NOT EXISTS (SELECT 1 FROM photo_links o WHERE o.shown_id = s.id AND o.kind = 'live')
+      AND NOT EXISTS (SELECT 1 FROM imported_metadata m JOIN photos o ON o.id = m.original_id
+                      WHERE m.photo_id = s.id AND o.owner_id = s.owner_id AND o.purged_at IS NULL
+                        AND o.content_identifier = s.content_identifier)
       AND (sqlc.narg(owner_id)::bigint IS NULL OR s.owner_id = sqlc.narg(owner_id)::bigint)
       AND (sqlc.narg(content_identifier)::text IS NULL OR s.content_identifier = sqlc.narg(content_identifier)::text)
     ORDER BY s.owner_id, s.content_identifier, s.id
@@ -350,7 +441,7 @@ videos AS (
       AND v.mime LIKE 'video/%'
       AND v.status = 'ready'
       AND v.deleted_at IS NULL
-      AND v.live_photo_id IS NULL
+      AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = v.id)
       AND (sqlc.narg(owner_id)::bigint IS NULL OR v.owner_id = sqlc.narg(owner_id)::bigint)
       AND (sqlc.narg(content_identifier)::text IS NULL OR v.content_identifier = sqlc.narg(content_identifier)::text)
     ORDER BY v.owner_id, v.content_identifier, v.id
@@ -363,25 +454,44 @@ pairs AS (
 stills_marked AS (
     UPDATE photos p
     SET has_motion = true, updated_at = now()
-    FROM pairs
-    WHERE p.id = pairs.still_id
+    WHERE p.id IN (SELECT still_id FROM pairs
+                   UNION
+                   SELECT e.shown_id FROM photo_links e JOIN pairs ON e.hidden_id = pairs.still_id
+                   WHERE e.kind = 'edited')
+),
+videos_marked AS (
+    UPDATE photos p
+    SET updated_at = now()
+    WHERE p.id IN (SELECT video_id FROM pairs)
 )
-UPDATE photos p
-SET live_photo_id = pairs.still_id, updated_at = now()
-FROM pairs
-WHERE p.id = pairs.video_id
-RETURNING p.id AS video_id, p.live_photo_id::bigint AS photo_id;
+INSERT INTO photo_links (hidden_id, shown_id, kind)
+SELECT video_id, still_id, 'live' FROM pairs
+RETURNING hidden_id AS video_id, shown_id AS photo_id;
 
--- Gives back the motion to paired photos that lost it: processing that waited
--- for a pairing to commit writes the flag from what it saw before.
--- name: RepairLivePhotoMotion :exec
+-- Gives back the motion to photos that lost it: processing that waited for a
+-- pairing or a link to commit writes the flag from what it saw before. The
+-- daily pairing looks at every photo, and restoring at the owner's.
+-- name: RepairLinkedMotion :exec
 UPDATE photos p
 SET has_motion = true, updated_at = now()
 WHERE NOT p.has_motion
   AND p.purged_at IS NULL
   AND (sqlc.narg(owner_id)::bigint IS NULL OR p.owner_id = sqlc.narg(owner_id)::bigint)
-  AND (sqlc.narg(content_identifier)::text IS NULL OR p.content_identifier = sqlc.narg(content_identifier)::text)
-  AND EXISTS (SELECT 1 FROM photos v WHERE v.live_photo_id = p.id AND v.purged_at IS NULL);
+  AND photo_has_linked_motion(p.id);
+
+-- RepairLinkedMotion for the photos of one Live Photo, which processing
+-- pairs: those with its identifier, and the edited copies shown above them.
+-- name: RepairLinkedMotionOf :exec
+UPDATE photos p
+SET has_motion = true, updated_at = now()
+WHERE p.id IN (SELECT s.id FROM photos s
+               WHERE s.owner_id = @owner_id AND s.content_identifier = @content_identifier::text
+               UNION
+               SELECT e.shown_id FROM photos s JOIN photo_links e ON e.hidden_id = s.id AND e.kind = 'edited'
+               WHERE s.owner_id = @owner_id AND s.content_identifier = @content_identifier::text)
+  AND NOT p.has_motion
+  AND p.purged_at IS NULL
+  AND photo_has_linked_motion(p.id);
 
 -- Items whose copy the transcode job has not looked at yet: videos that are
 -- not the video of a Live Photo, and photos with motion. Items in the trash
@@ -393,7 +503,7 @@ WHERE status = 'ready'
   AND purged_at IS NULL
   AND deleted_at IS NULL
   AND video_copy IS NULL
-  AND ((mime LIKE 'video/%' AND live_photo_id IS NULL) OR has_motion)
+  AND ((mime LIKE 'video/%' AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = photos.id)) OR has_motion)
   AND id > @after_id
 ORDER BY id
 LIMIT @max_rows;
