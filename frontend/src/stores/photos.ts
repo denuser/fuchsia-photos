@@ -16,6 +16,8 @@ export interface PhotoQuery {
   album?: number
   // The user's photos together with other users' photos the user can see, in the timeline.
   withShared?: boolean
+  // Only the current user's favorites.
+  favorites?: boolean
   tags?: number[]
   cameras?: string[]
   lenses?: string[]
@@ -159,9 +161,10 @@ function fetchMonths(query: PhotoQuery) {
 }
 
 // The filters of the user's own list, other than the album and the dates. An empty one is left out.
-export function listFilters({ withShared, tags, cameras, lenses, kinds }: PhotoQuery) {
+export function listFilters({ withShared, favorites, tags, cameras, lenses, kinds }: PhotoQuery) {
   return {
     withShared: withShared || undefined,
+    favorites: favorites || undefined,
     tag: tags?.length ? tags : undefined,
     camera: cameras?.length ? cameras : undefined,
     lens: lenses?.length ? lenses : undefined,
@@ -190,10 +193,11 @@ export const usePhotosStore = defineStore('photos', () => {
   // Only the whole library and the trash can tell from a photo alone that it
   // belongs in the list. Other lists learn about new members by loading.
   const unfiltered = computed(() => {
-    const { shared, everyone, album, tags, cameras, lenses, kinds, from, to } = query.value
+    const { shared, everyone, album, favorites, tags, cameras, lenses, kinds, from, to } = query.value
     return (
       !ranked(query.value) &&
       !shared &&
+      !favorites &&
       !everyone &&
       album === undefined &&
       !tags?.length &&
@@ -463,6 +467,15 @@ export const usePhotosStore = defineStore('photos', () => {
     remove(ids)
   }
 
+  // Marks are the user's own and send no event, so the Favorites page drops
+  // photos that lose theirs here.
+  async function favorite(ids: number[], value: boolean) {
+    await inBatches(ids, (batch) => api.POST('/photos/favorites', { body: { ids: batch, favorite: value } }))
+    if (!value && query.value.favorites) {
+      remove(ids)
+    }
+  }
+
   async function purge(ids: number[]) {
     await inBatches(ids, (batch) => api.POST('/photos/purge', { body: { ids: batch } }))
     remove(ids)
@@ -519,6 +532,7 @@ export const usePhotosStore = defineStore('photos', () => {
     open,
     trash,
     restore,
+    favorite,
     purge,
     connect,
     disconnect,

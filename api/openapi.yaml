@@ -411,6 +411,12 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: favorites
+          in: query
+          description: Only the current user's favorites. With `withShared`, also other users' photos the user marked. Cannot be combined with `album`
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: One page of photos
@@ -552,6 +558,28 @@ paths:
           description: The tags are changed
         "400":
           $ref: "#/components/responses/Error"
+  /photos/favorites:
+    post:
+      operationId: changeFavorites
+      summary: Mark photos as the current user's favorites, or take the marks off
+      description: A mark is the user's own and others do not see it. Photos the user cannot see, hidden versions and photos in the trash are not marked. A mark sends no event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, favorite]
+              properties:
+                ids:
+                  $ref: "#/components/schemas/PhotoIds"
+                favorite:
+                  type: boolean
+      responses:
+        "204":
+          description: The marks are changed
+        "400":
+          $ref: "#/components/responses/Error"
   /photos/months:
     get:
       operationId: countPhotoMonths
@@ -614,6 +642,12 @@ paths:
         - name: withShared
           in: query
           description: Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album`
+          schema:
+            type: boolean
+            default: false
+        - name: favorites
+          in: query
+          description: Only the current user's favorites. With `withShared`, also other users' photos the user marked. Cannot be combined with `album`
           schema:
             type: boolean
             default: false
@@ -696,6 +730,12 @@ paths:
         - name: withShared
           in: query
           description: Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album`
+          schema:
+            type: boolean
+            default: false
+        - name: favorites
+          in: query
+          description: Only the current user's favorites. With `withShared`, also other users' photos the user marked. Cannot be combined with `album`
           schema:
             type: boolean
             default: false
@@ -2045,6 +2085,9 @@ components:
           description: Set on a file hidden under another photo to the kind of link, live for the video of a Live Photo and edited for the original of an edited copy. Lists leave such files out; only events carry them, so that pages drop them
           type: [string, "null"]
           enum: [live, edited, null]
+        favorite:
+          description: Whether the photo is the current user's favorite. Only GET /photos/{id} gives it
+          type: boolean
         versions:
           description: The files hidden right under the photo, such as the original of an edited copy. Only GET /photos/{id} gives them, and only to the photo's owner; a hidden file is opened through its own id
           type: array

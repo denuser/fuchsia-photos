@@ -140,6 +140,12 @@ type PhotoEmbeddingFailure struct {
 	FailedAt time.Time
 }
 
+type PhotoFavorite struct {
+	UserID    int64
+	PhotoID   int64
+	CreatedAt time.Time
+}
+
 type PhotoLink struct {
 	HiddenID  int64
 	ShownID   int64

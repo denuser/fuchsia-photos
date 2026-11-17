@@ -370,6 +370,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/photos/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark photos as the current user's favorites, or take the marks off
+         * @description A mark is the user's own and others do not see it. Photos the user cannot see, hidden versions and photos in the trash are not marked. A mark sends no event.
+         */
+        post: operations["changeFavorites"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/photos/months": {
         parameters: {
             query?: never;
@@ -1399,6 +1419,8 @@ export interface components {
              * @enum {string|null}
              */
             hiddenUnder: "live" | "edited" | null;
+            /** @description Whether the photo is the current user's favorite. Only GET /photos/{id} gives it */
+            favorite?: boolean;
             /** @description The files hidden right under the photo, such as the original of an edited copy. Only GET /photos/{id} gives them, and only to the photo's owner; a hidden file is opened through its own id */
             versions?: components["schemas"]["PhotoVersion"][];
             /**
@@ -2070,6 +2092,8 @@ export interface operations {
                 album?: number;
                 /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
                 withShared?: boolean;
+                /** @description Only the current user's favorites. With `withShared`, also other users' photos the user marked. Cannot be combined with `album` */
+                favorites?: boolean;
             };
             header?: never;
             path?: never;
@@ -2255,6 +2279,32 @@ export interface operations {
             400: components["responses"]["Error"];
         };
     };
+    changeFavorites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    ids: components["schemas"]["PhotoIds"];
+                    favorite: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The marks are changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
     countPhotoMonths: {
         parameters: {
             query: {
@@ -2276,6 +2326,8 @@ export interface operations {
                 album?: number;
                 /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
                 withShared?: boolean;
+                /** @description Only the current user's favorites. With `withShared`, also other users' photos the user marked. Cannot be combined with `album` */
+                favorites?: boolean;
             };
             header?: never;
             path?: never;
@@ -2335,6 +2387,8 @@ export interface operations {
                 album?: number;
                 /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
                 withShared?: boolean;
+                /** @description Only the current user's favorites. With `withShared`, also other users' photos the user marked. Cannot be combined with `album` */
+                favorites?: boolean;
             };
             header?: never;
             path?: never;

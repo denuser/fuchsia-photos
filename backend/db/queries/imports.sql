@@ -240,3 +240,17 @@ WHERE m.run_id = @run_id
   AND p.purged_at IS NULL
   AND jsonb_typeof(m.sidecar -> 'description') = 'string'
   AND clean_description(m.sidecar ->> 'description') <> '';
+
+-- Marks as the owner's favorites the photos whose newest JSON came from this
+-- run with "favorited": true, on the photo shown at the top of their chain.
+-- Importing again marks them again, as it adds photos to albums again.
+-- name: FillImportedFavorites :exec
+INSERT INTO photo_favorites (user_id, photo_id)
+SELECT p.owner_id, t.id
+FROM imported_metadata m
+JOIN photos p ON p.id = m.photo_id
+JOIN photos t ON t.id = photo_top(m.photo_id)
+WHERE m.run_id = @run_id
+  AND m.sidecar -> 'favorited' = 'true'::jsonb
+  AND t.purged_at IS NULL
+ON CONFLICT DO NOTHING;

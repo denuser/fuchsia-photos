@@ -144,6 +144,11 @@ function restoreSelected() {
   void run(() => photos.restore(ids), t('browser.restored', ids.length))
 }
 
+function favoriteSelected(value: boolean) {
+  const ids = selectedIds.value
+  void run(() => photos.favorite(ids, value), t(value ? 'browser.favorited' : 'browser.unfavorited', ids.length))
+}
+
 function purgeSelected() {
   const ids = selectedIds.value
   void run(() => photos.purge(ids), t('browser.deleted', ids.length))
@@ -235,6 +240,17 @@ const selectionActions = computed<SelectionAction[]>(() => {
         { key: 'album', icon: 'fa-book-open', text: t('browser.addToAlbum'), click: () => (albumDialog.value = true) },
         { key: 'tags', icon: 'fa-tag', text: t('browser.tags'), click: openSelectionTags },
       )
+      // On the Favorites page every photo is one already.
+      if (!photos.query.favorites) {
+        list.push({ key: 'favorite', icon: 'fa-star', text: t('browser.addToFavorites'), click: () => favoriteSelected(true), spins: true })
+      }
+      list.push({
+        key: 'unfavorite',
+        icon: 'fa-regular-star',
+        text: t('browser.removeFromFavorites'),
+        click: () => favoriteSelected(false),
+        spins: true,
+      })
     }
     list.push(
       { key: 'share', icon: 'fa-share-nodes', text: t('browser.share'), click: openSelectionSharing },

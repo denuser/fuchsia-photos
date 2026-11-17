@@ -10,6 +10,30 @@ import (
 	"time"
 )
 
+const addFavorites = `-- name: AddFavorites :exec
+INSERT INTO photo_favorites (user_id, photo_id)
+SELECT $1::bigint, p.id
+FROM photos p
+WHERE p.id = ANY ($2::bigint[])
+  AND p.deleted_at IS NULL
+  AND p.purged_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
+  AND photo_visible_to(p, $1::bigint, false)
+ON CONFLICT DO NOTHING
+`
+
+type AddFavoritesParams struct {
+	UserID int64
+	Ids    []int64
+}
+
+// Marks photos the user can see as the user's favorites. Photos hidden under
+// another one, in the trash or purged are left out.
+func (q *Queries) AddFavorites(ctx context.Context, arg AddFavoritesParams) error {
+	_, err := q.db.Exec(ctx, addFavorites, arg.UserID, arg.Ids)
+	return err
+}
+
 const bumpPreviewVersion = `-- name: BumpPreviewVersion :exec
 UPDATE photos
 SET preview_version = preview_version + 1,
@@ -51,16 +75,18 @@ WHERE (p.owner_id = $2
            AND (photo_shared_directly(p, $2::bigint) OR photo_in_visible_album(p, $2::bigint))))
   AND p.deleted_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
-  AND ($4::timestamptz IS NULL OR p.sort_at >= $4::timestamptz)
-  AND ($5::timestamptz IS NULL OR p.sort_at < $5::timestamptz)
-  AND ($6::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $6::bigint))
-  AND ($7::bigint[] IS NULL
+  AND (NOT $4::boolean
+       OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = $2))
+  AND ($5::timestamptz IS NULL OR p.sort_at >= $5::timestamptz)
+  AND ($6::timestamptz IS NULL OR p.sort_at < $6::timestamptz)
+  AND ($7::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $7::bigint))
+  AND ($8::bigint[] IS NULL
        OR (p.owner_id = $2
-           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($7::bigint[]))))
-  AND ($8::text[] IS NULL OR p.camera = ANY ($8::text[]))
-  AND ($9::text[] IS NULL OR p.lens = ANY ($9::text[]))
-  AND ($10::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($10::text[]))
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($8::bigint[]))))
+  AND ($9::text[] IS NULL OR p.camera = ANY ($9::text[]))
+  AND ($10::text[] IS NULL OR p.lens = ANY ($10::text[]))
+  AND ($11::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($11::text[]))
 GROUP BY 1
 ORDER BY 1 DESC
 `
@@ -69,6 +95,7 @@ type CountTimelineMonthsParams struct {
 	Tz         string
 	OwnerID    int64
 	WithShared bool
+	Favorites  bool
 	FromTime   *time.Time
 	ToTime     *time.Time
 	AlbumID    *int64
@@ -90,6 +117,7 @@ func (q *Queries) CountTimelineMonths(ctx context.Context, arg CountTimelineMont
 		arg.Tz,
 		arg.OwnerID,
 		arg.WithShared,
+		arg.Favorites,
 		arg.FromTime,
 		arg.ToTime,
 		arg.AlbumID,
@@ -118,6 +146,7 @@ func (q *Queries) CountTimelineMonths(ctx context.Context, arg CountTimelineMont
 
 const deletePhotoMemberships = `-- name: DeletePhotoMemberships :exec
 WITH albums_removed AS (DELETE FROM album_photos ap WHERE ap.photo_id = $1),
+     favorites_removed AS (DELETE FROM photo_favorites f WHERE f.photo_id = $1),
      tags_removed AS (DELETE FROM photo_tags pt WHERE pt.photo_id = $1),
      covers_cleared AS (UPDATE albums a SET cover_photo_id = NULL WHERE a.cover_photo_id = $1),
      embeddings_removed AS (DELETE FROM photo_embeddings e WHERE e.photo_id = $1),
@@ -500,6 +529,22 @@ func (q *Queries) InsertPhoto(ctx context.Context, arg InsertPhotoParams) (Photo
 	return i, err
 }
 
+const isFavorite = `-- name: IsFavorite :one
+SELECT EXISTS (SELECT 1 FROM photo_favorites WHERE user_id = $1 AND photo_id = $2)
+`
+
+type IsFavoriteParams struct {
+	UserID  int64
+	PhotoID int64
+}
+
+func (q *Queries) IsFavorite(ctx context.Context, arg IsFavoriteParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isFavorite, arg.UserID, arg.PhotoID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listCameras = `-- name: ListCameras :many
 SELECT p.camera::text AS name, count(*) AS count
 FROM photos p
@@ -508,16 +553,18 @@ WHERE (p.owner_id = $1
            AND (photo_shared_directly(p, $1::bigint) OR photo_in_visible_album(p, $1::bigint))))
   AND p.deleted_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
+  AND (NOT $3::boolean
+       OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = $1))
   AND p.camera IS NOT NULL
-  AND ($3::timestamptz IS NULL OR p.sort_at >= $3::timestamptz)
-  AND ($4::timestamptz IS NULL OR p.sort_at < $4::timestamptz)
-  AND ($5::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $5::bigint))
-  AND ($6::bigint[] IS NULL
+  AND ($4::timestamptz IS NULL OR p.sort_at >= $4::timestamptz)
+  AND ($5::timestamptz IS NULL OR p.sort_at < $5::timestamptz)
+  AND ($6::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $6::bigint))
+  AND ($7::bigint[] IS NULL
        OR (p.owner_id = $1
-           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($6::bigint[]))))
-  AND ($7::text[] IS NULL OR p.lens = ANY ($7::text[]))
-  AND ($8::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($8::text[]))
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($7::bigint[]))))
+  AND ($8::text[] IS NULL OR p.lens = ANY ($8::text[]))
+  AND ($9::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($9::text[]))
 GROUP BY p.camera
 ORDER BY p.camera
 `
@@ -525,6 +572,7 @@ ORDER BY p.camera
 type ListCamerasParams struct {
 	OwnerID    int64
 	WithShared bool
+	Favorites  bool
 	FromTime   *time.Time
 	ToTime     *time.Time
 	AlbumID    *int64
@@ -546,6 +594,7 @@ func (q *Queries) ListCameras(ctx context.Context, arg ListCamerasParams) ([]Lis
 	rows, err := q.db.Query(ctx, listCameras,
 		arg.OwnerID,
 		arg.WithShared,
+		arg.Favorites,
 		arg.FromTime,
 		arg.ToTime,
 		arg.AlbumID,
@@ -766,15 +815,17 @@ WHERE (p.owner_id = $1
            AND (photo_shared_directly(p, $1::bigint) OR photo_in_visible_album(p, $1::bigint))))
   AND p.deleted_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
-  AND ($3::timestamptz IS NULL OR p.sort_at >= $3::timestamptz)
-  AND ($4::timestamptz IS NULL OR p.sort_at < $4::timestamptz)
-  AND ($5::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $5::bigint))
-  AND ($6::bigint[] IS NULL
+  AND (NOT $3::boolean
+       OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = $1))
+  AND ($4::timestamptz IS NULL OR p.sort_at >= $4::timestamptz)
+  AND ($5::timestamptz IS NULL OR p.sort_at < $5::timestamptz)
+  AND ($6::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $6::bigint))
+  AND ($7::bigint[] IS NULL
        OR (p.owner_id = $1
-           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($6::bigint[]))))
-  AND ($7::text[] IS NULL OR p.camera = ANY ($7::text[]))
-  AND ($8::text[] IS NULL OR p.lens = ANY ($8::text[]))
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($7::bigint[]))))
+  AND ($8::text[] IS NULL OR p.camera = ANY ($8::text[]))
+  AND ($9::text[] IS NULL OR p.lens = ANY ($9::text[]))
 GROUP BY 1
 ORDER BY 1
 `
@@ -782,6 +833,7 @@ ORDER BY 1
 type ListKindsParams struct {
 	OwnerID    int64
 	WithShared bool
+	Favorites  bool
 	FromTime   *time.Time
 	ToTime     *time.Time
 	AlbumID    *int64
@@ -799,6 +851,7 @@ func (q *Queries) ListKinds(ctx context.Context, arg ListKindsParams) ([]ListKin
 	rows, err := q.db.Query(ctx, listKinds,
 		arg.OwnerID,
 		arg.WithShared,
+		arg.Favorites,
 		arg.FromTime,
 		arg.ToTime,
 		arg.AlbumID,
@@ -832,16 +885,18 @@ WHERE (p.owner_id = $1
            AND (photo_shared_directly(p, $1::bigint) OR photo_in_visible_album(p, $1::bigint))))
   AND p.deleted_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
+  AND (NOT $3::boolean
+       OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = $1))
   AND p.lens IS NOT NULL
-  AND ($3::timestamptz IS NULL OR p.sort_at >= $3::timestamptz)
-  AND ($4::timestamptz IS NULL OR p.sort_at < $4::timestamptz)
-  AND ($5::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $5::bigint))
-  AND ($6::bigint[] IS NULL
+  AND ($4::timestamptz IS NULL OR p.sort_at >= $4::timestamptz)
+  AND ($5::timestamptz IS NULL OR p.sort_at < $5::timestamptz)
+  AND ($6::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $6::bigint))
+  AND ($7::bigint[] IS NULL
        OR (p.owner_id = $1
-           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($6::bigint[]))))
-  AND ($7::text[] IS NULL OR p.camera = ANY ($7::text[]))
-  AND ($8::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($8::text[]))
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($7::bigint[]))))
+  AND ($8::text[] IS NULL OR p.camera = ANY ($8::text[]))
+  AND ($9::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($9::text[]))
 GROUP BY p.lens
 ORDER BY p.lens
 `
@@ -849,6 +904,7 @@ ORDER BY p.lens
 type ListLensesParams struct {
 	OwnerID    int64
 	WithShared bool
+	Favorites  bool
 	FromTime   *time.Time
 	ToTime     *time.Time
 	AlbumID    *int64
@@ -866,6 +922,7 @@ func (q *Queries) ListLenses(ctx context.Context, arg ListLensesParams) ([]ListL
 	rows, err := q.db.Query(ctx, listLenses,
 		arg.OwnerID,
 		arg.WithShared,
+		arg.Favorites,
 		arg.FromTime,
 		arg.ToTime,
 		arg.AlbumID,
@@ -1103,25 +1160,28 @@ WHERE (p.owner_id = $1
            AND (photo_shared_directly(p, $1::bigint) OR photo_in_visible_album(p, $1::bigint))))
   AND p.deleted_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
-  AND ($3::timestamptz IS NULL
-       OR (p.sort_at, p.id) < ($3::timestamptz, $4::bigint))
-  AND ($5::timestamptz IS NULL OR p.sort_at >= $5::timestamptz)
-  AND ($6::timestamptz IS NULL OR p.sort_at < $6::timestamptz)
-  AND ($7::bigint IS NULL
-       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $7::bigint))
-  AND ($8::bigint[] IS NULL
+  AND (NOT $3::boolean
+       OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = $1))
+  AND ($4::timestamptz IS NULL
+       OR (p.sort_at, p.id) < ($4::timestamptz, $5::bigint))
+  AND ($6::timestamptz IS NULL OR p.sort_at >= $6::timestamptz)
+  AND ($7::timestamptz IS NULL OR p.sort_at < $7::timestamptz)
+  AND ($8::bigint IS NULL
+       OR EXISTS (SELECT 1 FROM album_photos ap WHERE ap.photo_id = p.id AND ap.album_id = $8::bigint))
+  AND ($9::bigint[] IS NULL
        OR (p.owner_id = $1
-           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($8::bigint[]))))
-  AND ($9::text[] IS NULL OR p.camera = ANY ($9::text[]))
-  AND ($10::text[] IS NULL OR p.lens = ANY ($10::text[]))
-  AND ($11::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($11::text[]))
+           AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.photo_id = p.id AND pt.tag_id = ANY ($9::bigint[]))))
+  AND ($10::text[] IS NULL OR p.camera = ANY ($10::text[]))
+  AND ($11::text[] IS NULL OR p.lens = ANY ($11::text[]))
+  AND ($12::text[] IS NULL OR photo_kind(p.mime, p.has_motion) = ANY ($12::text[]))
 ORDER BY p.sort_at DESC, p.id DESC
-LIMIT $12
+LIMIT $13
 `
 
 type ListTimelineParams struct {
 	OwnerID     int64
 	WithShared  bool
+	Favorites   bool
 	AfterSortAt *time.Time
 	AfterID     *int64
 	FromTime    *time.Time
@@ -1139,11 +1199,14 @@ type ListTimelineParams struct {
 // the list also takes other users' processed photos that the current user can
 // see, as photo_visible_to does. Tags are personal, so a tag filter keeps only
 // the owner's photos: another user's tag must not reveal how that user grouped
-// the photos it shared. The queries below take the same filters.
+// the photos it shared. favorites keeps the current user's favorites, which
+// the API allows only without an album. The queries below take the same
+// filters.
 func (q *Queries) ListTimeline(ctx context.Context, arg ListTimelineParams) ([]Photo, error) {
 	rows, err := q.db.Query(ctx, listTimeline,
 		arg.OwnerID,
 		arg.WithShared,
+		arg.Favorites,
 		arg.AfterSortAt,
 		arg.AfterID,
 		arg.FromTime,
@@ -1610,6 +1673,20 @@ func (q *Queries) PurgePhoto(ctx context.Context, arg PurgePhotoParams) (Photo, 
 		&i.Description,
 	)
 	return i, err
+}
+
+const removeFavorites = `-- name: RemoveFavorites :exec
+DELETE FROM photo_favorites WHERE user_id = $1 AND photo_id = ANY ($2::bigint[])
+`
+
+type RemoveFavoritesParams struct {
+	UserID int64
+	Ids    []int64
+}
+
+func (q *Queries) RemoveFavorites(ctx context.Context, arg RemoveFavoritesParams) error {
+	_, err := q.db.Exec(ctx, removeFavorites, arg.UserID, arg.Ids)
+	return err
 }
 
 const repairLinkedMotion = `-- name: RepairLinkedMotion :exec

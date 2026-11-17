@@ -6,13 +6,14 @@ import (
 )
 
 // An import gives a photo the description in its JSON, cleaned, and never
-// replaces a description the photo has, so the owner's edits stay.
+// replaces a description the photo has, so the owner's edits stay. It marks
+// the photos Google had as favorites as the owner's.
 func TestTakeoutFillsDescriptions(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	files := []archiveFile{
 		{yearFolder + "IMG_1.jpg", e.fixture("landscape.jpg")},
-		{yearFolder + "IMG_1.jpg.supplemental-metadata.json", []byte(`{"title": "IMG_1.jpg", "photoTakenTime": {"timestamp": "1569055192"}, "description": " Море\r\nи\tгоры \n"}`)},
+		{yearFolder + "IMG_1.jpg.supplemental-metadata.json", []byte(`{"title": "IMG_1.jpg", "photoTakenTime": {"timestamp": "1569055192"}, "description": " Море\r\nи\tгоры \n", "favorited": true}`)},
 		{yearFolder + "IMG_2.jpg", e.fixture("rotated.jpg")},
 		{yearFolder + "IMG_2.jpg.supplemental-metadata.json", []byte(`{"title": "IMG_2.jpg", "photoTakenTime": {"timestamp": "1569055192"}, "description": ""}`)},
 	}
@@ -33,6 +34,21 @@ func TestTakeoutFillsDescriptions(t *testing.T) {
 	}
 	if got := description(plain); got != "" {
 		t.Errorf("description of a photo with an empty one = %q", got)
+	}
+	var favorites []int64
+	rows, err := e.service.Ingest.Pool.Query(ctx, `SELECT photo_id FROM photo_favorites WHERE user_id = $1`, e.owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		favorites = append(favorites, id)
+	}
+	if len(favorites) != 1 || favorites[0] != described {
+		t.Errorf("favorites = %v, want %d", favorites, described)
 	}
 
 	// The owner's edit stays when the export is imported again.

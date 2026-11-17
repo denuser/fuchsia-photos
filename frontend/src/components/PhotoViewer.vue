@@ -43,17 +43,24 @@ const original = ref<Photo | null>(null)
 const showingOriginal = ref(false)
 const shown = computed(() => (showingOriginal.value && original.value) || props.photo)
 
+// Whether the photo is the user's favorite, which only the photo's own
+// address tells. The star acts on the photo of the list, also while its
+// original is shown.
+const favorite = ref<boolean | null>(null)
+
 watch(
   () => props.photo.id,
   async (id) => {
     showingOriginal.value = false
     original.value = null
-    if (props.photo.ownerId !== auth.user?.id) {
+    favorite.value = null
+    const { data } = await api.GET('/photos/{id}', { params: { path: { id } } })
+    if (!data || id !== props.photo.id) {
       return
     }
-    const { data } = await api.GET('/photos/{id}', { params: { path: { id } } })
-    const version = data?.versions?.find((v) => v.kind === 'edited')
-    if (!version || id !== props.photo.id) {
+    favorite.value = data.favorite ?? null
+    const version = data.versions?.find((v) => v.kind === 'edited')
+    if (!version) {
       return
     }
     const { data: photo } = await api.GET('/photos/{id}', { params: { path: { id: version.id } } })
@@ -132,6 +139,17 @@ const secondaryActions = computed<ViewerAction[]>(() => [
   ...(props.canTag ? [{ key: 'tags', icon: 'fa-tag', text: t('browser.tags'), click: () => emit('tags', props.photo) }] : []),
   ...(props.canManage ? [{ key: 'share', icon: 'fa-share-nodes', text: t('browser.share'), click: () => emit('share', props.photo) }] : []),
 ])
+
+// The mark sends no event, and the photo stays in the list until the page
+// loads again, also on the Favorites page, so that the viewer keeps its place.
+async function toggleFavorite() {
+  const id = props.photo.id
+  const value = !favorite.value
+  const { response } = await api.POST('/photos/favorites', { body: { ids: [id], favorite: value } })
+  if (response.ok && id === props.photo.id) {
+    favorite.value = value
+  }
+}
 
 const ready = computed(() => props.photos.filter((p) => p.status === 'ready'))
 const index = computed(() => ready.value.findIndex((p) => p.id === props.photo.id))
@@ -885,6 +903,16 @@ onBeforeUnmount(() => {
         :aria-label="motionPlaying ? t('viewer.stopMotion') : t('viewer.playMotion')"
         :title="motionPlaying ? t('viewer.stopMotion') : t('viewer.playMotion')"
         @click="toggleMotion"
+      />
+      <v-btn
+        v-if="favorite !== null"
+        :icon="favorite ? 'fa-star' : 'fa-regular-star'"
+        variant="text"
+        data-testid="viewer-favorite-button"
+        :aria-pressed="favorite"
+        :aria-label="favorite ? t('viewer.removeFavorite') : t('viewer.addFavorite')"
+        :title="favorite ? t('viewer.removeFavorite') : t('viewer.addFavorite')"
+        @click="toggleFavorite"
       />
       <v-menu v-if="xs && secondaryActions.length" v-model="moreOpen">
         <template #activator="{ props: menu }">

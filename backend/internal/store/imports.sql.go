@@ -234,6 +234,26 @@ func (q *Queries) FillImportedDescriptions(ctx context.Context, runID *int64) er
 	return err
 }
 
+const fillImportedFavorites = `-- name: FillImportedFavorites :exec
+INSERT INTO photo_favorites (user_id, photo_id)
+SELECT p.owner_id, t.id
+FROM imported_metadata m
+JOIN photos p ON p.id = m.photo_id
+JOIN photos t ON t.id = photo_top(m.photo_id)
+WHERE m.run_id = $1
+  AND m.sidecar -> 'favorited' = 'true'::jsonb
+  AND t.purged_at IS NULL
+ON CONFLICT DO NOTHING
+`
+
+// Marks as the owner's favorites the photos whose newest JSON came from this
+// run with "favorited": true, on the photo shown at the top of their chain.
+// Importing again marks them again, as it adds photos to albums again.
+func (q *Queries) FillImportedFavorites(ctx context.Context, runID *int64) error {
+	_, err := q.db.Exec(ctx, fillImportedFavorites, runID)
+	return err
+}
+
 const findAlbumByName = `-- name: FindAlbumByName :one
 SELECT id FROM albums WHERE owner_id = $1 AND name = $2 ORDER BY id LIMIT 1
 `

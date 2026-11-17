@@ -304,6 +304,9 @@ func (s *Service) match(ctx context.Context, run store.ImportRun) (bool, error) 
 	if err := store.New(tx).FillImportedDescriptions(ctx, &run.ID); err != nil {
 		return false, fmt.Errorf("fill descriptions: %w", err)
 	}
+	if err := store.New(tx).FillImportedFavorites(ctx, &run.ID); err != nil {
+		return false, fmt.Errorf("fill favorites: %w", err)
+	}
 	albums, err := s.makeAlbums(ctx, store.New(tx), run)
 	if err != nil {
 		return false, err

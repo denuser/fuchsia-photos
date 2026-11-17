@@ -104,6 +104,8 @@ func TestEditedVersions(t *testing.T) {
 	tag := decode[tagRefJSON](t, res).ID
 	wantStatus(t, anna.json(http.MethodPost, "/api/v1/photos/tags", map[string][]int64{"ids": {original}, "add": {tag}}), http.StatusNoContent)
 	sharePhoto(t, anna, original, map[string]any{"add": []int64{boris.ID}})
+	favorite(t, anna, true, original)
+	favorite(t, borisBrowser, true, original)
 
 	recordEdited(t, e, edited, original)
 	if linked := linkVersions(t, e); linked != 1 {
@@ -133,6 +135,8 @@ func TestEditedVersions(t *testing.T) {
 		t.Errorf("tags = %+v", tags)
 	}
 	wantIDs(t, anna.photoIDs("/api/v1/photos?tag="+itoa(tag)), edited)
+	wantIDs(t, anna.photoIDs("/api/v1/photos?favorites=true"), edited)
+	wantIDs(t, borisBrowser.photoIDs("/api/v1/photos?favorites=true&withShared=true"), edited)
 
 	// The owner's viewer gets the original as a version; the copy plays the
 	// original's video.
