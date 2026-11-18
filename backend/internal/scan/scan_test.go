@@ -231,11 +231,20 @@ func TestScanKeepsDeletedPhotosDeleted(t *testing.T) {
 	e.copyFixture("landscape.png", "b.png")
 	e.scan("")
 
-	photos, err := e.queries.ListTimeline(ctx, store.ListTimelineParams{OwnerID: e.owner, MaxRows: 10})
+	// The timeline leaves out photos not processed yet, so they are read here.
+	var first, last int64
+	err := e.service.Ingest.Pool.QueryRow(ctx, "SELECT min(id), max(id) FROM photos WHERE owner_id = $1", e.owner).Scan(&first, &last)
 	if err != nil {
 		t.Fatal(err)
 	}
-	trashed, purged := photos[0], photos[1]
+	trashed, err := e.queries.GetPhoto(ctx, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	purged, err := e.queries.GetPhoto(ctx, last)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := e.queries.TrashPhotos(ctx, store.TrashPhotosParams{Ids: []int64{trashed.ID, purged.ID}, ActorID: e.owner}); err != nil {
 		t.Fatal(err)
 	}

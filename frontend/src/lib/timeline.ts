@@ -76,7 +76,7 @@ function rowsOf(photos: Photo[], width: number, target: number, square: number |
 }
 
 // The height of a row of photos, roughly when they are not square.
-export function rowHeight(width: number, target: number, square: number | null) {
+function rowHeight(width: number, target: number, square: number | null) {
   if (!square) {
     return target
   }

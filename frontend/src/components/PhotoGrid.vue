@@ -5,7 +5,7 @@ import { useDisplay } from 'vuetify'
 import { isVideo, previewUrl, type Photo } from '../api/client'
 import { formatDuration } from '../lib/duration'
 import { visibleRows } from '../lib/justify'
-import { GAP, layoutTimeline, monthTitle, rowHeight, tileSide, visibleSections, type SectionLayout } from '../lib/timeline'
+import { layoutTimeline, monthTitle, tileSide, visibleSections, type SectionLayout } from '../lib/timeline'
 import { useAuthStore } from '../stores/auth'
 import type { Section } from '../stores/photos'
 import TimelineScrubber from './TimelineScrubber.vue'
@@ -50,11 +50,7 @@ const square = computed(() => (auth.user?.gridSquares ? side.value : null))
 
 const layout = computed(() => layoutTimeline(props.sections, inner.value, props.byMonth, side.value, square.value))
 const canvasHeight = computed(() => layout.value.height + PADDING_TOP + paddingBottom.value)
-const canvasStyle = computed(() => ({
-  height: `${canvasHeight.value}px`,
-  '--row-height': `${rowHeight(inner.value, side.value, square.value)}px`,
-  '--gap': `${GAP}px`,
-}))
+const canvasStyle = computed(() => ({ height: `${canvasHeight.value}px` }))
 
 const selecting = computed(() => props.selected.size > 0)
 
@@ -88,7 +84,10 @@ const pending = computed(() =>
     .filter((s) => s.pendingHeight > 0)
     .map((s) => ({
       section: s.section,
-      // A month shows the rows it will have; a whole list shows only its status.
+      // A month keeps the height of the rows it will have, left empty: grey rows
+      // drawn there jumped when the photos replaced them with rows of their own
+      // shapes (removed at the user's request on 2026-11-18). A whole list shows
+      // its status.
       estimate: s.section.month !== null && s.section.photos.length < s.section.count,
       style: { transform: at(0, s.y + s.pendingY), width: `${inner.value}px`, height: `${s.pendingHeight}px` },
     })),
@@ -235,7 +234,7 @@ onBeforeUnmount(() => {
         <h2 v-for="header in headers" :key="header.key" class="month" data-testid="month" :style="header.style">
           {{ header.title }}
         </h2>
-        <div v-for="item in pending" :key="item.section.key" class="pending" :class="{ estimate: item.estimate }" :style="item.style">
+        <div v-for="item in pending" :key="item.section.key" class="pending" :style="item.style">
           <div v-if="item.section.failed" class="status">
             <span>{{ t('grid.loadFailed') }}</span>
             <v-btn :text="t('common.retry')" variant="text" color="primary" @click="emit('retry', item.section.key)" />
@@ -340,15 +339,6 @@ onBeforeUnmount(() => {
   padding-bottom: 8px;
   font-size: 1rem;
   white-space: nowrap;
-}
-
-/* Rows of grey blocks where the photos of a month will be. */
-.pending.estimate {
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(128, 128, 128, 0.12) 0 var(--row-height),
-    transparent var(--row-height) calc(var(--row-height) + var(--gap))
-  );
 }
 
 .status {

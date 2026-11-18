@@ -198,6 +198,9 @@ export const usePhotosStore = defineStore('photos', () => {
   // belongs in the list. Other lists learn about new members by loading, except
   // an album an upload has just added the photo to, given as inAlbum.
   const unfiltered = computed(() => withoutFilters())
+  // The album each photo still being processed was uploaded into, so that it
+  // joins that album's open list once it is ready.
+  const uploadedInto = new Map<number, number>()
 
   function withoutFilters(inAlbum?: number) {
     const { shared, everyone, album, favorites, archived, tags, cameras, lenses, kinds, from, to } = query.value
@@ -365,14 +368,20 @@ export const usePhotosStore = defineStore('photos', () => {
   // loaded part of a whole list. Other counts are corrected when months load.
   function merge(changed: Photo[], inAlbum?: number) {
     const inTrash = Boolean(query.value.trash)
-    const joins = unfiltered.value || (inAlbum !== undefined && withoutFilters(inAlbum))
     const known = new Set(photos.value.map((p) => p.id))
     const gone = new Set<number>()
     const arriving: Photo[] = []
     for (const photo of changed) {
+      if (inAlbum !== undefined) {
+        uploadedInto.set(photo.id, inAlbum)
+      }
+      const album = uploadedInto.get(photo.id)
+      const joins = unfiltered.value || (album !== undefined && withoutFilters(album))
       // A file hidden under another photo, such as the video of a Live Photo
-      // or the original of an edited copy, now shows through that photo.
-      if (photo.hiddenUnder !== null || Boolean(photo.deletedAt) !== inTrash) {
+      // or the original of an edited copy, now shows through that photo. A
+      // photo not processed yet waits outside the lists, as the server leaves
+      // it out too, and joins them from the event that says it is ready.
+      if (photo.hiddenUnder !== null || Boolean(photo.deletedAt) !== inTrash || (!inTrash && photo.status === 'pending')) {
         gone.add(photo.id)
       } else if (known.has(photo.id) && ranked(query.value)) {
         // A search result keeps its place.
@@ -383,6 +392,9 @@ export const usePhotosStore = defineStore('photos', () => {
         arriving.push(photo)
       } else if (joins) {
         arriving.push(photo)
+      }
+      if (photo.status !== 'pending') {
+        uploadedInto.delete(photo.id)
       }
     }
     remove(gone)

@@ -28,7 +28,9 @@ WHERE p.id = @id
 -- see, as photo_visible_to does. Tags are personal, so a tag filter keeps only
 -- the owner's photos: another user's tag must not reveal how that user grouped
 -- the photos it shared. favorites keeps the current user's favorites, which
--- the API allows only without an album. The queries below take the same
+-- the API allows only without an album. Photos still being processed are
+-- left out until processing has read their date and size, so that they do not
+-- appear in the current month and then move. The queries below take the same
 -- filters.
 -- name: ListTimeline :many
 SELECT p.*
@@ -37,6 +39,8 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
+  -- A photo not processed yet has no date or size to place it by.
+  AND p.status <> 'pending'
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT @favorites::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = @owner_id))
@@ -72,6 +76,8 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
+  -- A photo not processed yet has no date or size to place it by.
+  AND p.status <> 'pending'
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT @favorites::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = @owner_id))
@@ -106,6 +112,8 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
+  -- A photo not processed yet has no date or size to place it by.
+  AND p.status <> 'pending'
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT @favorites::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = @owner_id))
@@ -136,6 +144,8 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
+  -- A photo not processed yet has no date or size to place it by.
+  AND p.status <> 'pending'
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT @favorites::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = @owner_id))
@@ -166,6 +176,8 @@ WHERE (p.owner_id = @owner_id
        OR (@with_shared::boolean AND p.status = 'ready'
            AND (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint))))
   AND p.deleted_at IS NULL
+  -- A photo not processed yet has no date or size to place it by.
+  AND p.status <> 'pending'
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (NOT @favorites::boolean
        OR EXISTS (SELECT 1 FROM photo_favorites f WHERE f.photo_id = p.id AND f.user_id = @owner_id))

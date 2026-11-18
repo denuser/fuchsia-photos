@@ -422,7 +422,8 @@ func TestTimelineWithShared(t *testing.T) {
 	t.Run("adds every processed photo the user can see", func(t *testing.T) {
 		wantIDs(t, s.boris.photoIDs("/api/v1/photos?withShared=true"), own, forAll, inAlbum, direct)
 		wantIDs(t, s.vera.photoIDs("/api/v1/photos?withShared=true"), forAll)
-		wantIDs(t, s.anna.photoIDs("/api/v1/photos?withShared=true"), pending, private, forAll, inAlbum, direct)
+		// The owner's photo still being processed is left out too, until it is ready.
+		wantIDs(t, s.anna.photoIDs("/api/v1/photos?withShared=true"), private, forAll, inAlbum, direct)
 		wantMonths(t, s.boris.months("/api/v1/photos/months?tz=UTC&withShared=true&from=2024-06-01T00:00:00Z"),
 			monthJSON{monthKey(time.Now().UTC()), 3})
 		wantMonths(t, s.boris.months("/api/v1/photos/months?tz=UTC&withShared=true&to=2024-06-01T00:00:00Z"),

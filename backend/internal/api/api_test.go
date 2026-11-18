@@ -582,7 +582,9 @@ func TestTimelinePagination(t *testing.T) {
 
 	fixtures := []string{"landscape.jpg", "landscape.png", "landscape.webp", "landscape.heic", "large.jpg"}
 	for _, f := range fixtures {
-		wantStatus(t, anna.upload(f), http.StatusCreated)
+		res := anna.upload(f)
+		wantStatus(t, res, http.StatusCreated)
+		markReady(t, e, decode[uploadResult](t, res).Photo.ID)
 	}
 
 	var seen []int64

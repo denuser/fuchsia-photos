@@ -63,6 +63,7 @@ func TestTrash(t *testing.T) {
 
 	kept := anna.addPhoto("landscape.jpg")
 	trashed := anna.addPhoto("landscape.png")
+	markReady(t, e, kept)
 	markReady(t, e, trashed)
 
 	wantStatus(t, boris.json(http.MethodPost, "/api/v1/photos/trash", ids(trashed)), http.StatusNoContent)
@@ -196,6 +197,9 @@ func TestEmptyTrash(t *testing.T) {
 	first, second := anna.addPhoto("landscape.png"), anna.addPhoto("landscape.webp")
 	wantStatus(t, anna.json(http.MethodPost, "/api/v1/photos/trash", ids(first, second)), http.StatusNoContent)
 	other := boris.addPhoto("landscape.png")
+	for _, id := range []int64{kept, first, second, other} {
+		markReady(t, e, id)
+	}
 	wantStatus(t, boris.json(http.MethodPost, "/api/v1/photos/trash", ids(other)), http.StatusNoContent)
 
 	wantStatus(t, anna.json(http.MethodPost, "/api/v1/photos/trash/empty", nil), http.StatusNoContent)
@@ -211,6 +215,7 @@ func TestUploadRestoresFromTrash(t *testing.T) {
 	anna := e.loggedIn("anna")
 
 	id := anna.addPhoto("landscape.jpg")
+	markReady(t, e, id)
 	album := decode[albumJSON](t, anna.json(http.MethodPost, "/api/v1/albums", map[string]string{"name": "Trip"}))
 	wantStatus(t, anna.json(http.MethodPost, "/api/v1/albums/"+itoa(album.ID)+"/photos", ids(id)), http.StatusNoContent)
 	wantStatus(t, anna.json(http.MethodPost, "/api/v1/photos/trash", ids(id)), http.StatusNoContent)
@@ -250,6 +255,9 @@ func TestUploadIntoAlbum(t *testing.T) {
 	res := anna.uploadTo(into, "landscape.jpg", landscape)
 	wantStatus(t, res, http.StatusCreated)
 	id := decode[uploadResult](t, res).Photo.ID
+	// Lists leave a photo out until it is processed.
+	wantIDs(t, anna.photoIDs("/api/v1/photos?album="+itoa(trip)))
+	markReady(t, e, id)
 	wantIDs(t, anna.photoIDs("/api/v1/photos?album="+itoa(trip)), id)
 
 	// A photo the library already has goes into the album too.
@@ -382,6 +390,9 @@ func TestTags(t *testing.T) {
 
 	first, second, third := anna.addPhoto("landscape.jpg"), anna.addPhoto("landscape.png"), anna.addPhoto("landscape.webp")
 	foreign := boris.addPhoto("large.jpg")
+	for _, id := range []int64{first, second, third, foreign} {
+		markReady(t, e, id)
+	}
 
 	create := func(b *browser, name string, status int) int64 {
 		t.Helper()
@@ -467,6 +478,7 @@ func TestDateFilter(t *testing.T) {
 	e.addUser("anna", auth.RoleUser)
 	anna := e.loggedIn("anna")
 	id := anna.addPhoto("landscape.jpg")
+	markReady(t, e, id)
 
 	stamp := func(d time.Duration) string { return time.Now().UTC().Add(d).Format(time.RFC3339) }
 	wantIDs(t, anna.photoIDs("/api/v1/photos?from="+stamp(-time.Hour)+"&to="+stamp(time.Hour)), id)
