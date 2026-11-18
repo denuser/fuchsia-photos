@@ -9,9 +9,11 @@ The first release.
 - Upload from the browser, with previews made in the background and progress shown as it goes
 - Upload from phones over WebDAV, with app passwords and folders linked to albums. Checked with PhotoSync and FolderSync
 - Import from a folder on the NAS, run by the administrator, which leaves the folder untouched and skips photos already imported or permanently deleted
+- Import from Google Takeout, reading `.zip` and `.tgz` parts or an unpacked export: the dates and places Google kept, albums, descriptions, favorites, the archive and the trash. An edited copy is shown over its original, which the owner can switch to in the viewer. Several exports, and the same export imported again, give one library
 - A timeline loaded month by month, with a year scrubber and filters by date, tag, camera and lens, and a "Mine / All" switch for the photos shared with the user
 - A viewer with zoom and pinch, camera details and the location, and the original on zoom when the user chooses it
 - Albums with covers, personal tags, bulk actions and a trash
+- Favorites and an archive, each user's own, and descriptions in the viewer, which the owner edits
 - Sharing of photos and albums with all users or by login, read-only for the recipient, and a "Shared with me" section
 - Users managed by the administrator, with administrator and user roles and an administration page with all photos, preview settings and the job queue
 - Search by description and similar photos, with an optional ML service on SigLIP 2

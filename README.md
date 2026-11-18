@@ -26,8 +26,9 @@ It is built for modest hardware. It is developed and measured on an Intel N150 w
 - Upload from the browser, files or whole folders, straight into an album, with previews made in the background and progress shown as it goes
 - Upload from phones over WebDAV, with sync apps such as PhotoSync and FolderSync. A folder can be linked to an album
 - Import from a folder on the NAS, which stays untouched. A repeated import skips the photos already imported or deleted
+- Import from Google Takeout, straight from its `.zip` or `.tgz` parts: dates and places from Google, albums, descriptions, favorites, the archive and the trash, with edited copies shown over their originals
 - A timeline that stays fast in large libraries, with a year scrubber and filters by date, tag, camera and lens
-- Albums, personal tags, bulk actions and a trash
+- Albums, personal tags, favorites, an archive, descriptions, bulk actions and a trash
 - Sharing of photos and albums with all users or with specific ones, read-only for the recipient
 - Users created by the administrator, with no self-registration, and two roles: administrator and user
 - Search by description and similar photos, with an optional ML service

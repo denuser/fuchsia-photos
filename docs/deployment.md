@@ -97,6 +97,8 @@ For large collections, this is faster than uploading through the browser.
 2. In the web interface, as an administrator, open the account menu and choose **Import from folder**.
 3. Choose the owner and the folder, and start the scan. One scan runs at a time, and it can be stopped.
 
+The application reads the import folder as the user it runs as: UID 1000 with the compose files, and `apps` (UID 568) on TrueNAS. Files copied there by another user may not be readable by it. The scan then ends with errors, and its details list the files with "permission denied". Make them readable by that user, on TrueNAS for example in the Permissions editor of the dataset, and start the scan again.
+
 The photos are copied into the library, and the source folder stays as it was. You can delete it after the scan, or keep it and scan it again after adding files: photos that are already in the library are not added twice. A scan reads every file in the folder each time, even on a repeat run, but writes only the new ones.
 
 A scan does not bring back photos that the owner moved to the trash or deleted permanently. To get one back, the owner restores it from the trash or uploads the file through the browser.
@@ -106,6 +108,14 @@ Hidden files, symbolic links and folders whose name starts with `@` or `#`, such
 A scan first lists the files, waits for `IMPORT_STABLE_SECONDS`, and skips any file whose size or modification time has changed since. The report lists these files, and the next scan picks them up, so it is safe to start a scan while files are still being copied.
 
 A scan continues after a restart, from where it stopped. After a clean stop, this happens shortly after the next start. After a crash or power loss, it can take up to 30 minutes.
+
+### Google Takeout
+
+To move a library from Google Photos, export it at [takeout.google.com](https://takeout.google.com) and copy the parts, `.zip` or `.tgz`, into the import folder as they are: there is no need to unpack them. An export that was unpacked already works too. Then choose **Google Takeout exports** under **Contents** in the scan form.
+
+The import reads the JSON files Google puts next to the photos. A photo without a date of its own, or with one without a time zone, takes the date from Google, and a photo without a location takes the place added in Google Photos. Folders with an album's file become albums of the owner, found by their title, so importing again fills the same albums. Descriptions, favorites and the archive come across, and photos Google had in the trash go to the trash. An edited copy is shown over its original, and the owner can switch to the original in the viewer. **Album photos in the trash** chooses what happens to a photo of an album that the owner has already moved to the trash.
+
+Several exports may sit in the folder together, such as an export of the whole library and later ones: a photo is added once, and the newest export's details win. The scan's summary counts the JSON files, the edited copies, the photos without JSON and the albums.
 
 ## Uploading from a phone over WebDAV
 

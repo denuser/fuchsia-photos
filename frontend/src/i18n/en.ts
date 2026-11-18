@@ -414,6 +414,9 @@ export default {
     details: 'Details',
     problemsTitle: 'Scan problems',
     changing: 'Still being copied. The next scan will try it again.',
+    finishedWithErrors: 'Finished with errors',
+    permissionDenied: 'The application may not read some files',
+    permissionDeniedHelp: 'Make the import folder and its files readable by the user the application runs as: UID 1000 with the compose files, apps (UID 568) on TrueNAS. Then start the scan again. See “Importing from a folder” in the deployment guide.',
   },
   admin: {
     title: 'Administration',

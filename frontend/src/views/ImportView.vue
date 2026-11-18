@@ -75,6 +75,23 @@ function processed(run: ImportRun) {
   return run.added + run.duplicates + run.inTrash + run.purged + run.unsupported + run.changing + run.failed
 }
 
+// A finished scan with failed files reads as failed when nothing else came of
+// it, as when the import folder cannot be read, and as finished with errors
+// otherwise, so that it does not pass for a scan that found nothing.
+function statusOf(run: ImportRun) {
+  if (run.status !== 'finished' || run.failed === 0) {
+    return { text: t(`import.statuses.${run.status}`), failed: run.status === 'failed' }
+  }
+  if (processed(run) === run.failed && run.sidecars === 0) {
+    return { text: t('import.statuses.failed'), failed: true }
+  }
+  return { text: t('import.finishedWithErrors'), failed: true }
+}
+
+// The application's user cannot read the file: a problem of the NAS's
+// permissions, not of the file.
+const permissionDenied = computed(() => problems.value.some((p) => p.error?.includes('permission denied')))
+
 // A Takeout scan learns how many files its parts hold only as it reads them.
 function showsProgress(run: ImportRun) {
   return run.status === 'importing' && run.kind === 'folder'
@@ -159,7 +176,9 @@ async function openDetails(run: ImportRun) {
               {{ run.folder || t('import.wholeFolderShort') }}
               <div v-if="run.kind === 'takeout'" class="text-medium-emphasis">{{ t('import.kinds.takeout') }}</div>
             </td>
-            <td :title="run.error ?? undefined">{{ t(`import.statuses.${run.status}`) }}</td>
+            <td :title="run.error ?? undefined" :class="{ 'text-error': statusOf(run).failed }" data-testid="import-status">
+              {{ statusOf(run).text }}
+            </td>
             <td class="text-right">
               <template v-if="showsProgress(run)">{{ t('import.progress', { done: processed(run), total: run.found }) }}</template>
               <template v-else>{{ run.found }}</template>
@@ -184,7 +203,7 @@ async function openDetails(run: ImportRun) {
                 </div>
               </template>
             </td>
-            <td class="text-right">{{ run.changing + run.failed }}</td>
+            <td class="text-right" :class="{ 'text-error': run.failed > 0 }">{{ run.changing + run.failed }}</td>
             <td class="text-right">
               <v-btn v-if="isActive(run)" variant="text" size="small" :text="t('import.stop')" @click="stop(run)" />
               <v-btn
@@ -207,6 +226,15 @@ async function openDetails(run: ImportRun) {
         max-width="720"
         @update:model-value="detailsOf = null"
       >
+        <v-alert
+          v-if="permissionDenied"
+          type="info"
+          density="compact"
+          class="mb-4"
+          :title="t('import.permissionDenied')"
+          :text="t('import.permissionDeniedHelp')"
+          data-testid="permission-denied"
+        />
         <v-table>
           <tbody>
             <tr v-for="problem in problems" :key="problem.path">
