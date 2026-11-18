@@ -242,9 +242,13 @@ function focalLength(mm: number, mm35?: number) {
 }
 
 // Short exposures are fractions such as 1/250, longer ones decimals such as 0.8 or 2.
+// Phones write exposures such as 0.002481 that are no exact fraction, and
+// rounding them to a tenth of a second would show 0, so anything shorter than
+// a quarter of a second is a fraction.
 function exposureTime(seconds: number) {
   const inverse = 1 / seconds
-  const value = seconds < 1 && Math.abs(inverse - Math.round(inverse)) < 0.05 ? `1/${Math.round(inverse)}` : round(seconds)
+  const fraction = seconds < 0.25 || (seconds < 1 && Math.abs(inverse - Math.round(inverse)) < 0.05)
+  const value = fraction ? `1/${Math.round(inverse)}` : round(seconds)
   return t('viewer.seconds', { value })
 }
 
