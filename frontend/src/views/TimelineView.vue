@@ -8,6 +8,7 @@ import AppAutocomplete from '../components/AppAutocomplete.vue'
 import EmptyState from '../components/EmptyState.vue'
 import FilterChips, { type FilterGroup } from '../components/FilterChips.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
+import UploadDropZone from '../components/UploadDropZone.vue'
 import { formatDate, t } from '../i18n'
 import { apiError } from '../i18n/apiErrors'
 import { useAuthStore } from '../stores/auth'
@@ -23,7 +24,6 @@ const photos = usePhotosStore()
 const tags = useTagsStore()
 const uploads = useUploadsStore()
 
-const dragging = ref(false)
 const browser = ref<InstanceType<typeof PhotoBrowser> | null>(null)
 
 // Whether the timeline shows other users' photos the user can see next to the
@@ -270,17 +270,10 @@ function onTagged() {
   }
 }
 
-function onDrop(event: DragEvent) {
-  dragging.value = false
-  const files = Array.from(event.dataTransfer?.files ?? [])
-  if (files.length > 0) {
-    uploads.add(files)
-  }
-}
 </script>
 
 <template>
-  <div class="timeline" @dragover.prevent="dragging = true" @dragleave.self="dragging = false" @drop.prevent="onDrop">
+  <UploadDropZone :hint="t('timeline.drop')" @files="(chosen) => uploads.add(chosen.files, null, chosen.skipped)">
     <PhotoBrowser ref="browser" mode="library" @tagged="onTagged">
       <template #toolbar>
         <div class="filters">
@@ -408,17 +401,10 @@ function onDrop(event: DragEvent) {
         </EmptyState>
       </template>
     </PhotoBrowser>
-
-    <div v-if="dragging" class="drop-hint">{{ t('timeline.drop') }}</div>
-  </div>
+  </UploadDropZone>
 </template>
 
 <style scoped>
-.timeline {
-  position: relative;
-  height: 100%;
-}
-
 .filters {
   display: flex;
   flex-wrap: wrap;
@@ -465,18 +451,5 @@ function onDrop(event: DragEvent) {
     flex-basis: 0;
     min-width: 0;
   }
-}
-
-.drop-hint {
-  position: absolute;
-  inset: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px dashed rgb(var(--v-theme-primary));
-  border-radius: 8px;
-  background: rgba(var(--v-theme-surface), 0.85);
-  font-size: 1.25rem;
-  pointer-events: none;
 }
 </style>

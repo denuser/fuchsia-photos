@@ -596,6 +596,20 @@ func parseCursor(cursor string) (time.Time, int64, error) {
 }
 
 func (s *server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
+	// The album is a query parameter rather than a form field, as the file
+	// streams into ingest and a field after it would come too late.
+	var albumID int64
+	if value := r.URL.Query().Get("album"); value != "" {
+		id, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		if _, ok := s.ownAlbum(w, r, id); !ok {
+			return
+		}
+		albumID = id
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
 	parts, err := r.MultipartReader()
 	if err != nil {
@@ -620,6 +634,15 @@ func (s *server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			uploadError(w, r, err)
 			return
+		}
+		// A duplicate is added too, as a WebDAV album does. A duplicate of a
+		// hidden file answers with the photo shown at the top of its chain.
+		if albumID != 0 {
+			err := s.Queries.AddPhotosToAlbum(r.Context(), store.AddPhotosToAlbumParams{AlbumID: albumID, OwnerID: currentUser(r).ID, Ids: []int64{res.Photo.ID}})
+			if err != nil {
+				internalError(w, r, err)
+				return
+			}
 		}
 		showLocation, err := s.showLocation(r.Context())
 		if err != nil {

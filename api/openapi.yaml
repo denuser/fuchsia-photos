@@ -438,6 +438,15 @@ paths:
       operationId: uploadPhoto
       summary: Upload a photo or a video
       description: JPEG, PNG, WebP and HEIC photos up to 512 MiB, MP4 and MOV videos up to 4 GiB
+      parameters:
+        - name: album
+          in: query
+          description: >-
+            An album of the user's own to add the photo to, a duplicate included.
+            Checked before the file is read.
+          schema:
+            type: integer
+            format: int64
       requestBody:
         required: true
         content:
@@ -463,6 +472,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/UploadResult"
         "400":
+          $ref: "#/components/responses/Error"
+        "404":
           $ref: "#/components/responses/Error"
         "413":
           $ref: "#/components/responses/Error"

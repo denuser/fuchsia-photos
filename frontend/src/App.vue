@@ -6,11 +6,16 @@ import { useDisplay, useTheme } from 'vuetify'
 import logo from './assets/logo.png'
 import AppearanceMenu from './components/AppearanceMenu.vue'
 import AppToasts from './components/AppToasts.vue'
+import UploadDialog, { type AlbumChoice } from './components/UploadDialog.vue'
 import UploadPanel from './components/UploadPanel.vue'
+import { api } from './api/client'
+import { apiError } from './i18n/apiErrors'
+import { useNoticesStore } from './stores/notices'
+import { ACCEPT, sift } from './lib/uploadFiles'
 import { useAppearanceStore } from './stores/appearance'
 import { useAuthStore } from './stores/auth'
 import { usePhotosStore } from './stores/photos'
-import { pickUploadsKey, useUploadsStore } from './stores/uploads'
+import { pickUploadsKey, useUploadsStore, type UploadAlbum } from './stores/uploads'
 import { t } from './i18n'
 
 const auth = useAuthStore()
@@ -61,12 +66,44 @@ const navItems = computed(() => [
   ...(auth.isAdmin ? [{ to: '/all', icon: 'fa-user-shield', title: t('nav.all') }] : []),
 ])
 const fileInput = ref<HTMLInputElement>()
-provide(pickUploadsKey, () => fileInput.value?.click())
+const folderInput = ref<HTMLInputElement>()
+provide(pickUploadsKey, () => uploads.openDialog())
 
-function chosen(event: Event) {
+// The album chosen in the upload dialog, for the files the picker hands over
+// next. Files set on the input any other way go into the library only.
+let picked: AlbumChoice = null
+
+function pick(choice: AlbumChoice, folder: boolean) {
+  picked = choice
+  const input = folder ? folderInput.value : fileInput.value
+  input?.click()
+}
+
+async function chosen(event: Event) {
   const input = event.target as HTMLInputElement
-  uploads.add(Array.from(input.files ?? []))
+  const all = Array.from(input.files ?? [])
+  const { files, skipped } = input === folderInput.value ? sift(all) : { files: all, skipped: [] }
   input.value = ''
+  const choice = picked
+  picked = null
+  const album = await albumFor(choice)
+  if (album !== undefined) {
+    uploads.add(files, album, skipped)
+  }
+}
+
+// Creates a new album when a name was typed. Undefined means it failed and
+// nothing is uploaded, rather than the files landing outside the album.
+async function albumFor(choice: AlbumChoice): Promise<UploadAlbum | null | undefined> {
+  if (typeof choice !== 'string') {
+    return choice
+  }
+  const { data, error } = await api.POST('/albums', { body: { name: choice } })
+  if (error) {
+    useNoticesStore().notify(t('uploadDialog.createFailed', { error: apiError(error) }), 'error')
+    return undefined
+  }
+  return { id: data.id, name: data.name }
 }
 
 async function logout() {
@@ -108,19 +145,21 @@ window.addEventListener('beforeunload', (event) => {
         color="primary"
         icon="fa-upload"
         :aria-label="t('nav.upload')"
-        @click="fileInput?.click()"
+        @click="uploads.openDialog()"
       />
-      <v-btn v-else color="primary" variant="flat" prepend-icon="fa-upload" class="mr-2" @click="fileInput?.click()">
+      <v-btn v-else color="primary" variant="flat" prepend-icon="fa-upload" class="mr-2" @click="uploads.openDialog()">
         {{ t('nav.upload') }}
       </v-btn>
       <input
         ref="fileInput"
+        data-testid="upload-files"
         type="file"
         multiple
-        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,video/mp4,video/quicktime,.mp4,.mov"
+        :accept="ACCEPT"
         hidden
         @change="chosen"
       />
+      <input ref="folderInput" data-testid="upload-folder" type="file" webkitdirectory hidden @change="chosen" />
 
       <AppearanceMenu />
 
@@ -171,6 +210,7 @@ window.addEventListener('beforeunload', (event) => {
     </v-main>
 
     <UploadPanel v-if="auth.user" />
+    <UploadDialog v-if="auth.user" @pick="pick" />
     <AppToasts />
   </v-app>
 </template>

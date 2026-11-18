@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef, useTemplateRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { api, type Album } from '../api/client'
@@ -10,14 +10,17 @@ import { apiError } from '../i18n/apiErrors'
 import NameDialog from '../components/NameDialog.vue'
 import PhotoBrowser, { type ExtraAction } from '../components/PhotoBrowser.vue'
 import ShareDialog from '../components/ShareDialog.vue'
+import UploadDropZone from '../components/UploadDropZone.vue'
 import { useAuthStore } from '../stores/auth'
 import { inBatches, usePhotosStore } from '../stores/photos'
+import { useUploadsStore, type UploadAlbum } from '../stores/uploads'
 import { t } from '../i18n'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const photos = usePhotosStore()
+const uploads = useUploadsStore()
 const browser = useTemplateRef('browser')
 
 const id = computed(() => Number(route.params.id))
@@ -45,6 +48,24 @@ async function loadAlbum() {
   }
   album.value = data
 }
+
+const uploadTarget = computed<UploadAlbum | null>(() => (album.value ? { id: album.value.id, name: album.value.name } : null))
+
+// Uploads into this album place their photos in the grid themselves; the count
+// and the cover in the header come from the album, read again at most once a second.
+let refresh: ReturnType<typeof setTimeout> | undefined
+watch(
+  () => uploads.landed,
+  (landed) => {
+    if (landed?.album === id.value && refresh === undefined) {
+      refresh = setTimeout(() => {
+        refresh = undefined
+        void loadAlbum()
+      }, 1000)
+    }
+  },
+)
+onBeforeUnmount(() => clearTimeout(refresh))
 
 async function rename(name: string) {
   const { data, error } = await api.PATCH('/albums/{id}', { params: { path: { id: id.value } }, body: { name } })
@@ -105,38 +126,42 @@ async function resetCover() {
 </script>
 
 <template>
-  <PhotoBrowser v-if="album" ref="browser" :mode="owned ? 'library' : 'shared'" :extra-actions="owned ? albumActions : undefined" @tagged="loadAlbum">
-    <template #header>
-      <AppPageHeader :title="album.name" :description="photoCount" :breadcrumbs="breadcrumbs">
-        <template v-if="owned" #actions>
-          <v-menu>
-            <template #activator="{ props }">
-              <v-btn v-bind="props" icon="fa-ellipsis-vertical" variant="text" :aria-label="t('albums.actions')" />
-            </template>
-            <v-list density="compact">
-              <v-list-item :title="t('common.rename')" prepend-icon="fa-pen" @click="renameOpen = true" />
-              <v-list-item :title="t('browser.share')" prepend-icon="fa-share-nodes" @click="shareOpen = true" />
-              <v-list-item
-                v-if="album.coverChosen"
-                :title="t('album.resetCover')"
-                prepend-icon="fa-arrow-rotate-left"
-                @click="resetCover"
-              />
-              <v-list-item :title="t('album.delete')" prepend-icon="fa-trash-can" @click="deleteOpen = true" />
-            </v-list>
-          </v-menu>
-        </template>
-      </AppPageHeader>
-    </template>
-    <template #empty>
-      <EmptyState v-if="owned" icon="fa-book-open" :title="t('album.empty')" :text="t('album.emptyText')">
-        <template #actions>
-          <v-btn :text="t('common.openTimeline')" color="primary" to="/" />
-        </template>
-      </EmptyState>
-      <EmptyState v-else icon="fa-book-open" :title="t('album.empty')" />
-    </template>
-  </PhotoBrowser>
+  <UploadDropZone v-if="album" :hint="t('album.drop')" :disabled="!owned" @files="(chosen) => uploads.add(chosen.files, uploadTarget, chosen.skipped)">
+    <PhotoBrowser ref="browser" :mode="owned ? 'library' : 'shared'" :extra-actions="owned ? albumActions : undefined" @tagged="loadAlbum">
+      <template #header>
+        <AppPageHeader :title="album.name" :description="photoCount" :breadcrumbs="breadcrumbs">
+          <template v-if="owned" #actions>
+            <v-menu>
+              <template #activator="{ props }">
+                <v-btn v-bind="props" icon="fa-ellipsis-vertical" variant="text" :aria-label="t('albums.actions')" />
+              </template>
+              <v-list density="compact">
+                <v-list-item :title="t('album.upload')" prepend-icon="fa-upload" @click="uploads.openDialog(uploadTarget)" />
+                <v-list-item :title="t('common.rename')" prepend-icon="fa-pen" @click="renameOpen = true" />
+                <v-list-item :title="t('browser.share')" prepend-icon="fa-share-nodes" @click="shareOpen = true" />
+                <v-list-item
+                  v-if="album.coverChosen"
+                  :title="t('album.resetCover')"
+                  prepend-icon="fa-arrow-rotate-left"
+                  @click="resetCover"
+                />
+                <v-list-item :title="t('album.delete')" prepend-icon="fa-trash-can" @click="deleteOpen = true" />
+              </v-list>
+            </v-menu>
+          </template>
+        </AppPageHeader>
+      </template>
+      <template #empty>
+        <EmptyState v-if="owned" icon="fa-book-open" :title="t('album.empty')" :text="t('album.emptyText')">
+          <template #actions>
+            <v-btn :text="t('album.uploadPhotos')" color="primary" prepend-icon="fa-upload" @click="uploads.openDialog(uploadTarget)" />
+            <v-btn :text="t('common.openTimeline')" color="primary" variant="text" to="/" />
+          </template>
+        </EmptyState>
+        <EmptyState v-else icon="fa-book-open" :title="t('album.empty')" />
+      </template>
+    </PhotoBrowser>
+  </UploadDropZone>
 
   <ShareDialog v-model="shareOpen" :album-id="id" @done="loadAlbum" />
   <NameDialog

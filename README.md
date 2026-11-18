@@ -23,7 +23,7 @@ It is built for modest hardware. It is developed and measured on an Intel N150 w
 
 ## Features
 
-- Upload from the browser, with previews made in the background and progress shown as it goes
+- Upload from the browser, files or whole folders, straight into an album, with previews made in the background and progress shown as it goes
 - Upload from phones over WebDAV, with sync apps such as PhotoSync and FolderSync. A folder can be linked to an album
 - Import from a folder on the NAS, which stays untouched. A repeated import skips the photos already imported or deleted
 - A timeline that stays fast in large libraries, with a year scrubber and filters by date, tag, camera and lens

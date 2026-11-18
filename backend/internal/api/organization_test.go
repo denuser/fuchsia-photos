@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -231,6 +232,38 @@ func TestUploadRestoresFromTrash(t *testing.T) {
 	if again := decode[result](t, anna.upload("landscape.jpg")); again.Restored {
 		t.Errorf("a duplicate outside the trash was reported as restored: %+v", again)
 	}
+}
+
+func TestUploadIntoAlbum(t *testing.T) {
+	e := setup(t)
+	e.addUser("anna", auth.RoleUser)
+	e.addUser("boris", auth.RoleUser)
+	anna, boris := e.loggedIn("anna"), e.loggedIn("boris")
+
+	landscape, err := os.ReadFile(filepath.Join("..", "media", "testdata", "landscape.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	trip := anna.newAlbum(t, "Trip")
+	into := "/api/v1/photos?album=" + itoa(trip)
+
+	res := anna.uploadTo(into, "landscape.jpg", landscape)
+	wantStatus(t, res, http.StatusCreated)
+	id := decode[uploadResult](t, res).Photo.ID
+	wantIDs(t, anna.photoIDs("/api/v1/photos?album="+itoa(trip)), id)
+
+	// A photo the library already has goes into the album too.
+	other := anna.newAlbum(t, "Other")
+	res = anna.uploadTo("/api/v1/photos?album="+itoa(other), "landscape.jpg", landscape)
+	wantStatus(t, res, http.StatusOK)
+	wantIDs(t, anna.photoIDs("/api/v1/photos?album="+itoa(other)), id)
+
+	// Someone else's album, or one that does not exist, refuses the upload
+	// before a photo is made of it.
+	wantStatus(t, boris.uploadTo(into, "landscape.jpg", landscape), http.StatusNotFound)
+	wantStatus(t, boris.uploadTo("/api/v1/photos?album=x", "landscape.jpg", landscape), http.StatusNotFound)
+	wantIDs(t, boris.photoIDs("/api/v1/photos"))
+	wantIDs(t, anna.photoIDs("/api/v1/photos?album="+itoa(trip)), id)
 }
 
 func TestAlbums(t *testing.T) {

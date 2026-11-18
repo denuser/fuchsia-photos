@@ -195,6 +195,11 @@ func (b *browser) upload(fixture string) *http.Response {
 
 func (b *browser) uploadBytes(name string, data []byte) *http.Response {
 	b.e.t.Helper()
+	return b.uploadTo("/api/v1/photos", name, data)
+}
+
+func (b *browser) uploadTo(path, name string, data []byte) *http.Response {
+	b.e.t.Helper()
 	var body bytes.Buffer
 	form := multipart.NewWriter(&body)
 	part, err := form.CreateFormFile("file", name)
@@ -204,7 +209,7 @@ func (b *browser) uploadBytes(name string, data []byte) *http.Response {
 	part.Write(data)
 	form.Close()
 
-	req, err := http.NewRequest(http.MethodPost, b.e.server.URL+"/api/v1/photos", &body)
+	req, err := http.NewRequest(http.MethodPost, b.e.server.URL+path, &body)
 	if err != nil {
 		b.e.t.Fatal(err)
 	}

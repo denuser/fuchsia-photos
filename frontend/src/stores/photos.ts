@@ -195,8 +195,11 @@ export const usePhotosStore = defineStore('photos', () => {
   // Search results keep the server's order: sorting is stable.
   const order = computed(() => (ranked(query.value) ? () => 0 : query.value.trash ? deletedFirst : newestFirst))
   // Only the whole library and the trash can tell from a photo alone that it
-  // belongs in the list. Other lists learn about new members by loading.
-  const unfiltered = computed(() => {
+  // belongs in the list. Other lists learn about new members by loading, except
+  // an album an upload has just added the photo to, given as inAlbum.
+  const unfiltered = computed(() => withoutFilters())
+
+  function withoutFilters(inAlbum?: number) {
     const { shared, everyone, album, favorites, archived, tags, cameras, lenses, kinds, from, to } = query.value
     return (
       !ranked(query.value) &&
@@ -204,7 +207,7 @@ export const usePhotosStore = defineStore('photos', () => {
       !favorites &&
       !archived &&
       !everyone &&
-      album === undefined &&
+      album === inAlbum &&
       !tags?.length &&
       !cameras?.length &&
       !lenses?.length &&
@@ -212,7 +215,7 @@ export const usePhotosStore = defineStore('photos', () => {
       !from &&
       !to
     )
-  })
+  }
 
   let events: EventSource | null = null
   // A list opened later makes the answers still on their way out of date.
@@ -360,8 +363,9 @@ export const usePhotosStore = defineStore('photos', () => {
   // counted in its month. It joins the list only where it is certainly new: in
   // a loaded part of a month, in a month the list does not have, or within the
   // loaded part of a whole list. Other counts are corrected when months load.
-  function merge(changed: Photo[]) {
+  function merge(changed: Photo[], inAlbum?: number) {
     const inTrash = Boolean(query.value.trash)
+    const joins = unfiltered.value || (inAlbum !== undefined && withoutFilters(inAlbum))
     const known = new Set(photos.value.map((p) => p.id))
     const gone = new Set<number>()
     const arriving: Photo[] = []
@@ -377,7 +381,7 @@ export const usePhotosStore = defineStore('photos', () => {
         // It may have moved to another month once its EXIF was read.
         gone.add(photo.id)
         arriving.push(photo)
-      } else if (unfiltered.value) {
+      } else if (joins) {
         arriving.push(photo)
       }
     }

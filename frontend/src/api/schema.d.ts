@@ -2145,7 +2145,10 @@ export interface operations {
     };
     uploadPhoto: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description An album of the user's own to add the photo to, a duplicate included. Checked before the file is read. */
+                album?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2178,6 +2181,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             413: components["responses"]["Error"];
             415: components["responses"]["Error"];
         };

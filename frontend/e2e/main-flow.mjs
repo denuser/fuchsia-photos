@@ -1,6 +1,7 @@
 // The main path through the application in a real browser. It runs against the
 // stack that `make e2e` starts. Steps build on each other, so the first failure ends the run.
-import { mkdirSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -97,6 +98,12 @@ async function shareWithGuest() {
   await button('Save').waitFor({ state: 'hidden' })
 }
 
+// Chooses files through the upload dialog, which must be open.
+async function chooseFiles(files, kind = 'Choose files') {
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), button(kind).click()])
+  await chooser.setFiles(files)
+}
+
 async function moveToTrash() {
   await expectRequest('/photos/trash', () => button('Move to trash').click())
 }
@@ -116,7 +123,8 @@ const steps = {
     loggedIn = true
   },
   'upload photos and get previews': async () => {
-    await page.locator('input[type=file]').setInputFiles(PHOTOS)
+    await button('Upload').click()
+    await chooseFiles(PHOTOS)
     await previews(5)
     // The timeline groups photos by month, after reading the dates from EXIF.
     await page.getByTestId('month').first().waitFor()
@@ -271,6 +279,41 @@ const steps = {
     }
     await context.close()
   },
+  'upload into a new album from the dialog, then into it from the album menu': async () => {
+    await page.goto(BASE)
+    await previews(5)
+    await button('Upload').click()
+    await dialog().getByLabel('Album').fill('Holiday')
+    await chooseFiles(PHOTOS.slice(0, 2))
+    await page.getByText('Into Holiday').waitFor({ timeout: 30_000 })
+    await page.goto(`${BASE}/albums`)
+    await page.getByText('Holiday').click()
+    await tiles(2)
+    await button('Album actions').click()
+    await page.locator('.v-list-item', { hasText: /^Upload to album$/ }).click()
+    await chooseFiles(PHOTOS.slice(2, 3))
+    // The photo joins the open album, and its count follows, with no reload.
+    await tiles(3)
+    await page.getByText('3 photos').waitFor()
+  },
+  'upload a folder with its subfolders, skipping files that are not photos and ignoring hidden ones': async () => {
+    const folder = mkdtempSync(join(tmpdir(), 'fuchsia-folder-'))
+    mkdirSync(join(folder, 'nested'))
+    copyFileSync(PHOTOS[0], join(folder, 'one.jpg'))
+    copyFileSync(PHOTOS[1], join(folder, 'nested', 'TWO.PNG'))
+    writeFileSync(join(folder, 'notes.txt'), 'not a photo')
+    // macOS metadata next to a photo is ignored, not reported as skipped.
+    writeFileSync(join(folder, '._one.jpg'), 'AppleDouble')
+    writeFileSync(join(folder, 'nested', 'IMG_1.jpg.supplemental-metadata.json'), '{}')
+    await page.goto(BASE)
+    await previews(5)
+    await button('Upload').click()
+    await chooseFiles(folder, 'Choose folder')
+    await page.getByText('Uploaded 2 of 2').waitFor({ timeout: 30_000 })
+    await page.getByText('2 files skipped: not photos or videos.').waitFor()
+    await page.getByText('Show', { exact: true }).click()
+    await page.getByText(/nested\/IMG_1\.jpg\.supplemental-metadata\.json$/).waitFor()
+  },
   'an administrator sees the photos of all users': async () => {
     await page.goto(`${BASE}/all`)
     await previews(5)
@@ -347,7 +390,7 @@ const steps = {
     await select(0)
     await moveToTrash()
     await tiles(4)
-    await page.locator('input[type=file]').setInputFiles(PHOTOS)
+    await page.getByTestId('upload-files').setInputFiles(PHOTOS)
     await page.getByText('1 restored from the trash').waitFor({ timeout: 30_000 })
     await tiles(5)
   },
@@ -582,7 +625,7 @@ const steps = {
   },
   'a video plays in the viewer, and a motion photo plays its motion': async () => {
     await page.goto(BASE)
-    await page.locator('input[type=file]').setInputFiles(['video.mp4', 'motion.jpg'].map((f) => join(FIXTURES, f)))
+    await page.getByTestId('upload-files').setInputFiles(['video.mp4', 'motion.jpg'].map((f) => join(FIXTURES, f)))
     await previews(5)
     await page.getByTestId('tile-video').getByText('0:02').waitFor()
     await page.getByTestId('tile-motion').waitFor()
