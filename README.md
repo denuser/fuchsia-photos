@@ -6,16 +6,22 @@ It is built for modest hardware. It is developed and measured on an Intel N150 w
 
 **Status:** in active development, with no release yet. The [roadmap](docs/roadmap.md) shows what is done and what comes next.
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshots/timeline-dark.jpg"><img src="docs/images/screenshots/timeline-light.jpg" alt="The timeline, with photos grouped by month and filters by tag, type, camera, lens and date"></picture>
+<img src="docs/images/tour.gif" alt="A tour of Fuchsia Photos: the timeline, the viewer, search by description and albums" width="100%">
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/images/screenshots/viewer.jpg" alt="The viewer with the camera, exposure and place of a photo"></td>
-    <td width="33%"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshots/search-dark.jpg"><img src="docs/images/screenshots/search-light.jpg" alt="Search by description: dog on the beach"></picture></td>
-    <td width="33%"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshots/albums-dark.jpg"><img src="docs/images/screenshots/albums-light.jpg" alt="Albums with their covers and photo counts"></picture></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshots/timeline-dark.jpg"><img src="docs/images/screenshots/timeline-light.jpg" alt="The timeline, with photos grouped by month and filters by tag, type, camera, lens and date"></picture></td>
+    <td width="50%"><img src="docs/images/screenshots/viewer.jpg" alt="The viewer with the camera, exposure and place of a photo"></td>
   </tr>
   <tr>
+    <td>The timeline, by month, with filters</td>
     <td>The viewer, with the camera and the place</td>
+  </tr>
+  <tr>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshots/search-dark.jpg"><img src="docs/images/screenshots/search-light.jpg" alt="Search by description: dog on the beach"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshots/albums-dark.jpg"><img src="docs/images/screenshots/albums-light.jpg" alt="Albums with their covers and photo counts"></picture></td>
+  </tr>
+  <tr>
     <td>Search by description</td>
     <td>Albums</td>
   </tr>
