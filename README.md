@@ -1,19 +1,4 @@
-<p align="center"><img src="frontend/src/assets/logo.png" alt="Fuchsia Photos logo" width="160"></p>
-
-# Fuchsia Photos
-
-```
-       |           _____   _   _    ____   _   _   ____    _____    ___
-       |          |  ___| | | | |  / ___| | | | | / ___|  |_   _|  / _ \
-      (o)         | |_    | | | | | |     | |_| | \___ \    | |   | |_| |
-   .-'/ \'-.      |  _|   | |_| | | |___  |  _  |  ___) |  _| |_  |  _  |
-  /  /   \  \     |_|      \___/   \____| |_| |_| |____/  |_____| |_| |_|
- `  ( ||| )  `     ____    _   _    ___    _____    ___    ____
-     \|||/        |  _ \  | | | |  / _ \  |_   _|  / _ \  / ___|
-      |||         | |_) | | |_| | | | | |   | |   | | | | \___ \
-      |||         |  __/  |  _  | | |_| |   | |   | |_| |  ___) |
-     ' ' '        |_|     |_| |_|  \___/    |_|    \___/  |____/
-```
+<p align="center"><img src="docs/images/banner.png" alt="Fuchsia Photos: a self-hosted photo library for a home NAS" width="100%"></p>
 
 A self-hosted photo library for a home NAS. Photos come in from the browser, from phones over WebDAV or from a folder on the NAS, and are organized into albums and tags and shared between the people who use the server.
 
