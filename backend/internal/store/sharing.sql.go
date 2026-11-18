@@ -15,6 +15,7 @@ SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE $1::text), 'YYYY-MM'):
        count(*) AS count
 FROM photos p
 WHERE p.deleted_at IS NULL
+  AND p.status <> 'pending'
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND ($2::bigint IS NULL OR p.owner_id = $2::bigint)
 GROUP BY 1
@@ -171,6 +172,7 @@ const listAllPhotos = `-- name: ListAllPhotos :many
 SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description
 FROM photos p
 WHERE p.deleted_at IS NULL
+  AND p.status <> 'pending'
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND ($1::bigint IS NULL OR p.owner_id = $1::bigint)
   AND ($2::timestamptz IS NULL OR p.sort_at >= $2::timestamptz)
@@ -190,7 +192,8 @@ type ListAllPhotosParams struct {
 	MaxRows     int32
 }
 
-// The administrator's view of all photos.
+// The administrator's view of all photos. Like the timeline, it leaves out a
+// photo until processing has read its date and size.
 func (q *Queries) ListAllPhotos(ctx context.Context, arg ListAllPhotosParams) ([]Photo, error) {
 	rows, err := q.db.Query(ctx, listAllPhotos,
 		arg.OwnerID,

@@ -30,11 +30,13 @@ WHERE p.owner_id <> @viewer_id::bigint
 GROUP BY 1
 ORDER BY 1 DESC;
 
--- The administrator's view of all photos.
+-- The administrator's view of all photos. Like the timeline, it leaves out a
+-- photo until processing has read its date and size.
 -- name: ListAllPhotos :many
 SELECT p.*
 FROM photos p
 WHERE p.deleted_at IS NULL
+  AND p.status <> 'pending'
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (sqlc.narg(owner_id)::bigint IS NULL OR p.owner_id = sqlc.narg(owner_id)::bigint)
   AND (sqlc.narg(from_time)::timestamptz IS NULL OR p.sort_at >= sqlc.narg(from_time)::timestamptz)
@@ -50,6 +52,7 @@ SELECT to_char(date_trunc('month', p.sort_at AT TIME ZONE @tz::text), 'YYYY-MM')
        count(*) AS count
 FROM photos p
 WHERE p.deleted_at IS NULL
+  AND p.status <> 'pending'
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND (sqlc.narg(owner_id)::bigint IS NULL OR p.owner_id = sqlc.narg(owner_id)::bigint)
 GROUP BY 1

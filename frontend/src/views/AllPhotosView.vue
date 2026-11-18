@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppAutocomplete from '../components/AppAutocomplete.vue'
@@ -36,10 +36,22 @@ function open() {
   void photos.open({ everyone: true, owner: owner.value })
 }
 
+// Photo events carry only the administrator's own photos, so other users'
+// photos being processed, as during an import, would show only after a reload.
+// The page reads the month counts again while it is in view.
+const REFRESH_MS = 10_000
+let timer: ReturnType<typeof setInterval> | undefined
+
 onMounted(() => {
   void users.load()
   open()
+  timer = setInterval(() => {
+    if (document.visibilityState === 'visible') {
+      void photos.refreshMonths()
+    }
+  }, REFRESH_MS)
 })
+onUnmounted(() => clearInterval(timer))
 watch(owner, open)
 
 function chooseOwner(id: number | null) {

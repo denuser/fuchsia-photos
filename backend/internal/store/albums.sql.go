@@ -89,7 +89,8 @@ SELECT a.id, a.owner_id, a.name, a.created_at, a.cover_photo_id AS chosen_cover_
        (a.visibility = 'all' OR EXISTS (SELECT 1 FROM album_shares s WHERE s.album_id = a.id))::boolean AS shared,
        (SELECT count(*)
         FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
-        WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id))::bigint AS photo_count,
+        WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.status <> 'pending'
+          AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id))::bigint AS photo_count,
        COALESCE((SELECT p.id
                  FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
                  WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id) AND p.status = 'ready'
@@ -138,7 +139,8 @@ SELECT a.id, a.owner_id, a.name, a.created_at, a.cover_photo_id AS chosen_cover_
        (a.visibility = 'all' OR EXISTS (SELECT 1 FROM album_shares s WHERE s.album_id = a.id))::boolean AS shared,
        (SELECT count(*)
         FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
-        WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id))::bigint AS photo_count,
+        WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.status <> 'pending'
+          AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id))::bigint AS photo_count,
        COALESCE((SELECT p.id
                  FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
                  WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id) AND p.status = 'ready'
@@ -201,7 +203,8 @@ SELECT a.id, a.owner_id, a.name, a.created_at, a.cover_photo_id AS chosen_cover_
        (a.visibility = 'all' OR EXISTS (SELECT 1 FROM album_shares s WHERE s.album_id = a.id))::boolean AS shared,
        (SELECT count(*)
         FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
-        WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id))::bigint AS photo_count,
+        WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND p.status <> 'pending'
+          AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id))::bigint AS photo_count,
        COALESCE((SELECT p.id
                  FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
                  WHERE ap.album_id = a.id AND p.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id) AND p.status = 'ready'

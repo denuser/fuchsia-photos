@@ -255,10 +255,20 @@ func TestUploadIntoAlbum(t *testing.T) {
 	res := anna.uploadTo(into, "landscape.jpg", landscape)
 	wantStatus(t, res, http.StatusCreated)
 	id := decode[uploadResult](t, res).Photo.ID
-	// Lists leave a photo out until it is processed.
+	// Lists and the album's count leave a photo out until it is processed.
+	photoCount := func() int64 {
+		t.Helper()
+		return decode[albumJSON](t, anna.get("/api/v1/albums/"+itoa(trip))).PhotoCount
+	}
 	wantIDs(t, anna.photoIDs("/api/v1/photos?album="+itoa(trip)))
+	if got := photoCount(); got != 0 {
+		t.Errorf("an album with a photo being processed counts %d", got)
+	}
 	markReady(t, e, id)
 	wantIDs(t, anna.photoIDs("/api/v1/photos?album="+itoa(trip)), id)
+	if got := photoCount(); got != 1 {
+		t.Errorf("an album with a processed photo counts %d", got)
+	}
 
 	// A photo the library already has goes into the album too.
 	other := anna.newAlbum(t, "Other")

@@ -322,6 +322,13 @@ func TestAdminView(t *testing.T) {
 	borises := s.boris.addPhoto("landscape.png")
 	album := s.anna.newAlbum(t, "Trip", annas)
 
+	t.Run("leaves out photos still being processed", func(t *testing.T) {
+		wantIDs(t, s.root.photoIDs("/api/v1/photos/all"), annas)
+		wantIDs(t, s.root.photoIDs("/api/v1/photos/all?owner="+itoa(s.borisID)))
+		wantMonths(t, s.root.months("/api/v1/photos/all/months?tz=UTC&owner="+itoa(s.borisID)))
+		markReady(t, s.e, borises)
+	})
+
 	t.Run("sees everything", func(t *testing.T) {
 		wantIDs(t, s.root.photoIDs("/api/v1/photos/all"), borises, annas)
 		wantIDs(t, s.root.photoIDs("/api/v1/photos/all?owner=1"), annas)

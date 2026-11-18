@@ -473,6 +473,40 @@ export const usePhotosStore = defineStore('photos', () => {
     pump()
   }
 
+  // Reads the month counts again and loads the months whose count changed,
+  // keeping the photos already shown so that nothing flickers. A list whose
+  // changes come with no event, such as other users' photos in the
+  // administrator's view, catches up this way as they are processed.
+  async function refreshMonths() {
+    if (!byMonth.value || !loadedOnce.value) {
+      return
+    }
+    const started = generation
+    const { data } = await fetchMonths(query.value)
+    if (!data || started !== generation) {
+      return
+    }
+    const known = new Map(sections.value.map((s) => [s.key, s]))
+    let changed = data.length !== sections.value.length
+    const next = data.map((m) => {
+      const section = known.get(m.month)
+      if (!section) {
+        changed = true
+        return monthSection(m.month, m.count)
+      }
+      if (section.count === m.count || section.loading) {
+        return section
+      }
+      changed = true
+      // Loading again from the start adds the new photos to those shown.
+      return { ...section, count: m.count, cursor: null, complete: false, failed: false }
+    })
+    if (changed) {
+      sections.value = next
+      pump()
+    }
+  }
+
   async function open(next: PhotoQuery) {
     query.value = next
     await reload()
@@ -573,6 +607,7 @@ export const usePhotosStore = defineStore('photos', () => {
     merge,
     remove,
     reload,
+    refreshMonths,
     open,
     trash,
     restore,

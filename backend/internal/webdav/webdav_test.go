@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/denuser/fuchsia-photos/backend/internal/auth"
 	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
 	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
@@ -28,6 +30,7 @@ type env struct {
 	t       *testing.T
 	server  *httptest.Server
 	queries *store.Queries
+	pool    *pgxpool.Pool
 }
 
 func setup(t *testing.T) *env {
@@ -48,7 +51,7 @@ func setup(t *testing.T) *env {
 	mux.Handle("/webdav/", handler)
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
-	return &env{t, server, queries}
+	return &env{t, server, queries, pool}
 }
 
 // client is a WebDAV client logged in as a user with an app password.
@@ -357,13 +360,20 @@ func (e *env) link(owner *client, path string, albumID int64) {
 	}
 }
 
+// albumSize counts the photos of the owner's album that are not in the trash
+// or hidden, processed or not: the album's own count waits for processing,
+// which these tests do not run.
 func (e *env) albumSize(owner *client, albumID int64) int64 {
 	e.t.Helper()
-	albums, err := e.queries.ListAlbums(context.Background(), store.ListAlbumsParams{OwnerID: owner.user.ID, ID: &albumID})
-	if err != nil || len(albums) != 1 {
+	var n int64
+	err := e.pool.QueryRow(context.Background(), `
+		SELECT count(*) FROM album_photos ap JOIN albums a ON a.id = ap.album_id JOIN photos p ON p.id = ap.photo_id
+		WHERE a.id = $1 AND a.owner_id = $2 AND p.deleted_at IS NULL
+		  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)`, albumID, owner.user.ID).Scan(&n)
+	if err != nil {
 		e.t.Fatalf("album %d: %v", albumID, err)
 	}
-	return albums[0].PhotoCount
+	return n
 }
 
 func TestFolderAlbums(t *testing.T) {
