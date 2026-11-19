@@ -69,7 +69,7 @@ docker compose up -d
 docker compose exec app fuchsia-photos create-admin admin
 ```
 
-Set a long password with URL-safe characters only, and the address of the NAS. The last command waits for the administrator's password. Then open `https://<address>:10304/`. The certificate comes from Caddy's local CA, so the browser warns about it until that CA is trusted.
+Set a long password with URL-safe characters only, and the address of the NAS. The last command waits for the administrator's password. Then open `https://<address>:10304/`; to use another port, set `HTTPS_PORT` in `.env`. The certificate comes from Caddy's local CA, so the browser warns about it until that CA is trusted.
 
 The [deployment guide](docs/deployment.md) covers the settings, TrueNAS, WebDAV, folder imports, backups and updates.
 
