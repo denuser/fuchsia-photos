@@ -1,6 +1,6 @@
 # Improvements
 
-The current list of improvements, in order of priority. All of them are done except 6, 8 and 9, which are planned, and 10, whose Google Takeout part is done and iCloud part planned. Stages 0 to 6 of the [roadmap](roadmap.md) are done too.
+The current list of improvements, in order of priority. All of them are done except 6, 8, 9, 13 and 14, which are planned, and 10, whose Google Takeout part is done and iCloud part planned. Stages 0 to 6 of the [roadmap](roadmap.md) are done too.
 
 ## 1. Administration page
 
@@ -248,3 +248,28 @@ Plan, three changes in this order, merged in one commit at the user's request:
 1. **An album for an upload.** `POST /photos` takes an optional `album` query parameter, as the multipart body streams the file and a form field would have to come before it. The album must be the uploader's own, checked before the file is read, with 404 otherwise. After ingest the photo is added with `AddPhotosToAlbum`, duplicates and photos restored from the trash included, as a WebDAV album does. A duplicate of a hidden file already answers with the photo shown at the top of its chain, so that photo goes into the album. A Live Photo video uploaded before its photo is paired later, in processing, so it enters the album and the album hides it once paired, as for WebDAV. OpenAPI and backend tests: an upload into an own album, a duplicate added to it, someone else's album refused without a photo created.
 2. **The upload dialog.** Upload in the app bar, and `pickUploadsKey` from the empty timeline, open an `AppDialog` instead of the file picker. It has an album field inside `AppFormGroup`, empty on every opening, which means the library only. The field lists the user's own albums and also takes the name of a new album, as "Add to album" does (settled with the user on 2026-11-18): the album is created once the files are chosen, before they are sent, so that the picker opens within the user's click. The field is an outlined `v-combobox`, as `AppAutocomplete` takes no new values. The dialog has the buttons "Choose files" and "Choose folder", which click the hidden inputs synchronously so that the browser keeps the user's gesture. The album is taken when the button is clicked and travels with the files; files that come any other way have no album. Choosing closes the dialog and starts the upload. The album page gets "Upload to album" in its ⋮ menu, and its empty state an action of the same kind, opening the same dialog with the album filled in. The upload queue carries the album of each file, so uploads into different albums can run together, and the panel names the album. A 404 for an album, deleted while its files wait, is not retried, and the rest of that album's queue fails with it without being sent, so that "Retry failed" can send them again. `merge` places an uploaded photo in the open list when it is the album the photo went into with no other filter, as it does for the whole library, and the album page reads the album again, for its count and cover, at most once a second while files land in it. Dropping files on the timeline still uploads them into the library with no dialog (settled with the user on 2026-11-18); dropping them on an album page the user owns uploads them into that album. The hidden inputs stay in `App.vue` and get a `data-testid` each, as a second input would make `input[type=file]` in the browser test match two; the test uploads into an album through the dialog.
 3. **Folders.** "Choose folder" clicks a second hidden input with `webkitdirectory`, which Chrome, Firefox and desktop Safari support; on iOS and Android, where it does not pick folders, the button is hidden, judged by the user agent, which is to be checked on real phones. A folder dropped on the timeline or an album page is read through `webkitGetAsEntry`, called for every item inside the `drop` handler before anything is awaited, walking subfolders and calling `readEntries` until it returns nothing, as it gives at most 100 entries at a time. When the drop has entries, `dataTransfer.files` is not used, as a browser may list a folder there as an empty file. Files inside a folder, chosen or dropped, are filtered by extension, ignoring case, so `.aae` and Takeout JSON do not show up as failures; the panel says how many files were skipped and lists their paths on request (asked by the user on 2026-11-18, when a count alone did not say what was left out). Each line of the panel is a line of its own, so that none is cut off. Hidden files and folders, such as `.DS_Store` and the `._` files macOS writes next to each photo on other volumes, are left out without being counted, as listing them was only noise (2026-11-18). The extensions in `lib/uploadFiles.ts` also make the picker's `accept`, and cover what `ingest` detects. Files chosen or dropped one by one go to the server unfiltered, as it tells a file by its content. Folder names do not make albums, as for WebDAV.
+
+## 13. Public links to albums
+
+**Status:** planned, not started.
+
+The owner of an album makes a link that opens it without an account, to show photos to people who do not use the server. Today sharing reaches only users of the server, as described under [sharing](architecture.md#decisions). People moving from other photo libraries tend to expect such links.
+
+Questions to settle with the user before a plan:
+
+- Albums only, or single photos too.
+- Whether a link may have an expiry date and a password, and whether visitors may download originals, which keep their EXIF and GPS.
+- Whether the album's location data is shown to visitors, given that locations are shown only when an administrator allows them.
+- How the page is served to visitors without a session, and how its requests are limited, as the NAS would then be reached from outside the home network.
+
+## 14. Memories: on this day
+
+**Status:** planned, not started.
+
+The timeline or a page of its own shows photos taken on the same day in earlier years. It needs no ML: the date of the photo is enough. People moving from other photo libraries tend to expect it.
+
+Questions to settle with the user before a plan:
+
+- Where it is shown: above the timeline, on a page of its own, or both.
+- Whether it covers only the user's own photos or also the photos shared with them, and whether archived photos are left out, as on the timeline.
+- Whether a day with nothing shows the nearest days instead, and how the date is taken for photos without a time zone.
