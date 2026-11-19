@@ -266,7 +266,7 @@ To run a specific release or build, set `IMAGE_TAG=0.1.0` or `IMAGE_TAG=sha-<com
 
 ### Video copies
 
-Phones record HEVC, which some browsers cannot play: the viewer then shows the poster and offers the download. With graphics that encode H.264, the application can make an H.264 copy that every browser plays, with the shorter side at 1080 and HDR tone mapped to SDR. The copy is made on the graphics, leaves the CPU almost free, and goes into the cache next to the previews, at about a seventh of the original's size. On the N150 a minute of 4K HDR from an iPhone takes about 32 seconds, as measured in the [benchmark](benchmark.md#video-results). Copies are made for HEVC, VP9 and AV1 videos and for the motion of motion photos and Live Photos; H.264 needs none.
+Phones record HEVC, which some browsers cannot play: the viewer then shows the poster and offers the download. With graphics that encode H.264, the application can make an H.264 copy that every browser plays, with the shorter side at 1080 and HDR tone mapped to SDR. The copy is made on the graphics, leaves the CPU almost free, and goes into the cache next to the previews, at about a seventh of the original's size. On the N150 a minute of 4K HDR from an iPhone takes about 32 seconds, as measured in the [benchmark](benchmark.md#video-results). Copies are made for HEVC, VP9 and AV1 videos, for HDR videos in H.264, which Firefox shows grey, and for the motion of motion photos and Live Photos; other H.264 videos need none.
 
 The copies are made by the transcoder, a service next to the application whose image carries the drivers for the graphics:
 

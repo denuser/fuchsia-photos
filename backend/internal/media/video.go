@@ -159,12 +159,19 @@ func RenderVideo(ctx context.Context, path string, video Video, settings Setting
 
 // NeedsCopy tells whether a video needs an H.264 copy to play in every
 // browser, and whether the graphics can decode it to make one. H.264 plays
-// everywhere. ProRes, MPEG-4 Part 2 and MJPEG would have to be decoded on the
-// CPU, which is too slow on a NAS, so they stay as they are.
+// everywhere, but an HDR one looks grey where the browser does not tone map
+// it, as in Firefox, so it gets a tone mapped copy. ProRes, MPEG-4 Part 2 and
+// MJPEG would have to be decoded on the CPU, which is too slow on a NAS, so
+// they stay as they are.
 func NeedsCopy(video Video) bool {
+	if video.Width <= 0 || video.Height <= 0 {
+		return false
+	}
 	switch video.Codec {
 	case "hevc", "vp9", "av1":
-		return video.Width > 0 && video.Height > 0
+		return true
+	case "h264":
+		return video.HDR
 	}
 	return false
 }
