@@ -649,6 +649,10 @@ const steps = {
     }
     await video.evaluate((v) => v.play())
     await waitFor('the video to play', () => document.querySelector('[data-testid=viewer-video]')?.currentTime > 0)
+    // A video that plays shows neither the poster beside it nor the message for an unplayable one.
+    if ((await page.getByTestId('video-unplayable').count()) > 0) {
+      throw new Error('the viewer shows a video that plays as unplayable')
+    }
     await page.keyboard.press('Escape')
 
     await page.getByLabel('motion.jpg', { exact: true }).click()

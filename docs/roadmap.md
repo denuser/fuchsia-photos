@@ -51,7 +51,8 @@ Decisions are in the [architecture](architecture.md).
     - [x] Playback checked on 2026-11-12 in Safari on an iPhone and in Firefox
     - [x] Google's older MicroVideo motion photos, which give only `MicroVideoOffset`, checked on 2026-11-12 with `MVIMG_` files from [Wikimedia Commons](https://commons.wikimedia.org/w/index.php?search=MVIMG_&ns6=1): a Pixel 2, a Pixel 3 XL, a Nokia 3.1 Plus and an ASUS phone each gave a whole MP4. Two files kept the tag after an editor dropped the video and stayed still photos
     - [x] Huawei and Honor moving pictures, found by the `LIVE_` trailer at the end of the file, checked on 2026-11-12 with a Huawei MediaPad M5 file. Photos processed before are not backfilled
-    - [ ] Check on real devices: the poster of an HDR video from an iPhone
+    - [x] Check on real devices: the poster of an HDR video from an iPhone
+      - Checked on 2026-11-19 on the NAS with iPhone 17 videos in HEVC Main 10, HLG with Dolby Vision profile 8: portrait posters with normal colours
       - A PQ video in H.264, not from an iPhone, got a tone-mapped poster with normal colours in the application image on 2026-11-12
   - [x] Live Photos: the iPhone photo and its video as one item, pairing files that come in either order, including those imported before, as described under [Live Photos](architecture.md)
     - Pairing checked on 2026-11-12 with the iPhone 15 pair of [MotionPhotoSamples](https://github.com/NightMean/MotionPhotoSamples): the HEIC and the HEVC MOV share the tag, and the video paired with the photo whichever came first
@@ -63,7 +64,8 @@ Decisions are in the [architecture](architecture.md).
     - [x] Benchmark on the NAS with `scripts/video-bench.sh`, as described under [Video transcoding](benchmark.md#video-transcoding): 1080p and 4K HEVC to H.264 through VAAPI, with libx264 for comparison
       - Measured on 2026-11-13 with Jellyfin's test files: `h264_vaapi` makes a 1080p copy of 4K HLG video, as an iPhone records it, at 1.9 times real time with about one core busy, and of 4K SDR at 2.9 times. HLG needs `tonemap_opencl`, as `tonemap_vaapi` fails on it. libx264 ran at about 0.14 times real time on HDR
     - [x] Check the tone mapped copies by eye: on 2026-11-13 the copies of the HLG and PQ files looked right next to the originals
-    - [ ] Check with an iPhone video that has rotation and sound
+    - [x] Check with an iPhone video that has rotation and sound
+      - Checked on 2026-11-19 with portrait iPhone 17 videos in 4K and 1080p: the copies keep the rotation and the stereo AAC track at the original's level. The iPhone's second, four-channel `apple_apac` track is left out
     - Decided on 2026-11-13: the hardware encoding ships in a separate amd64 image for Intel graphics, with a moving tag of its own next to `latest`, so the main image stays small and arm64 needs nothing. It carries libva, Debian's non-free iHD driver and Intel's OpenCL runtime, about 450 MB more. On arm64 videos stay as in step 1: no hardware encoder there works with upstream ffmpeg in a container
     - [x] Run the benchmark with the Intel image: on 2026-11-13 `latest-intel` matched the Jellyfin image on every file
     - Decided with the user on 2026-11-13: a copy is made for videos in HEVC, VP9 and AV1, which the graphics decode, and for the motion of motion photos and Live Photos by the same rule. H.264 needs none; ProRes, MPEG-4 Part 2 and MJPEG stay as in step 1, as decoding them on the CPU is slow. The viewer always plays the copy when there is one, with the original still available for download. Turning the setting off keeps the copies made so far
@@ -72,7 +74,8 @@ Decisions are in the [architecture](architecture.md).
     - [x] A playable copy, with the shorter side at 1080 and HDR tone mapped, made on a queue of its own with one worker, as described under Video copies in the [architecture](architecture.md), with the setting on the administration page
     - [x] Keep what differs between makers of graphics in a file per vendor, with Intel as it was and AMD (Mesa's radeonsi) making SDR copies only
     - Decided with the user on 2026-11-14: the copies are made by the transcoder, a service with an image per maker of graphics (`fuchsia-photos-transcoder:latest-intel` and `latest-amd`), called over HTTP with a token and sharing the library and the cache at the same paths. The application's image no longer carries drivers, and its `latest-intel` is no longer built
-    - [ ] Check on the NAS with the transcoder's Intel image: a copy of an HEVC video and of a Live Photo's motion, in Firefox, an iPhone video with rotation and sound, and the transcoder stopped and started again
+    - [x] Check on the NAS with the transcoder's Intel image: a copy of an HEVC video and of a Live Photo's motion, in Firefox, an iPhone video with rotation and sound, and the transcoder stopped and started again
+      - Checked on 2026-11-19: the copies of iPhone 17 videos and of a Live Photo's motion play in Firefox with sound. A video uploaded with the transcoder stopped got no copy and no error, and its copy was made within a minute of the transcoder starting again
     - [ ] Benchmark HDR tone mapping on AMD graphics (a Ryzen 350): `tonemap_vaapi`, libplacebo on Vulkan and the CPU, with `DRIVER=radeonsi`, and give the transcoder's AMD image the one that takes HLG
 
 ## Later

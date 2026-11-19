@@ -900,28 +900,29 @@ onBeforeUnmount(() => {
           <img :src="previewUrl(previous.id, 'viewer')" alt="" class="image" draggable="false" />
         </div>
         <div v-if="video" class="slide" :style="{ paddingBottom: `${videoReserve}px` }">
-          <video
-            v-if="!unplayable"
-            ref="videoElement"
-            :key="shown.id"
-            :src="videoSource"
-            :poster="previewUrl(shown.id, 'viewer')"
-            :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
-            class="image"
-            data-testid="viewer-video"
-            controls
-            playsinline
-            preload="none"
-            @error="onVideoUnplayable"
-            @loadedmetadata="onVideoMetadata"
-            @play="onVideoPlay"
-          />
-          <div v-if="waitingForCopy && !unplayable" class="unplayable" data-testid="video-hdr-copy-coming">
-            <v-progress-circular indeterminate size="16" width="2" class="mr-2" />{{ t('viewer.videoHdrCopyComing') }}
-            <div>
-              <v-btn variant="text" class="mt-2" data-testid="video-play-original" :text="t('viewer.playOriginal')" @click="stopWaitingForCopy" />
+          <template v-if="!unplayable">
+            <video
+              ref="videoElement"
+              :key="shown.id"
+              :src="videoSource"
+              :poster="previewUrl(shown.id, 'viewer')"
+              :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
+              class="image"
+              data-testid="viewer-video"
+              controls
+              playsinline
+              preload="none"
+              @error="onVideoUnplayable"
+              @loadedmetadata="onVideoMetadata"
+              @play="onVideoPlay"
+            />
+            <div v-if="waitingForCopy" class="unplayable" data-testid="video-hdr-copy-coming">
+              <v-progress-circular indeterminate size="16" width="2" class="mr-2" />{{ t('viewer.videoHdrCopyComing') }}
+              <div>
+                <v-btn variant="text" class="mt-2" data-testid="video-play-original" :text="t('viewer.playOriginal')" @click="stopWaitingForCopy" />
+              </div>
             </div>
-          </div>
+          </template>
           <template v-else>
             <img
               :src="previewUrl(shown.id, 'viewer')"
