@@ -217,6 +217,63 @@ func TestBackfillMotion(t *testing.T) {
 	}
 }
 
+// Processing records whether a video is HDR, and the backfill probes the
+// videos processed before it did, without new previews.
+func TestVideoHDR(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	want := map[int64]bool{}
+	var videos []store.Photo
+	for _, tt := range []struct {
+		file string
+		hdr  bool
+	}{{"hdr.mp4", true}, {"video.mp4", false}} {
+		video := waitForStatus(t, e, upload(t, e, tt.file).ID, "ready")
+		if video.Hdr == nil || *video.Hdr != tt.hdr {
+			t.Errorf("%s: hdr = %v, want %v", tt.file, video.Hdr, tt.hdr)
+		}
+		want[video.ID] = tt.hdr
+		videos = append(videos, video)
+	}
+	photo := waitForStatus(t, e, upload(t, e, "landscape.jpg").ID, "ready")
+	if photo.Hdr != nil {
+		t.Errorf("hdr of a photo = %v, want null", *photo.Hdr)
+	}
+
+	// As an earlier version left them.
+	if _, err := e.pool.Exec(ctx, `UPDATE photos SET hdr = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.ingest.Jobs.Insert(ctx, jobs.BackfillVideoHDRArgs{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for _, video := range videos {
+		for {
+			current, err := e.queries.GetPhoto(ctx, video.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if current.Hdr != nil {
+				if *current.Hdr != want[video.ID] {
+					t.Errorf("backfilled hdr of %d = %v, want %v", video.ID, *current.Hdr, want[video.ID])
+				}
+				if current.PreviewVersion != video.PreviewVersion {
+					t.Error("the backfill made new previews")
+				}
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("the hdr of video %d was not backfilled", video.ID)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	if current, _ := e.queries.GetPhoto(ctx, photo.ID); current.Hdr != nil {
+		t.Error("the backfill probed a photo")
+	}
+}
+
 // The video of a Live Photo that comes after its photo is paired when it is
 // processed, and the photo keeps the video as its motion when its previews
 // are made again. The fixture photo cannot carry Apple's maker notes, so the

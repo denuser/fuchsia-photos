@@ -154,6 +154,8 @@ export default {
     videoUnsupported: 'This browser cannot play this video',
     videoUnsupportedText: 'Download the original to watch it.',
     videoCopyComing: 'A copy it can play is being made, and it appears here when ready.',
+    playOriginal: 'Play the original',
+    videoHdrCopyComing: 'Making a copy of this HDR video with the right colours; it plays when ready',
   },
   viewerFields: {
     camera: 'Camera',

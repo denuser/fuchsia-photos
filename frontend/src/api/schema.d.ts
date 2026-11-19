@@ -1455,6 +1455,8 @@ export interface components {
              * @enum {string|null}
              */
             videoCopy: "ready" | "not_needed" | "failed" | null;
+            /** @description Whether a video uses an HDR transfer function, which some browsers, such as Firefox, play grey; the viewer then waits for the copy. Null for photos and for videos not probed yet */
+            hdr: boolean | null;
             /** @description The photo's description, which everyone who can see the photo sees and only its owner changes. Empty for none */
             description: string;
             /** @description Shooting details from EXIF. Null when the photo has none */

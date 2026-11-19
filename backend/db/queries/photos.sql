@@ -239,6 +239,7 @@ SET status = 'ready',
     exif = @exif,
     preview_format = @preview_format,
     duration = sqlc.narg(duration),
+    hdr = sqlc.narg(hdr),
     -- The video of a Live Photo is its motion too, and an edited copy plays
     -- the motion of its original.
     has_motion = @has_motion OR photo_has_linked_motion(p.id),
@@ -376,6 +377,25 @@ WHERE status = 'ready'
   AND id > @after_id
 ORDER BY id
 LIMIT @max_rows;
+
+-- Videos processed before HDR was recorded, for the backfill_video_hdr job.
+-- name: ListVideosMissingHDR :many
+SELECT id, owner_id, sha256, mime
+FROM photos
+WHERE status = 'ready'
+  AND purged_at IS NULL
+  AND mime LIKE 'video/%'
+  AND hdr IS NULL
+  AND id > @after_id
+ORDER BY id
+LIMIT @max_rows;
+
+-- Moves updated_at too, so that open pages learn whether to wait for the copy.
+-- name: SetVideoHDR :exec
+UPDATE photos
+SET hdr = @hdr,
+    updated_at = now()
+WHERE id = @id AND status = 'ready' AND purged_at IS NULL;
 
 -- Moves updated_at too, so that open pages learn of the motion. An edited
 -- copy shown above the photo plays the same motion.

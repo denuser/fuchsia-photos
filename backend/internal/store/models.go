@@ -124,6 +124,7 @@ type Photo struct {
 	ImportedLatitude  *float64
 	ImportedLongitude *float64
 	Description       string
+	Hdr               *bool
 }
 
 type PhotoArchive struct {

@@ -73,6 +73,9 @@ type photoJSON struct {
 	// The H.264 copy of what the item plays: ready, not_needed, failed, or
 	// null while no copy has been tried.
 	VideoCopy *string `json:"videoCopy"`
+	// Whether a video is HDR, which some browsers play grey: the viewer then
+	// waits for the copy. Null for photos and for videos not probed yet.
+	HDR *bool `json:"hdr"`
 
 	// The description everyone who can see the photo sees; empty for none.
 	Description string `json:"description"`
@@ -120,6 +123,7 @@ func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 		Duration:       p.Duration,
 		HasMotion:      p.HasMotion,
 		VideoCopy:      p.VideoCopy,
+		HDR:            p.Hdr,
 		Description:    p.Description,
 	}
 }

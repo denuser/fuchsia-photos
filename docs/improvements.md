@@ -273,3 +273,21 @@ Questions to settle with the user before a plan:
 - Where it is shown: above the timeline, on a page of its own, or both.
 - Whether it covers only the user's own photos or also the photos shared with them, and whether archived photos are left out, as on the timeline.
 - Whether a day with nothing shows the nearest days instead, and how the date is taken for photos without a time zone.
+
+## 15. Wait for the copy of an HDR video
+
+**Status:** done on 2026-11-19; to check on the NAS in Firefox.
+
+On 2026-11-19 an HDR10 video in H.264 played grey in Firefox on its first play: the browser plays the original, the copy is asked for alongside it, and the viewer does not switch to a copy that arrives while the original plays. The copy, tone mapped, played once the page was reloaded. The user asked for the viewer to show the poster and wait for the copy of an HDR video, as it does when the browser cannot play the original.
+
+The interface does not know which videos are HDR: processing finds it with ffprobe and throws it away.
+
+Plan:
+
+1. A migration adds `photos.hdr boolean`, NULL until the video is probed. Processing sets it where it already probes, and a job at every start probes the videos with no value yet, as the motion backfill does; ffprobe reads only the headers.
+2. The API returns `hdr` with every photo, in the lists too, as the viewer starts from the list item.
+3. The viewer: when a video is HDR and has no copy yet, starting it asks for the copy first and shows the poster with "the copy is being made", then plays the copy. When no copy is coming (copies off, the transcoder unreachable) or it ends `failed` or `not_needed`, the original plays at once.
+4. Backend tests for the column and the API field; the browser test is not changed.
+5. The "Video copies" row in `docs/architecture.md`.
+
+Settled with the user on 2026-11-19: videos only, not the motion of motion photos and Live Photos, which lasts about 3 seconds and comes from another file. On AMD graphics, which make no HDR copies yet, nothing changes: the first play of an HDR video waits through the failed attempts and then plays the original, as AMD is a test machine only.

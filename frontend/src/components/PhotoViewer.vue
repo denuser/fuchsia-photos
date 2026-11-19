@@ -296,17 +296,53 @@ let copyPoll = 0
 // it before the other items waiting. Copies are made only where the
 // graphics allow, so the answer may be that none is coming.
 let copyAsked = 0
-async function askForCopy() {
+async function askForCopy(): Promise<boolean> {
   const id = shown.value.id
   if (videoCopy.value !== null || copyAsked === id) {
-    return
+    return copyComing.value
   }
   copyAsked = id
   const { data } = await api.POST('/photos/{id}/copy', { params: { path: { id } } })
   if (id === shown.value.id && data?.queued) {
     copyComing.value = true
     pollCopy(id)
+    return true
   }
+  return false
+}
+
+// An HDR video plays grey in browsers that do not tone map it, such as
+// Firefox, so its first play waits for the copy, which is tone mapped, rather
+// than starting the original. When no copy is coming, the original plays.
+const waitingForCopy = ref(false)
+
+async function onVideoPlay() {
+  const element = videoElement.value
+  if (waitingForCopy.value) {
+    element?.pause()
+    return
+  }
+  const id = shown.value.id
+  if (!shown.value.hdr || videoCopy.value !== null || copyAsked === id || element === null) {
+    askForCopy()
+    return
+  }
+  element.pause()
+  waitingForCopy.value = true
+  const coming = await askForCopy()
+  if (!coming && waitingForCopy.value && id === shown.value.id) {
+    stopWaitingForCopy()
+  }
+}
+
+// Plays what the video element now holds: the copy, or the original when no
+// copy came or the user chose not to wait, as when the transcoder stopped
+// halfway or the copy of a long video takes minutes. A copy that arrives
+// later does not interrupt the original. A browser may refuse to start it outside the user's click; the
+// user then starts it.
+function stopWaitingForCopy() {
+  waitingForCopy.value = false
+  nextTick(() => videoElement.value?.play().catch(() => {}))
 }
 
 function pollCopy(id: number) {
@@ -329,6 +365,16 @@ function copyArrived(state: NonNullable<Photo['videoCopy']>) {
   copyComing.value = false
   clearTimeout(copyPoll)
   videoCopy.value = state
+  if (waitingForCopy.value) {
+    if (state === 'ready') {
+      videoSource.value = copyUrl(shown.value.id)
+      // An original the browser could not decode, such as HEVC, may have
+      // failed while the viewer waited.
+      unplayable.value = false
+    }
+    stopWaitingForCopy()
+    return
+  }
   const element = videoElement.value
   const started = element !== null && (!element.paused || element.currentTime > 0)
   if (state === 'ready' && (unplayable.value || !started)) {
@@ -413,6 +459,7 @@ watch(
     videoCopy.value = shown.value.videoCopy
     videoSource.value = playSource()
     copyComing.value = false
+    waitingForCopy.value = false
     clearTimeout(copyPoll)
   },
 )
@@ -867,8 +914,14 @@ onBeforeUnmount(() => {
             preload="none"
             @error="onVideoUnplayable"
             @loadedmetadata="onVideoMetadata"
-            @play="askForCopy"
+            @play="onVideoPlay"
           />
+          <div v-if="waitingForCopy && !unplayable" class="unplayable" data-testid="video-hdr-copy-coming">
+            <v-progress-circular indeterminate size="16" width="2" class="mr-2" />{{ t('viewer.videoHdrCopyComing') }}
+            <div>
+              <v-btn variant="text" class="mt-2" data-testid="video-play-original" :text="t('viewer.playOriginal')" @click="stopWaitingForCopy" />
+            </div>
+          </div>
           <template v-else>
             <img
               :src="previewUrl(shown.id, 'viewer')"

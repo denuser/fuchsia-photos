@@ -111,13 +111,19 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) err
 		previews      media.Previews
 		width, height int
 		duration      *float64
+		hdr           *bool
 		hasMotion     bool
 	)
 	if video {
-		previews, width, height, duration, err = renderVideo(ctx, path, settings)
+		var probed media.Video
+		previews, width, height, probed, err = renderVideo(ctx, path, settings)
 		if err != nil {
 			return err
 		}
+		if probed.Duration > 0 {
+			duration = &probed.Duration
+		}
+		hdr = &probed.HDR
 	} else {
 		width, height, err = media.Dimensions(path)
 		if err != nil {
@@ -152,6 +158,7 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) err
 		Exif:          meta.Tags,
 		PreviewFormat: &format,
 		Duration:      duration,
+		Hdr:           hdr,
 		HasMotion:     hasMotion,
 	})
 	if err != nil {
@@ -265,7 +272,7 @@ func LinkVersions(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, ids [
 // renderVideo makes the previews of a video from its poster frame. A missing
 // ffmpeg or a cancelled job is worth a retry; anything else means the file
 // cannot be read.
-func renderVideo(ctx context.Context, path string, settings media.Settings) (media.Previews, int, int, *float64, error) {
+func renderVideo(ctx context.Context, path string, settings media.Settings) (media.Previews, int, int, media.Video, error) {
 	unreadable := func(err error) error {
 		if media.ToolMissing(err) || ctx.Err() != nil {
 			return err
@@ -274,17 +281,13 @@ func renderVideo(ctx context.Context, path string, settings media.Settings) (med
 	}
 	video, err := media.ProbeVideo(ctx, path)
 	if err != nil {
-		return media.Previews{}, 0, 0, nil, unreadable(err)
+		return media.Previews{}, 0, 0, media.Video{}, unreadable(err)
 	}
 	previews, width, height, err := media.RenderVideo(ctx, path, video, settings)
 	if err != nil {
-		return media.Previews{}, 0, 0, nil, unreadable(err)
+		return media.Previews{}, 0, 0, media.Video{}, unreadable(err)
 	}
-	var duration *float64
-	if video.Duration > 0 {
-		duration = &video.Duration
-	}
-	return previews, width, height, duration, nil
+	return previews, width, height, video, nil
 }
 
 // extractMotion keeps the video of a motion photo next to its previews and
@@ -539,6 +542,58 @@ func (w *backfillMotionWorker) Work(ctx context.Context, _ *river.Job[BackfillMo
 	}
 }
 
+// BackfillVideoHDRArgs queues the probing of videos processed before
+// processing recorded whether they are HDR. It runs at every start and once a
+// day; a video ffprobe cannot read is tried again then.
+type BackfillVideoHDRArgs struct{}
+
+// Kind implements river.JobArgs.
+func (BackfillVideoHDRArgs) Kind() string { return "backfill_video_hdr" }
+
+// InsertOpts implements river.JobArgsWithInsertOpts. New photos go first.
+func (BackfillVideoHDRArgs) InsertOpts() river.InsertOpts {
+	return river.InsertOpts{Priority: 4}
+}
+
+type backfillVideoHDRWorker struct {
+	river.WorkerDefaults[BackfillVideoHDRArgs]
+	queries *store.Queries
+	layout  storage.Layout
+}
+
+// Timeout leaves room for a library with many videos; ffprobe reads only the
+// headers. A job stopped by a restart starts over with the videos still left.
+func (w *backfillVideoHDRWorker) Timeout(*river.Job[BackfillVideoHDRArgs]) time.Duration {
+	return time.Hour
+}
+
+func (w *backfillVideoHDRWorker) Work(ctx context.Context, _ *river.Job[BackfillVideoHDRArgs]) error {
+	var after int64
+	for {
+		videos, err := w.queries.ListVideosMissingHDR(ctx, store.ListVideosMissingHDRParams{AfterID: after, MaxRows: 100})
+		if err != nil {
+			return fmt.Errorf("list videos: %w", err)
+		}
+		if len(videos) == 0 {
+			return nil
+		}
+		for _, v := range videos {
+			after = v.ID
+			video, err := media.ProbeVideo(ctx, w.layout.Original(v.OwnerID, v.Sha256, v.Mime))
+			if err != nil {
+				if media.ToolMissing(err) || ctx.Err() != nil {
+					return err
+				}
+				slog.Warn("probe video", "photo", v.ID, "error", err)
+				continue
+			}
+			if err := w.queries.SetVideoHDR(ctx, store.SetVideoHDRParams{ID: v.ID, Hdr: &video.HDR}); err != nil {
+				return fmt.Errorf("update video: %w", err)
+			}
+		}
+	}
+}
+
 // PairLivePhotosArgs queues the pairing of Live Photos that processing did
 // not pair: files processed before the application paired them, and files
 // whose pairing failed. It links the versions processing did not link too.
@@ -644,6 +699,7 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 	river.AddWorker(workers, &cleanupWorker{queries: queries, layout: cfg.Layout})
 	river.AddWorker(workers, &backfillMotionWorker{process: process})
 	river.AddWorker(workers, &pairLivePhotosWorker{pool: pool})
+	river.AddWorker(workers, &backfillVideoHDRWorker{queries: queries, layout: cfg.Layout})
 	if cfg.Register != nil {
 		cfg.Register(workers)
 	}
@@ -667,6 +723,11 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 		river.NewPeriodicJob(
 			river.PeriodicInterval(24*time.Hour),
 			func() (river.JobArgs, *river.InsertOpts) { return PairLivePhotosArgs{}, nil },
+			&river.PeriodicJobOpts{RunOnStart: true},
+		),
+		river.NewPeriodicJob(
+			river.PeriodicInterval(24*time.Hour),
+			func() (river.JobArgs, *river.InsertOpts) { return BackfillVideoHDRArgs{}, nil },
 			&river.PeriodicJobOpts{RunOnStart: true},
 		),
 	}, cfg.PeriodicJobs...)
