@@ -241,6 +241,7 @@ func LinkVersions(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, ids [
 		return 0, fmt.Errorf("list versions: %w", err)
 	}
 	linked := 0
+	var editedErr error
 	for _, c := range candidates {
 		if storage.IsRAW(c.EditedMime) || !sameTakenAt(c.EditedExif, c.EditedMime, c.OriginalExif, c.OriginalMime) {
 			continue
@@ -260,16 +261,33 @@ func LinkVersions(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, ids [
 			return nil
 		})
 		if err != nil {
-			return linked, fmt.Errorf("link version: %w", err)
+			editedErr = fmt.Errorf("link version: %w", err)
+			break
 		}
 	}
-	rawLinked := 0
+	rawLinked, rawErr := linkRAWVersions(ctx, pool, ownerID, ids)
+	if rawErr != nil {
+		rawErr = fmt.Errorf("link RAW versions: %w", rawErr)
+	}
+	return linked + rawLinked, errors.Join(editedErr, rawErr)
+}
+
+// linkRAWVersions hides each RAW under its JPEG. Most processed photos have no
+// pair, so the candidates are looked up before the lock of PairLivePhotos is
+// taken, and again under it only when there are some.
+func linkRAWVersions(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, ids []int64) (int, error) {
+	params := store.ListRAWVersionCandidatesParams{OwnerID: ownerID, Ids: ids}
+	pairs, err := store.New(pool).ListRAWVersionCandidates(ctx, params)
+	if err != nil || len(pairs) == 0 {
+		return 0, err
+	}
+	linked := 0
 	err = pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 		queries := store.New(tx)
 		if err := queries.LockPhotoLinks(ctx); err != nil {
 			return err
 		}
-		pairs, err := queries.ListRAWVersionCandidates(ctx, store.ListRAWVersionCandidatesParams{OwnerID: ownerID, Ids: ids})
+		pairs, err := queries.ListRAWVersionCandidates(ctx, params)
 		if err != nil {
 			return err
 		}
@@ -278,14 +296,14 @@ func LinkVersions(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, ids [
 			if err != nil {
 				return err
 			}
-			rawLinked += int(n)
+			linked += int(n)
 		}
 		return nil
 	})
 	if err != nil {
-		return linked, fmt.Errorf("link RAW versions: %w", err)
+		return 0, err
 	}
-	return linked + rawLinked, nil
+	return linked, nil
 }
 
 // renderVideo makes the previews of a video from its poster frame. A missing

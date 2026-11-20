@@ -414,8 +414,9 @@ JOIN photos v ON v.id = l.hidden_id
 WHERE l.shown_id = @photo_id AND l.kind = 'live' AND v.purged_at IS NULL;
 
 -- Where the motion of a photo may come from, in order: the photo itself and
--- the original of an edited copy, each with the video of its Live Photo if it
--- has one. A photo without such a video plays the motion extracted from it.
+-- the original of an edited copy or the RAW under a JPEG, each with the video
+-- of its Live Photo if it has one. A photo without such a video plays the
+-- motion extracted from it.
 -- name: ListMotionSources :many
 SELECT c.id AS photo_id, v.owner_id AS video_owner_id, v.sha256 AS video_sha256, v.mime AS video_mime
 FROM (
@@ -424,7 +425,7 @@ FROM (
     SELECT e.hidden_id, 1
     FROM photo_links e
     JOIN photos o ON o.id = e.hidden_id
-    WHERE e.shown_id = @photo_id AND e.kind = 'edited' AND o.has_motion AND o.purged_at IS NULL
+    WHERE e.shown_id = @photo_id AND e.kind IN ('edited', 'raw') AND o.has_motion AND o.purged_at IS NULL
 ) c
 LEFT JOIN photo_links l ON l.shown_id = c.id AND l.kind = 'live'
 LEFT JOIN photos v ON v.id = l.hidden_id AND v.purged_at IS NULL
@@ -508,6 +509,8 @@ WITH stills AS (
       AND s.status = 'ready'
       AND s.deleted_at IS NULL
       AND NOT EXISTS (SELECT 1 FROM photo_links o WHERE o.shown_id = s.id AND o.kind = 'live')
+      -- A RAW hidden under its JPEG leaves the video to the JPEG.
+      AND NOT EXISTS (SELECT 1 FROM photo_links h WHERE h.hidden_id = s.id AND h.kind = 'raw')
       AND NOT EXISTS (SELECT 1 FROM imported_metadata m JOIN photos o ON o.id = m.original_id
                       WHERE m.photo_id = s.id AND o.owner_id = s.owner_id AND o.purged_at IS NULL
                         AND o.content_identifier = s.content_identifier)

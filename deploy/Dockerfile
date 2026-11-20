@@ -98,11 +98,11 @@ COPY --from=ffmpeg-intel /opt/ffmpeg/bin/ffmpeg /usr/local/bin/ffmpeg-intel
 CMD ["sh", "-c", "go vet ./... && go test ./..."]
 
 # Regenerates the fixtures of internal/media. Making the sample videos needs
-# Debian's full ffmpeg, with lavfi and libx264.
+# Debian's full ffmpeg, with lavfi and libx264, and the DNG files python3.
 FROM backend AS fixtures
 RUN rm /usr/local/bin/ffmpeg /usr/local/bin/ffprobe \
     && apt-get update \
-    && apt-get install --yes --no-install-recommends libvips-tools libheif-plugin-x265 ffmpeg \
+    && apt-get install --yes --no-install-recommends libvips-tools libheif-plugin-x265 ffmpeg python3 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src/backend/internal/media/testdata
 CMD ["sh", "generate.sh"]

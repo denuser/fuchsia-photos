@@ -336,3 +336,15 @@ Draft plan:
 Settled with the user on 2026-11-20: all the formats above; previews from the embedded JPEG when it is large enough and a LibRaw decode otherwise; RAW and JPEG pairs linked in this improvement, the JPEG shown and the RAW under it.
 
 The implementation uses explicit `magickload` with a `DNG:` prefix. On Debian trixie, the ImageMagick coder handed the portrait DNG’s orientation to libvips as metadata. Both paths now apply the orientation when they make the thumbnail, and a synthetic portrait fixture covers the three preview choices. Direct decoding succeeded for one CC0 sample of every supported format from [raw.pixls.us](https://raw.pixls.us/). On a Ryzen AI 7 350, the trial of 12 files with WebP previews took 2.93 s with one worker, 1.60 s with two and 1.14 s with three. Peak process memory across the run was about 878 MB. The NAS N150 measurements are still pending.
+
+After review on 2026-11-20, only one full decode runs at a time, whatever the number of workers; previews from the embedded JPEG do not wait. A decode that has started cannot be stopped: a job cancelled at shutdown or by its 2-minute timeout returns only when LibRaw finishes.
+
+To check on the NAS (N150) before the release:
+
+1. Memory: import a folder of large RAW files that need a full decode, such as Sony ARW (their 1616x1080 preview is below the default viewer size of 2048) and a 45 MP or larger NEF or CR3, with the default number of workers. Watch the container's peak memory with `docker stats`; it should stay near one decode, about 0.9 GB, not one per worker.
+2. Time: the duration of one full decode of the largest file. It must stay well under the 2-minute processing timeout, and ideally under the 30-second grace period of a shutdown, which a running decode delays.
+3. Restart during a decode: stop the app while a large RAW is decoding and check how long it takes to stop, and that the photo is processed again after the start.
+4. Embedded JPEG path: the time to process a folder of NEF, CR2, CR3 and RAF files whose preview reaches the viewer size, against a folder of JPEGs of the same count.
+5. Formats: one file of each supported format from a real camera, if at hand. Files that LibRaw in the image cannot decode, such as Nikon High Efficiency NEF, should still get a preview from the embedded JPEG, and the log should give LibRaw's reason rather than an empty error.
+6. Pairs: a folder scan of a camera card with RAW + JPEG shows only the JPEGs, the viewer switches to the RAW, and the pair goes into the trash and back together. A rescan of a folder scanned by an earlier version picks up the RAW files it skipped.
+7. Bulk import of mixed files (photos, videos, RAW): the processing queue should drain at about the same rate as before RAW support, now that photos without a pair no longer take the linking lock.

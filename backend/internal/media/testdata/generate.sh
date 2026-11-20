@@ -1,6 +1,6 @@
 #!/bin/sh
 # Regenerates the test fixtures. Requires libvips-tools, libimage-exiftool-perl,
-# libheif-plugin-x265 and ffmpeg. Run through `make fixtures`.
+# libheif-plugin-x265, ffmpeg and python3. Run through `make fixtures`.
 set -eu
 
 tmp=$(mktemp -d)
@@ -28,6 +28,13 @@ vips copy "$tmp/large.v" 'large.jpg[Q=40]'
 cp landscape.jpg rotated.jpg
 exiftool -q -overwrite_original -n -Orientation=6 -GPSLatitude=59.93 -GPSLongitude=30.33 \
     -Make=Canon '-Model=Canon EOS R5' '-LensModel=RF24-70mm F2.8 L IS USM' rotated.jpg
+
+# Camera RAW: a 64x48 Bayer image with a 1200x900 JPEG preview, orientation 6.
+# The second file's sensor image cannot be decoded, so only its preview works.
+image 1200 900 "$tmp/preview.v"
+vips copy "$tmp/preview.v" "$tmp/preview.jpg"
+python3 dng.py "$tmp/preview.jpg" rotated.dng
+python3 dng.py "$tmp/preview.jpg" rotated-preview-only.dng --broken-sensor
 
 # Two seconds of 320x240 video.
 clip() {

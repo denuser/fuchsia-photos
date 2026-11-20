@@ -77,3 +77,76 @@ func TestRAWVersions(t *testing.T) {
 		t.Fatalf("RAW was not restored with JPEG: %v", err)
 	}
 }
+
+// The video of a Live Photo shot as RAW + JPEG plays on the JPEG, whether it
+// arrives after the pair is linked or was paired with the RAW before.
+func TestRAWVersionLivePhoto(t *testing.T) {
+	for _, videoFirst := range []bool{false, true} {
+		name := "video after the pair"
+		if videoFirst {
+			name = "video paired with the RAW before"
+		}
+		t.Run(name, func(t *testing.T) {
+			e := setup(t)
+			e.addUser("anna", auth.RoleUser)
+			anna := e.loggedIn("anna")
+			ctx := context.Background()
+
+			res := anna.uploadBytes("IMG_0001.DNG", []byte("II*\x00\x08\x00\x00\x00"))
+			wantStatus(t, res, http.StatusCreated)
+			raw := decode[uploadResult](t, res).Photo.ID
+			jpeg := anna.addPhoto("landscape.jpg")
+			if _, err := e.pool.Exec(ctx, `UPDATE photos SET original_name = 'IMG_0001.JPG' WHERE id = $1`, jpeg); err != nil {
+				t.Fatal(err)
+			}
+			for _, id := range []int64{raw, jpeg} {
+				markLive(t, e, id, "LIVE-RAW")
+				_, err := e.pool.Exec(ctx, `UPDATE photos SET exif = exif || jsonb_build_object(
+					'DateTimeOriginal', '2024:05:01 12:00:00', 'SubSecTimeOriginal', '5', 'Make', 'Apple', 'Model', 'iPhone 15 Pro')
+					WHERE id = $1`, id)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			video := anna.addPhoto("video.mov")
+			if videoFirst {
+				markLive(t, e, video, "LIVE-RAW")
+				if paired := pairLivePhotos(t, e); paired != 1 {
+					t.Fatalf("paired %d, want 1", paired)
+				}
+			}
+			if n := linkVersions(t, e); n != 1 {
+				t.Fatalf("linked %d photos, want one RAW + JPEG pair", n)
+			}
+			if !videoFirst {
+				markLive(t, e, video, "LIVE-RAW")
+				if paired := pairLivePhotos(t, e); paired != 1 {
+					t.Fatalf("paired %d, want 1", paired)
+				}
+				if shown := liveShownID(t, e, video); shown == nil || *shown != jpeg {
+					under := "nothing"
+					if shown != nil {
+						under = itoa(*shown)
+					}
+					t.Fatalf("video is under %s, want the JPEG %d", under, jpeg)
+				}
+			}
+
+			got := decode[photoJSON](t, anna.get("/api/v1/photos/"+itoa(jpeg)))
+			if !got.HasMotion {
+				t.Error("JPEG has no motion")
+			}
+			sources, err := e.queries.ListMotionSources(ctx, jpeg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, s := range sources {
+				found = found || s.VideoSha256 != nil
+			}
+			if !found {
+				t.Errorf("no motion source with a video for the JPEG: %+v", sources)
+			}
+		})
+	}
+}

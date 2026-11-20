@@ -15,7 +15,10 @@ typedef struct {
 	VipsInterpretation interpretation;
 } RawThumbnail;
 
-static int raw_thumbnail(const char *path, int edge, int *width, int *height, RawThumbnail *result) {
+// raw_thumbnail copies libvips's error text into *error on failure. The
+// buffer is shared by the whole process, so it is taken at once, before
+// another thread's operation can clear or extend it.
+static int raw_thumbnail(const char *path, int edge, int *width, int *height, RawThumbnail *result, char **error) {
 	VipsImage *source = NULL;
 	VipsImage *thumbnail = NULL;
 
@@ -40,7 +43,11 @@ done:
 		g_object_unref(thumbnail);
 	if (source)
 		g_object_unref(source);
-	return result->pixels ? 0 : -1;
+	if (!result->pixels) {
+		*error = vips_error_buffer_copy();
+		return -1;
+	}
+	return 0;
 }
 */
 import "C"
@@ -55,7 +62,6 @@ import (
 	"image/jpeg"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 	"unsafe"
@@ -63,7 +69,17 @@ import (
 	"github.com/davidbyttow/govips/v2/vips"
 )
 
+// rawDecodes lets one full RAW decode run at a time. A decode holds the whole
+// sensor image, close to 1 GB for a large file, so several workers decoding
+// at once could take more memory than a small NAS has. Previews from the
+// embedded JPEG do not wait for it.
+var rawDecodes = make(chan struct{}, 1)
+
 // renderRAW uses the best available source and reports its upright dimensions.
+// A full decode cannot be stopped once it has started: LibRaw runs inside
+// ImageMagick through cgo and takes no context. Cancelling ctx stops a job that
+// is waiting for its turn, and one that is decoding returns when the decode
+// ends.
 func renderRAW(ctx context.Context, path string, settings Settings) (Previews, int, int, error) {
 	path, err := filepath.Abs(path)
 	if err != nil {
@@ -81,10 +97,10 @@ func renderRAW(ctx context.Context, path string, settings Settings) (Previews, i
 		}
 		embeddedErr = err
 	}
-	if err := ctx.Err(); err != nil {
-		return Previews{}, 0, 0, err
+	previews, width, height, err := decodeRAWInTurn(ctx, path, settings)
+	if ctxErr := ctx.Err(); ctxErr != nil && err != nil {
+		return Previews{}, 0, 0, ctxErr
 	}
-	previews, width, height, err := decodeRAW(path, settings)
 	if err != nil && embeddedErr == nil && len(embedded) != 0 {
 		fallback, w, h, fallbackErr := renderEmbeddedRAW(embedded, orientation, settings)
 		if fallbackErr == nil {
@@ -157,6 +173,20 @@ func renderEmbeddedRAW(jpeg []byte, orientation int, settings Settings) (Preview
 	return previews, width, height, err
 }
 
+// decodeRAWInTurn waits for the decode slot unless ctx ends first.
+func decodeRAWInTurn(ctx context.Context, path string, settings Settings) (Previews, int, int, error) {
+	select {
+	case rawDecodes <- struct{}{}:
+	case <-ctx.Done():
+		return Previews{}, 0, 0, ctx.Err()
+	}
+	defer func() { <-rawDecodes }()
+	if err := ctx.Err(); err != nil {
+		return Previews{}, 0, 0, err
+	}
+	return decodeRAW(path, settings)
+}
+
 func disableVipsCache() {
 	C.vips_cache_set_max(0)
 }
@@ -166,16 +196,13 @@ func decodeRAW(path string, settings Settings) (Previews, int, int, error) {
 	defer C.free(unsafe.Pointer(filename))
 	var width, height C.int
 	var thumbnail C.RawThumbnail
-	// Read libvips's error buffer on the thread that ran the operation.
-	runtime.LockOSThread()
-	result := C.raw_thumbnail(filename, C.int(settings.ViewerEdge), &width, &height, &thumbnail)
-	var message string
-	if result != 0 {
-		message = strings.TrimSpace(C.GoString(C.vips_error_buffer()))
-		C.vips_error_clear()
-	}
-	runtime.UnlockOSThread()
-	if result != 0 {
+	var cError *C.char
+	if C.raw_thumbnail(filename, C.int(settings.ViewerEdge), &width, &height, &thumbnail, &cError) != 0 {
+		message := strings.TrimSpace(C.GoString(cError))
+		C.g_free(C.gpointer(cError))
+		if message == "" {
+			message = "unknown error"
+		}
 		return Previews{}, 0, 0, fmt.Errorf("decode RAW %s: %s", path, message)
 	}
 	pixels := unsafe.Slice((*byte)(thumbnail.pixels), int(thumbnail.size))
