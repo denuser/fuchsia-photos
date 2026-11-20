@@ -48,7 +48,7 @@ var (
 )
 
 // ErrUnsupportedMessage tells a client which files are supported.
-const ErrUnsupportedMessage = "only JPEG, PNG, WebP and HEIC photos and MP4 and MOV videos are supported"
+const ErrUnsupportedMessage = "only JPEG, PNG, WebP, HEIC and camera RAW photos and MP4 and MOV videos are supported"
 
 // Service adds photos and videos to the library.
 type Service struct {
@@ -107,7 +107,7 @@ func (s *Service) ingest(ctx context.Context, ownerID int64, r io.Reader, name s
 	if err != nil && !errors.Is(err, io.EOF) {
 		return Result{}, fmt.Errorf("read upload: %w", err)
 	}
-	mime, ok := detectMIME(head)
+	mime, ok := detectNamedMIME(head, name)
 	if !ok {
 		return Result{}, ErrUnsupported
 	}
@@ -147,7 +147,7 @@ func (s *Service) Import(ctx context.Context, ownerID int64, file io.ReadSeeker,
 	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 		return Result{}, fmt.Errorf("read file: %w", err)
 	}
-	mime, ok := detectMIME(head[:n])
+	mime, ok := detectNamedMIME(head[:n], name)
 	if !ok {
 		return Result{}, ErrUnsupported
 	}
@@ -403,6 +403,30 @@ func (s *Service) duplicate(ctx context.Context, tx pgx.Tx, queries *store.Queri
 	return Result{Photo: restored, Duplicate: true, Restored: true}, nil
 }
 
+// detectNamedMIME uses the name only to distinguish TIFF-based camera RAWs.
+func detectNamedMIME(head []byte, name string) (string, bool) {
+	if len(head) >= 4 {
+		switch string(head[:4]) {
+		case "IIRO", "IIRS", "MMOR":
+			return storage.RAWORF, true
+		case "IIU\x00":
+			return storage.RAWRW2, true
+		case "II*\x00", "MM\x00*":
+			if len(head) >= 12 && string(head[8:12]) == "CR\x02\x00" {
+				return storage.RAWCR2, true
+			}
+			switch mime := storage.RAWMIME(filepath.Ext(cleanName(name))); mime {
+			case storage.RAWNEF, storage.RAWNRW, storage.RAWCR2, storage.RAWARW, storage.RAWDNG, storage.RAWPEF, storage.RAWSRW:
+				return mime, true
+			}
+		}
+	}
+	if len(head) >= 16 && string(head[:16]) == "FUJIFILMCCD-RAW " {
+		return storage.RAWRAF, true
+	}
+	return detectMIME(head)
+}
+
 // detectMIME identifies a file by its content, not by its name. HEIC, MP4 and
 // QuickTime all start with an ftyp box, so its brands tell them apart.
 // http.DetectContentType is not used for it, as it calls any file with an mp4
@@ -425,6 +449,8 @@ func detectFtyp(head []byte) (string, bool) {
 		return "image/heic", true
 	}
 	switch string(head[8:12]) {
+	case "crx ":
+		return storage.RAWCR3, true
 	case "qt  ":
 		return "video/quicktime", true
 	case "isom", "iso2", "iso3", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "M4V ":

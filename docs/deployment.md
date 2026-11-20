@@ -144,6 +144,14 @@ Revoke a password in the profile if a device is lost. Whoever has it can upload 
 
 The server logs every WebDAV request with its method, path, status and client, to see how real clients behave.
 
+## RAW photos
+
+Upload NEF, NRW, CR2, CR3, ARW, DNG (including Apple ProRAW), RAF, ORF, RW2, PEF and SRW through the browser, WebDAV or an import. Run a new folder or Takeout import to pick up RAW files counted as unsupported by an earlier version.
+
+For the viewer, the server uses the camera's largest embedded JPEG if it reaches the configured viewer size. Otherwise LibRaw decodes the image. Some camera encodings need a newer LibRaw release, such as Nikon's High Efficiency NEF. When decoding fails, an embedded JPEG can still make a preview. The download button saves the original.
+
+A RAW and JPEG from the same owner are paired if the base name, capture time including sub-seconds, and camera make and model match. The files can come from different directories or uploads. The JPEG stays in the library view. Its owner can switch to RAW in the viewer. Both files go into and out of the trash together.
+
 ## Backups
 
 | What | Where | How |

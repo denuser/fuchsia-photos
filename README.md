@@ -43,7 +43,7 @@ It is built for modest hardware. It is developed and measured on an Intel N150 w
 - Nightly database dumps with a tested restore, request logs and the job queue on the administration page
 - The interface in ten languages: English, Russian, Simplified Chinese, Spanish, Brazilian Portuguese, German, French, Japanese, Korean and Italian; light, dark and high contrast themes
 
-Supported formats: JPEG, PNG, WebP and HEIC photos, MP4 and MOV videos, and the motion of Google and Samsung motion photos and iPhone Live Photos. A Live Photo needs both of its files, which the browser's file picker does not hand over: see [Live Photos](docs/deployment.md#live-photos). RAW is not supported yet.
+Supported formats: JPEG, PNG, WebP and HEIC photos, MP4 and MOV videos, and the motion of Google and Samsung motion photos and iPhone Live Photos. A Live Photo needs both of its files, which the browser's file picker does not hand over: see [Live Photos](docs/deployment.md#live-photos). Camera RAW formats include NEF, NRW, CR2, CR3, ARW, DNG (including Apple ProRAW), RAF, ORF, RW2, PEF and SRW. Matched RAW + JPEG pairs appear as one item. See [RAW photos](docs/deployment.md#raw-photos).
 
 ## Requirements
 

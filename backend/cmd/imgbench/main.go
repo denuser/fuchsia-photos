@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"flag"
 	"fmt"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/denuser/fuchsia-photos/backend/internal/media"
+	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 )
 
 var extensions = map[string]bool{
@@ -125,7 +127,8 @@ func findPhotos(root string, limit int) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if !d.IsDir() && extensions[strings.ToLower(filepath.Ext(path))] {
+		ext := strings.ToLower(filepath.Ext(path))
+		if !d.IsDir() && (extensions[ext] || storage.RAWMIME(ext) != "") {
 			files = append(files, path)
 		}
 		return nil
@@ -182,7 +185,7 @@ func process(path, outPrefix string, format media.Format) result {
 	}
 	settings := media.DefaultSettings()
 	settings.Format = format
-	previews, err := media.Render(path, settings)
+	previews, _, _, err := media.RenderPhoto(context.Background(), path, storage.RAWMIME(filepath.Ext(path)), settings)
 	if err != nil {
 		res.err = err
 		return res

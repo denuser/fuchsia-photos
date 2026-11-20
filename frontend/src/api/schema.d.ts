@@ -266,7 +266,7 @@ export interface paths {
         put?: never;
         /**
          * Upload a photo or a video
-         * @description JPEG, PNG, WebP and HEIC photos up to 512 MiB, MP4 and MOV videos up to 4 GiB
+         * @description JPEG, PNG, WebP, HEIC and RAW photos (NEF, NRW, CR2, CR3, ARW, DNG, RAF, ORF, RW2, PEF, SRW) up to 512 MiB, MP4 and MOV videos up to 4 GiB
          */
         post: operations["uploadPhoto"];
         delete?: never;
@@ -1440,10 +1440,10 @@ export interface components {
             /** @description Whether a motion photo or a Live Photo has a video to play from /photos/{id}/motion */
             hasMotion: boolean;
             /**
-             * @description Set on a file hidden under another photo to the kind of link, live for the video of a Live Photo and edited for the original of an edited copy. Lists leave such files out; only events carry them, so that pages drop them
+             * @description Set on a file hidden under another photo to the kind of link, live for the video of a Live Photo, edited for the original of an edited copy, and raw for a camera RAW paired with its JPEG. Lists leave such files out; only events carry them, so that pages drop them
              * @enum {string|null}
              */
-            hiddenUnder: "live" | "edited" | null;
+            hiddenUnder: "live" | "edited" | "raw" | null;
             /** @description Whether the photo is the current user's favorite. Only GET /photos/{id} gives it */
             favorite?: boolean;
             /** @description Whether the photo is in the current user's archive. Only GET /photos/{id} gives it */
@@ -1467,7 +1467,7 @@ export interface components {
         PhotoVersion: {
             /** Format: int64 */
             id: number;
-            /** @description live for the video of a Live Photo, which plays as the photo's motion, and edited for the original of an edited copy. Clients leave out kinds they do not know */
+            /** @description live for the video of a Live Photo, which plays as the photo's motion, edited for the original of an edited copy, and raw for a camera RAW paired with its JPEG. Clients leave out kinds they do not know */
             kind: string;
         };
         /** @description Each field is present only when the photo has it */

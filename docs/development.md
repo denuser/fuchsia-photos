@@ -6,7 +6,7 @@
 - Go 1.27
 - Node.js 24 and pnpm 12
 - Google Chrome, for `make e2e`
-- libvips, pkg-config, exiftool and ffmpeg: `brew install vips pkg-config exiftool ffmpeg`
+- libvips, pkg-config, exiftool and ffmpeg: `brew install vips pkg-config exiftool ffmpeg`. RAW decoding uses libvips with the ImageMagick loader and ImageMagick with LibRaw, as packaged in the Debian image.
 - uv, for the ML service: `brew install uv`
 
 The backend links against libvips through cgo, so it needs a working C toolchain on the host.

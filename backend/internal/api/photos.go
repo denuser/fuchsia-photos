@@ -60,8 +60,8 @@ type photoJSON struct {
 	// Whether a motion photo or a Live Photo has a video to play.
 	HasMotion bool `json:"hasMotion"`
 	// The kind of link a photo is hidden under another one with: live for the
-	// video of a Live Photo, edited for the original of an edited copy. Only
-	// events carry hidden photos, so that pages drop them.
+	// video of a Live Photo, edited for the original of an edited copy, and
+	// raw for a camera RAW paired with a JPEG. Only events carry hidden photos.
 	HiddenUnder *string `json:"hiddenUnder"`
 	// The versions hidden right under the photo, given only to its owner and
 	// only for one photo, as the viewer loads it.
@@ -510,7 +510,15 @@ func (s *server) trashPhotos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := currentUser(r)
-	if err := s.Queries.TrashPhotos(r.Context(), store.TrashPhotosParams{Ids: ids, ActorID: user.ID, ActorIsAdmin: isAdmin(user)}); err != nil {
+	ctx := r.Context()
+	err := pgx.BeginFunc(ctx, s.Ingest.Pool, func(tx pgx.Tx) error {
+		queries := store.New(tx)
+		if err := queries.LockPhotoLinks(ctx); err != nil {
+			return err
+		}
+		return queries.TrashPhotos(ctx, store.TrashPhotosParams{Ids: ids, ActorID: user.ID, ActorIsAdmin: isAdmin(user)})
+	})
+	if err != nil {
 		internalError(w, r, err)
 		return
 	}

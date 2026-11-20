@@ -19,58 +19,105 @@ WHERE e.owner_id = o.owner_id
        OR m.photo_id = ANY (sqlc.narg(ids)::bigint[]) OR m.original_id = ANY (sqlc.narg(ids)::bigint[]))
 ORDER BY m.original_id, m.photo_id;
 
--- Hides an original under its edited copy, if both are still as
--- ListVersionCandidates found them. The copy takes over what the original
+-- Find unambiguous pairs within the selected owners. The candidate name set
+-- limits a per-photo lookup without masking other matches for that same name.
+-- name: ListRAWVersionCandidates :many
+WITH eligible AS NOT MATERIALIZED (
+    SELECT p.id, p.owner_id, p.mime, lower(regexp_replace(p.original_name, '\.[^.]+$', '')) AS stem,
+           nullif(btrim(p.exif ->> 'DateTimeOriginal'), '') AS taken,
+           rtrim(coalesce(p.exif ->> 'SubSecTimeOriginal', ''), '0') AS fraction,
+           nullif(lower(btrim(p.exif ->> 'Make')), '') AS make,
+           nullif(lower(btrim(p.exif ->> 'Model')), '') AS model
+    FROM photos p
+    WHERE p.mime IN ('image/jpeg', 'image/x-nikon-nef', 'image/x-nikon-nrw', 'image/x-canon-cr2',
+                     'image/x-canon-cr3', 'image/x-sony-arw', 'image/x-adobe-dng', 'image/x-fuji-raf',
+                     'image/x-olympus-orf', 'image/x-panasonic-rw2', 'image/x-pentax-pef', 'image/x-samsung-srw')
+      AND p.status = 'ready' AND p.deleted_at IS NULL
+      AND (sqlc.narg(owner_id)::bigint IS NULL OR p.owner_id = sqlc.narg(owner_id)::bigint)
+),
+names AS (
+    SELECT DISTINCT owner_id, stem FROM eligible
+    WHERE sqlc.narg(ids)::bigint[] IS NULL OR id = ANY (sqlc.narg(ids)::bigint[])
+),
+pairs AS (
+    SELECT r.id AS raw_id, j.id AS jpeg_id,
+           count(*) OVER (PARTITION BY r.id) AS jpeg_matches,
+           count(*) OVER (PARTITION BY j.id) AS raw_matches
+    FROM names n
+    JOIN eligible r ON r.owner_id = n.owner_id AND r.stem = n.stem
+    JOIN eligible j ON j.owner_id = r.owner_id AND j.stem = r.stem
+                   AND j.taken = r.taken AND j.fraction = r.fraction
+                   AND j.make = r.make AND j.model = r.model
+    WHERE r.mime <> 'image/jpeg' AND j.mime = 'image/jpeg' AND r.stem <> ''
+      AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = r.id)
+      AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.shown_id = j.id AND l.kind = 'raw')
+)
+SELECT raw_id, jpeg_id FROM pairs
+WHERE jpeg_matches = 1 AND raw_matches = 1
+  AND (sqlc.narg(ids)::bigint[] IS NULL
+       OR raw_id = ANY (sqlc.narg(ids)::bigint[]) OR jpeg_id = ANY (sqlc.narg(ids)::bigint[]))
+ORDER BY raw_id;
+
+-- Hides an original under its edited copy or a RAW under its JPEG.
+-- The photo shown at the top takes over what the original
 -- had, so that nobody loses the photo: its albums, the album covers it was,
 -- its direct shares, visibility to all users, its tags, every user's
 -- favorite marks and archive, its motion, and its description if the copy
 -- has none. The video of a Live Photo paired with the copy moves to the
 -- original, which it belongs to, when the original has none. Both move updated_at, so that open
 -- pages drop the original. Run under LockPhotoLinks.
--- name: LinkEditedVersion :execrows
+-- name: LinkPhotoVersion :execrows
 WITH link AS (
     INSERT INTO photo_links (hidden_id, shown_id, kind)
-    SELECT o.id, e.id, 'edited'
+    SELECT o.id, e.id, @kind::text
     FROM photos e
-    JOIN photos o ON o.id = @original_id AND o.owner_id = e.owner_id
-    WHERE e.id = @edited_id
+    JOIN photos o ON o.id = @hidden_id AND o.owner_id = e.owner_id
+    WHERE e.id = @shown_id
       AND e.status = 'ready' AND o.status = 'ready'
       AND e.deleted_at IS NULL AND o.deleted_at IS NULL
-      AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id IN (e.id, o.id))
+      AND NOT EXISTS (
+          SELECT 1 FROM photo_links l
+          WHERE l.hidden_id = o.id OR (l.hidden_id = e.id AND @kind::text = 'edited')
+      )
+    ON CONFLICT DO NOTHING
     RETURNING hidden_id, shown_id
+),
+transfer AS (
+    SELECT hidden_id, CASE WHEN @kind::text = 'raw' THEN photo_top(shown_id) ELSE shown_id END AS shown_id
+    FROM link
 ),
 albums_added AS (
     INSERT INTO album_photos (album_id, photo_id)
-    SELECT ap.album_id, link.shown_id FROM album_photos ap JOIN link ON ap.photo_id = link.hidden_id
+    SELECT ap.album_id, transfer.shown_id FROM album_photos ap JOIN transfer ON ap.photo_id = transfer.hidden_id
     ON CONFLICT DO NOTHING
 ),
 covers_moved AS (
-    UPDATE albums a SET cover_photo_id = link.shown_id FROM link WHERE a.cover_photo_id = link.hidden_id
+    UPDATE albums a SET cover_photo_id = transfer.shown_id FROM transfer WHERE a.cover_photo_id = transfer.hidden_id
 ),
 shares_added AS (
     INSERT INTO photo_shares (photo_id, user_id)
-    SELECT link.shown_id, s.user_id FROM photo_shares s JOIN link ON s.photo_id = link.hidden_id
+    SELECT transfer.shown_id, s.user_id FROM photo_shares s JOIN transfer ON s.photo_id = transfer.hidden_id
     ON CONFLICT DO NOTHING
 ),
 favorites_moved AS (
     INSERT INTO photo_favorites (user_id, photo_id)
-    SELECT f.user_id, link.shown_id FROM photo_favorites f JOIN link ON f.photo_id = link.hidden_id
+    SELECT f.user_id, transfer.shown_id FROM photo_favorites f JOIN transfer ON f.photo_id = transfer.hidden_id
     ON CONFLICT DO NOTHING
 ),
 archive_moved AS (
     INSERT INTO photo_archive (user_id, photo_id)
-    SELECT a.user_id, link.shown_id FROM photo_archive a JOIN link ON a.photo_id = link.hidden_id
+    SELECT a.user_id, transfer.shown_id FROM photo_archive a JOIN transfer ON a.photo_id = transfer.hidden_id
     ON CONFLICT DO NOTHING
 ),
 tags_added AS (
     INSERT INTO photo_tags (tag_id, photo_id)
-    SELECT t.tag_id, link.shown_id FROM photo_tags t JOIN link ON t.photo_id = link.hidden_id
+    SELECT t.tag_id, transfer.shown_id FROM photo_tags t JOIN transfer ON t.photo_id = transfer.hidden_id
     ON CONFLICT DO NOTHING
 ),
 video_moved AS (
     UPDATE photo_links v SET shown_id = link.hidden_id
     FROM link
-    WHERE v.shown_id = link.shown_id AND v.kind = 'live'
+    WHERE v.shown_id = link.shown_id AND v.kind = 'live' AND @kind::text = 'edited'
       AND NOT EXISTS (SELECT 1 FROM photo_links w WHERE w.shown_id = link.hidden_id AND w.kind = 'live')
     RETURNING v.hidden_id
 ),
@@ -85,6 +132,6 @@ SET visibility = CASE WHEN o.visibility = 'all' THEN 'all' ELSE e.visibility END
     has_motion = e.has_motion OR o.has_motion,
     description = CASE WHEN e.description = '' THEN o.description ELSE e.description END,
     updated_at = now()
-FROM link
-JOIN photos o ON o.id = link.hidden_id
-WHERE e.id = link.shown_id;
+FROM transfer
+JOIN photos o ON o.id = transfer.hidden_id
+WHERE e.id = transfer.shown_id;

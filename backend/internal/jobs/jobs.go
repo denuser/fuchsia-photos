@@ -125,15 +125,16 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) err
 		}
 		hdr = &probed.HDR
 	} else {
-		width, height, err = media.Dimensions(path)
+		previews, width, height, err = media.RenderPhoto(ctx, path, photo.Mime, settings)
 		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return &unreadableError{err}
 		}
-		previews, err = media.Render(path, settings)
-		if err != nil {
-			return &unreadableError{err}
+		if !storage.IsRAW(photo.Mime) {
+			hasMotion = w.extractMotion(ctx, photo.ID, path, meta.MotionTag)
 		}
-		hasMotion = w.extractMotion(ctx, photo.ID, path, meta.MotionTag)
 	}
 
 	format := stored.Format
@@ -228,13 +229,9 @@ func PairLivePhotos(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, con
 	}
 }
 
-// LinkVersions hides the originals of edited copies that an import recorded
-// under their copies, those of one owner and, when ids are given, those that
-// one of the given photos is in, and returns how many it linked. Both photos
-// must be processed and have the same EXIF date, as for the metadata the copy
-// takes from its original, so that a file whose name only looks like a
-// copy's stays a photo of its own. Each link is made under the lock of
-// PairLivePhotos.
+// LinkVersions hides a RAW under its JPEG or an imported original under its
+// edited copy. It can restrict matching by owner and to pairs involving ids.
+// Both photos must be ready, with matching EXIF capture data.
 func LinkVersions(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, ids []int64) (int, error) {
 	candidates, err := store.New(pool).ListVersionCandidates(ctx, store.ListVersionCandidatesParams{
 		OwnerID: ownerID,
@@ -245,7 +242,7 @@ func LinkVersions(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, ids [
 	}
 	linked := 0
 	for _, c := range candidates {
-		if !sameTakenAt(c.EditedExif, c.EditedMime, c.OriginalExif, c.OriginalMime) {
+		if storage.IsRAW(c.EditedMime) || !sameTakenAt(c.EditedExif, c.EditedMime, c.OriginalExif, c.OriginalMime) {
 			continue
 		}
 		err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
@@ -253,7 +250,7 @@ func LinkVersions(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, ids [
 			if err := queries.LockPhotoLinks(ctx); err != nil {
 				return err
 			}
-			n, err := queries.LinkEditedVersion(ctx, store.LinkEditedVersionParams{EditedID: c.EditedID, OriginalID: c.OriginalID})
+			n, err := queries.LinkPhotoVersion(ctx, store.LinkPhotoVersionParams{ShownID: c.EditedID, HiddenID: c.OriginalID, Kind: storage.LinkEdited})
 			if err != nil {
 				return err
 			}
@@ -266,7 +263,29 @@ func LinkVersions(ctx context.Context, pool *pgxpool.Pool, ownerID *int64, ids [
 			return linked, fmt.Errorf("link version: %w", err)
 		}
 	}
-	return linked, nil
+	rawLinked := 0
+	err = pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		queries := store.New(tx)
+		if err := queries.LockPhotoLinks(ctx); err != nil {
+			return err
+		}
+		pairs, err := queries.ListRAWVersionCandidates(ctx, store.ListRAWVersionCandidatesParams{OwnerID: ownerID, Ids: ids})
+		if err != nil {
+			return err
+		}
+		for _, pair := range pairs {
+			n, err := queries.LinkPhotoVersion(ctx, store.LinkPhotoVersionParams{ShownID: pair.JpegID, HiddenID: pair.RawID, Kind: storage.LinkRAW})
+			if err != nil {
+				return err
+			}
+			rawLinked += int(n)
+		}
+		return nil
+	})
+	if err != nil {
+		return linked, fmt.Errorf("link RAW versions: %w", err)
+	}
+	return linked + rawLinked, nil
 }
 
 // renderVideo makes the previews of a video from its poster frame. A missing

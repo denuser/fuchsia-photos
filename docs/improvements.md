@@ -334,3 +334,5 @@ Draft plan:
 7. Tests with small fixtures, the architecture rows, the README, the deployment guide and the changelog.
 
 Settled with the user on 2026-11-20: all the formats above; previews from the embedded JPEG when it is large enough and a LibRaw decode otherwise; RAW and JPEG pairs linked in this improvement, the JPEG shown and the RAW under it.
+
+The implementation uses explicit `magickload` with a `DNG:` prefix. On Debian trixie, the ImageMagick coder handed the portrait DNG’s orientation to libvips as metadata. Both paths now apply the orientation when they make the thumbnail, and a synthetic portrait fixture covers the three preview choices. Direct decoding succeeded for one CC0 sample of every supported format from [raw.pixls.us](https://raw.pixls.us/). On a Ryzen AI 7 350, the trial of 12 files with WebP previews took 2.93 s with one worker, 1.60 s with two and 1.14 s with three. Peak process memory across the run was about 878 MB. The NAS N150 measurements are still pending.

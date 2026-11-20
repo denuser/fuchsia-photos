@@ -3,9 +3,12 @@
 package media
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/davidbyttow/govips/v2/vips"
+
+	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 )
 
 // Limits of the settings. A grid preview is made from the viewer preview and
@@ -88,12 +91,29 @@ type Previews struct {
 // every photo is processed only once.
 func Startup() error {
 	vips.LoggingSettings(nil, vips.LogLevelWarning)
-	return vips.Startup(&vips.Config{ConcurrencyLevel: 1})
+	if err := vips.Startup(&vips.Config{ConcurrencyLevel: 1}); err != nil {
+		return err
+	}
+	disableVipsCache()
+	return nil
 }
 
 // Shutdown releases libvips.
 func Shutdown() {
 	vips.Shutdown()
+}
+
+// RenderPhoto returns previews and the upright dimensions of their source.
+func RenderPhoto(ctx context.Context, path, mime string, settings Settings) (Previews, int, int, error) {
+	if storage.IsRAW(mime) {
+		return renderRAW(ctx, path, settings)
+	}
+	width, height, err := Dimensions(path)
+	if err != nil {
+		return Previews{}, 0, 0, err
+	}
+	previews, err := Render(path, settings)
+	return previews, width, height, err
 }
 
 // Dimensions returns the size of the photo at path as it is displayed, taking
@@ -121,6 +141,7 @@ func Render(path string, settings Settings) (Previews, error) {
 	if err != nil {
 		return Previews{}, fmt.Errorf("load %s: %w", path, err)
 	}
+	defer viewerImage.Close()
 	previews, err := renderFrom(viewerImage, settings)
 	if err != nil {
 		return Previews{}, fmt.Errorf("%s: %w", path, err)
@@ -135,14 +156,13 @@ func render(data []byte, settings Settings) (Previews, error) {
 	if err != nil {
 		return Previews{}, fmt.Errorf("load: %w", err)
 	}
+	defer viewerImage.Close()
 	return renderFrom(viewerImage, settings)
 }
 
 // renderFrom encodes the viewer preview, already resized, and makes the grid
-// preview from it. It closes the image.
+// preview from it.
 func renderFrom(viewerImage *vips.ImageRef, settings Settings) (Previews, error) {
-	defer viewerImage.Close()
-
 	viewer, err := encode(viewerImage, settings)
 	if err != nil {
 		return Previews{}, fmt.Errorf("encode viewer preview: %w", err)

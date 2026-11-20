@@ -4,11 +4,13 @@
 // rather than refused one by one. Files chosen or dropped one by one all go to
 // the server, which decides.
 
-const EXTENSIONS = ['jpg', 'jpeg', 'jpe', 'jfif', 'png', 'webp', 'heic', 'heif', 'hif', 'mp4', 'm4v', 'mov', 'qt']
+import { rawFormats } from './rawFormats'
+
+const EXTENSIONS = ['jpg', 'jpeg', 'jpe', 'jfif', 'png', 'webp', 'heic', 'heif', 'hif', 'mp4', 'm4v', 'mov', 'qt', ...[...rawFormats.values()].map((format) => format.toLowerCase())]
 const KNOWN = new Set(EXTENSIONS)
 
 // The types ingest accepts, for the file picker.
-export const ACCEPT = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'video/mp4', 'video/quicktime', ...EXTENSIONS.map((e) => `.${e}`)].join(',')
+export const ACCEPT = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'video/mp4', 'video/quicktime', ...rawFormats.keys(), ...EXTENSIONS.map((e) => `.${e}`)].join(',')
 
 export interface Chosen {
   files: File[]

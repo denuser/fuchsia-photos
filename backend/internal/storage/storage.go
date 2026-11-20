@@ -49,7 +49,14 @@ func (l Layout) TempDir() string {
 // Original returns the path of an original photo.
 func (l Layout) Original(ownerID int64, sha256 []byte, mime string) string {
 	sum := hex.EncodeToString(sha256)
-	return filepath.Join(l.Library, "originals", fmt.Sprint(ownerID), sum[:2], sum+extensions[mime])
+	return filepath.Join(l.Library, "originals", fmt.Sprint(ownerID), sum[:2], sum+extension(mime))
+}
+
+func extension(mime string) string {
+	if IsRAW(mime) {
+		return rawExtensions[mime]
+	}
+	return extensions[mime]
 }
 
 // Preview returns the path of a preview. The format is the file extension.

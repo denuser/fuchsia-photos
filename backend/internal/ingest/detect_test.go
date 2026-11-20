@@ -51,7 +51,7 @@ func TestDetectFtypBrands(t *testing.T) {
 		{ftyp("qt  ", "qt  "), "video/quicktime"},
 		{ftyp("avif", "avif", "mif1", "mp41"), ""},
 		{ftyp("mif1", "mif1", "avif"), ""},
-		{ftyp("crx ", "crx "), ""},
+		{ftyp("crx ", "crx "), "image/x-canon-cr3"},
 	}
 	for _, tt := range tests {
 		got, ok := detectMIME(tt.head)

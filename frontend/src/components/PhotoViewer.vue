@@ -6,6 +6,7 @@ import { api, copyUrl, isVideo, motionUrl, originalUrl, previewUrl, videoUrl, ty
 import { formatDateTime, intlLocale, t } from '../i18n'
 import { apiError } from '../i18n/apiErrors'
 import { formatDuration } from '../lib/duration'
+import { rawFormats } from '../lib/rawFormats'
 import { useAuthStore } from '../stores/auth'
 import { usePhotosStore } from '../stores/photos'
 import AppDialog from './AppDialog.vue'
@@ -38,13 +39,12 @@ const emit = defineEmits<{
 const auth = useAuthStore()
 const users = useUsersStore()
 
-// The owner of an edited copy can switch to its original, which the photo
-// lists leave out. The viewer shows the original's image, details and
-// download in place of the copy's; the list, navigation and the actions
-// stay with the copy.
+// Versions can replace the image, details and download. Navigation and
+// library actions still use the photo that opened the viewer.
 const original = ref<Photo | null>(null)
-const showingOriginal = ref(false)
-const shown = computed(() => (showingOriginal.value && original.value) || props.photo)
+const raw = ref<Photo | null>(null)
+const selectedVersion = ref<'edited' | 'raw' | null>(null)
+const shown = computed(() => (selectedVersion.value === 'raw' ? raw.value : selectedVersion.value === 'edited' ? original.value : null) ?? props.photo)
 
 // Whether the photo is the user's favorite, which only the photo's own
 // address tells. The star acts on the photo of the list, also while its
@@ -57,8 +57,9 @@ const archived = ref<boolean | null>(null)
 watch(
   () => props.photo.id,
   async (id) => {
-    showingOriginal.value = false
+    selectedVersion.value = null
     original.value = null
+    raw.value = null
     favorite.value = null
     archived.value = null
     const { data } = await api.GET('/photos/{id}', { params: { path: { id } } })
@@ -67,13 +68,21 @@ watch(
     }
     favorite.value = data.favorite ?? null
     archived.value = data.archived ?? null
-    const version = data.versions?.find((v) => v.kind === 'edited')
-    if (!version) {
-      return
+    const editedVersion = data.versions?.find((v) => v.kind === 'edited')
+    if (editedVersion) {
+      const { data: photo } = await api.GET('/photos/{id}', { params: { path: { id: editedVersion.id } } })
+      if (id !== props.photo.id) {
+        return
+      }
+      original.value = photo ?? null
     }
-    const { data: photo } = await api.GET('/photos/{id}', { params: { path: { id: version.id } } })
-    if (photo && id === props.photo.id) {
-      original.value = photo
+    const rawVersion = data.versions?.find((v) => v.kind === 'raw')
+      ?? original.value?.versions?.find((v) => v.kind === 'raw')
+    if (rawVersion) {
+      const { data: photo } = await api.GET('/photos/{id}', { params: { path: { id: rawVersion.id } } })
+      if (photo && id === props.photo.id) {
+        raw.value = photo
+      }
     }
   },
   { immediate: true },
@@ -137,11 +146,20 @@ const secondaryActions = computed<ViewerAction[]>(() => [
         {
           key: 'original',
           icon: 'fa-clock-rotate-left',
-          text: showingOriginal.value ? t('viewer.showEdited') : t('viewer.showOriginal'),
-          click: () => (showingOriginal.value = !showingOriginal.value),
-          active: showingOriginal.value,
+          text: selectedVersion.value === 'edited' ? t('viewer.showEdited') : t('viewer.showOriginal'),
+          click: () => (selectedVersion.value = selectedVersion.value === 'edited' ? null : 'edited'),
+          active: selectedVersion.value === 'edited',
         },
       ]
+    : []),
+  ...(raw.value
+    ? [{
+        key: 'raw',
+        icon: 'fa-file-image',
+        text: selectedVersion.value === 'raw' ? t('viewer.showPhoto') : t('viewer.showRaw'),
+        click: () => (selectedVersion.value = selectedVersion.value === 'raw' ? null : 'raw'),
+        active: selectedVersion.value === 'raw',
+      }]
     : []),
   ...(canEditDescription.value ? [{ key: 'description', icon: 'fa-pen', text: t('viewer.editDescription'), click: editDescription }] : []),
   ...(props.canTag ? [{ key: 'tags', icon: 'fa-tag', text: t('browser.tags'), click: () => emit('tags', props.photo) }] : []),
@@ -188,7 +206,7 @@ const details = computed(() => {
   const date = new Date(shown.value.takenAt ?? shown.value.createdAt)
   const owner = shown.value.ownerId === auth.user?.id ? null : users.login(shown.value.ownerId)
   const duration = shown.value.duration !== null && formatDuration(shown.value.duration)
-  return [showingOriginal.value && t('viewer.originalVersion'), owner && t('viewer.sharedBy', { owner }), formatDateTime(date), shown.value.width && `${shown.value.width} × ${shown.value.height}`, duration]
+  return [selectedVersion.value === 'edited' && t('viewer.originalVersion'), rawFormats.get(shown.value.mime), owner && t('viewer.sharedBy', { owner }), formatDateTime(date), shown.value.width && `${shown.value.width} × ${shown.value.height}`, duration]
     .filter(Boolean)
     .join(' · ')
 })
@@ -267,7 +285,7 @@ const undecodable = reactive(new Set<string>())
 
 // The original of a video is no image, and can be gigabytes.
 function canShowOriginal(photo: Photo) {
-  return !isVideo(photo) && !undecodable.has(photo.mime)
+  return !isVideo(photo) && !rawFormats.has(photo.mime) && !undecodable.has(photo.mime)
 }
 
 // A video plays in place of the photo once the user starts it: stepping

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/denuser/fuchsia-photos/backend/internal/storage"
 	"github.com/denuser/fuchsia-photos/backend/internal/store"
 )
 
@@ -407,4 +408,28 @@ func TestTakeoutAppliesTheNewestExportsMetadata(t *testing.T) {
 			t.Errorf("taken at = %v", takenAt)
 		}
 	})
+}
+
+func TestTakeoutRerunImportsRAW(t *testing.T) {
+	e := setup(t)
+	const part = "exports/takeout-20261115T073434Z-1-001.zip"
+	entry := yearFolder + "IMG_1.DNG"
+
+	// Simulate the entry an earlier run recorded as unsupported. The next
+	// run reads the same export and entry path again.
+	e.write(part, makeZip(t, []archiveFile{{entry, []byte("unsupported")}}))
+	first := e.finish(e.startKind("exports", KindTakeout).ID)
+	wantCounts(t, first, counts{found: 1, unsupported: 1})
+
+	e.write(part, makeZip(t, []archiveFile{{entry, e.fixture("rotated.dng")}}))
+	second := e.finish(e.startKind("exports", KindTakeout).ID)
+	wantCounts(t, second, counts{found: 1, added: 1})
+	entries := e.entries(second.ID)
+	if len(entries) != 1 || entries[0].Path != entry || entries[0].PhotoID == nil {
+		t.Fatalf("RAW entries = %+v", entries)
+	}
+	photo, err := e.queries.GetPhoto(t.Context(), *entries[0].PhotoID)
+	if err != nil || photo.Mime != storage.RAWDNG {
+		t.Fatalf("imported RAW MIME = %q, %v", photo.Mime, err)
+	}
 }

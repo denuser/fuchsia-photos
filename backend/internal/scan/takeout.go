@@ -232,7 +232,8 @@ func badPart(err error) error {
 }
 
 // donePaths returns the entries of an export recorded in an earlier slice or
-// from another part, such as the same part downloaded twice.
+// from another part, such as the same part downloaded twice. A new run reads
+// all entries again, including files whose formats were unsupported before.
 func (s *Service) donePaths(ctx context.Context, runID int64, export string) (map[string]bool, error) {
 	paths, err := s.queries().ListTakeoutEntryPaths(ctx, store.ListTakeoutEntryPathsParams{RunID: runID, Export: export})
 	if err != nil {
