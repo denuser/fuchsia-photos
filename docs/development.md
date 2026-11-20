@@ -143,9 +143,11 @@ TypeScript stays on version 5, because `vue-tsc` does not work with version 7 ye
 
 ### Interface text
 
-Every string the interface shows lives in `frontend/src/i18n/en.ts` and `frontend/src/i18n/ru.ts`, read through vue-i18n. Write the English text in `en.ts` and the Russian in `ru.ts` under the same key, and show it with `t('group.key')` imported from `src/i18n`. The type check fails on a key that is missing from `ru.ts` or mistyped in a `t()` call.
+Every string the interface shows lives in `frontend/src/i18n/en.ts`, the source, and in one file per other language (`ru`, `zh`, `es`, `pt`, `de`, `fr`, `ja`, `ko`, `it`), read through vue-i18n. Write the English text in `en.ts` and its translation in every other file under the same key, and show it with `t('group.key')` imported from `src/i18n`. The type check fails on a key that is missing from any of them or mistyped in a `t()` call.
 
-- Parameters are written `{name}` and passed as `t('key', { name })`. A count chooses the plural form with `t('key', n)`: English writes `one | other`, Russian `one | few | many`, and `{n}` is the count.
+- Parameters are written `{name}` and passed as `t('key', { name })`. A count chooses the plural form with `t('key', n)`, by the language's CLDR rules: English, German, Spanish, French, Italian and Portuguese write `one | other`, Russian `one | few | many`, Chinese, Japanese and Korean a single form; `{n}` is the count.
+- French and Italian text uses the typographic apostrophe (’), as a straight one ends the string.
+- To add a language, add its file, its code to `languages` and `intlLocales` in `src/i18n/index.ts`, Vuetify's locale, the code to the `Language` enum in `api/openapi.yaml`, `languages` in `backend/internal/api/users.go` and a migration widening the check on `users.language`.
 - vue-i18n gives `{`, `}`, `@`, `$` and `|` a meaning in messages, so a literal one is written as `{'@'}`.
 - Dates and numbers go through `formatDate` and `formatDateTime` in `src/i18n`, or `intlLocale` for other `Intl` calls, so that they follow the interface language rather than the browser's.
 - API errors stay in English. `src/i18n/apiErrors.ts` matches the messages the interface knows and shows its own text for them; pass any API error through `apiError()`. When a backend error message changes, change its pattern there too.

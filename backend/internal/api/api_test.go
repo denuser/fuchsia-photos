@@ -345,11 +345,15 @@ func TestLanguage(t *testing.T) {
 		t.Errorf("the setting changed another user's language to %q", got)
 	}
 
+	// Every interface language is accepted, not only the first two.
+	res = anna.json(http.MethodPatch, "/api/v1/me", map[string]string{"language": "ja"})
+	wantStatus(t, res, http.StatusOK)
+
 	// An unknown language is refused, and nothing else in the request is applied.
-	res = anna.json(http.MethodPatch, "/api/v1/me", map[string]any{"language": "de", "gridSquares": true})
+	res = anna.json(http.MethodPatch, "/api/v1/me", map[string]any{"language": "uk", "gridSquares": true})
 	wantStatus(t, res, http.StatusBadRequest)
 	me := decode[userJSON](t, anna.get("/api/v1/me"))
-	if me.Language != "ru" || me.GridSquares {
+	if me.Language != "ja" || me.GridSquares {
 		t.Errorf("an invalid request changed the settings: language %q, grid squares %v", me.Language, me.GridSquares)
 	}
 }

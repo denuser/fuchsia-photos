@@ -291,3 +291,18 @@ Plan:
 5. The "Video copies" row in `docs/architecture.md`.
 
 Settled with the user on 2026-11-19: videos only, not the motion of motion photos and Live Photos, which lasts about 3 seconds and comes from another file. On AMD graphics, which make no HDR copies yet, nothing changes: the first play of an HDR video waits through the failed attempts and then plays the original, as AMD is a test machine only.
+
+## 16. Ten interface languages
+
+**Status:** done on 2026-11-20, except the live check of the date fields and fonts in Chinese, Japanese and Korean.
+
+The interface in the ten languages most used in software: English, Russian, Simplified Chinese, Spanish, Brazilian Portuguese, German, French, Japanese, Korean and Italian (chosen with the user on 2026-11-20 over the ten with the most speakers, which would bring Hindi, Bengali and Urdu, with no Vuetify locales, and right-to-left Arabic and Urdu).
+
+Plan:
+
+1. The codes are `en`, `ru`, `zh`, `es`, `pt`, `de`, `fr`, `ja`, `ko` and `it`, the primary subtags of browser languages, so the automatic choice keeps matching on them. `zh` is Simplified Chinese and `pt` Brazilian Portuguese; a browser set to Traditional Chinese gets Simplified rather than English.
+2. Backend: a migration widens the check on `users.language`, `PATCH /me` accepts the new codes, the OpenAPI enum lists them; the language test sets one of them and refuses a code outside the list.
+3. Frontend: a message file per language, typed by `en.ts`; Vuetify's locale and an `Intl` locale for each (`zh-CN`, `pt-BR`, ...). Plural forms come from `Intl.PluralRules` for every language: one form in Chinese, Japanese and Korean, "one | other" in the Western languages, three forms in Russian.
+4. Fonts: system fonts for Chinese, Japanese and Korean, as PatternFly leaves them, named per language through `:lang()` so that Japanese text does not take Chinese glyph shapes (chosen with the user over bundling Noto subsets).
+5. Check the date fields' masks in Korean, Japanese and Chinese, whose short dates are written `2026. 12. 31.` and `2026/12/31`.
+6. Docs: the architecture row, the development guide, the README and the changelog.

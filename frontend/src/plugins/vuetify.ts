@@ -124,7 +124,7 @@ export const vuetify = createVuetify({
   // Vuetify's own texts and its dates follow the interface language. Date
   // fields and calendars take the input mask, month names and first weekday
   // from the locale: English keeps the browser's region when it has one.
-  // The adapter's type takes any locale name, while ours knows only en and ru.
+  // The adapter's type takes any locale name, while ours knows only the interface languages.
   locale: { adapter: createVueI18nAdapter({ i18n: i18n as unknown as Parameters<typeof createVueI18nAdapter>[0]['i18n'], useI18n }) },
   date: { locale: intlLocales },
   icons: { defaultSet: 'fa', aliases, sets: { fa: fontAwesome } },

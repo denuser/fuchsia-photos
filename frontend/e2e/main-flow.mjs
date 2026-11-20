@@ -619,6 +619,12 @@ const steps = {
     await page.goto(`${BASE}/profile`)
     // A select's input sits under the field's own box, which takes the click.
     await page.getByLabel('Язык интерфейса').locator('..').click()
+    // The list opens scrolled to the chosen language and renders only the options in view, so
+    // Automatic, the first one, exists only after the list goes back to the top. Vuetify keeps
+    // scrolling to the chosen option while the menu opens, so scrolling by hand loses to it; Home
+    // moves through Vuetify itself.
+    await page.getByRole('listbox').waitFor()
+    await page.keyboard.press('Home')
     await expectRequest('/me', () => page.getByRole('option', { name: 'Автоматически' }).click())
     // The browser is set to en-US, so Automatic means English.
     await page.getByText('Interface language').waitFor()

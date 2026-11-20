@@ -36,7 +36,7 @@ type userJSON struct {
 	GridSize string `json:"gridSize"`
 	// TimelineIncludesShared adds other users' photos the user can see to the timeline.
 	TimelineIncludesShared bool `json:"timelineIncludesShared"`
-	// Language is the interface language: auto, en or ru.
+	// Language is the interface language: auto or one of languages.
 	Language string `json:"language"`
 }
 
@@ -69,7 +69,7 @@ func toUserJSON(u store.User) userJSON {
 }
 
 // languages are the interface languages a user can choose; auto follows the browser.
-var languages = []string{"auto", "en", "ru"}
+var languages = []string{"auto", "en", "ru", "zh", "es", "pt", "de", "fr", "ja", "ko", "it"}
 
 // gridSizes are the sizes of grid tiles a user can choose.
 var gridSizes = []string{"small", "medium", "large"}

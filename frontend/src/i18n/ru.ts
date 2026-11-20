@@ -1,5 +1,5 @@
 // Russian messages. The type makes the keys match en.ts. Plural forms go in the order
-// "one | few | many": 1 фото удалено, 2 фото удалены, 5 фото удалено (see ruPlural in index.ts).
+// "one | few | many": 1 фото удалено, 2 фото удалены, 5 фото удалено (see pluralRule in index.ts).
 import type en from './en'
 
 const ru: typeof en = {

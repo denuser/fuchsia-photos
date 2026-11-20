@@ -41,7 +41,7 @@ It is built for modest hardware. It is developed and measured on an Intel N150 w
 - Users created by the administrator, with no self-registration, and two roles: administrator and user
 - Search by description and similar photos, with an optional ML service
 - Nightly database dumps with a tested restore, request logs and the job queue on the administration page
-- English and Russian interface, light, dark and high contrast themes
+- The interface in ten languages: English, Russian, Simplified Chinese, Spanish, Brazilian Portuguese, German, French, Japanese, Korean and Italian; light, dark and high contrast themes
 
 Supported formats: JPEG, PNG, WebP and HEIC photos, MP4 and MOV videos, and the motion of Google and Samsung motion photos and iPhone Live Photos. A Live Photo needs both of its files, which the browser's file picker does not hand over: see [Live Photos](docs/deployment.md#live-photos). RAW is not supported yet.
 

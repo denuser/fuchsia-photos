@@ -18,7 +18,7 @@ The first release.
 - Users managed by the administrator, with administrator and user roles and an administration page with all photos, preview settings and the job queue
 - Search by description and similar photos, with an optional ML service on SigLIP 2
 - Nightly database dumps with a tested restore, request logs in text or JSON
-- English and Russian interface, light, dark and high contrast themes and a glass mode
+- The interface in ten languages (English, Russian, Simplified Chinese, Spanish, Brazilian Portuguese, German, French, Japanese, Korean and Italian), light, dark and high contrast themes and a glass mode
 - JPEG, PNG, WebP and HEIC photos, and MP4 and MOV videos up to 4 GiB, which play in the viewer, with a download when the browser cannot play the codec
 - The motion of Google and Samsung motion photos, played in the viewer by a button, including for photos uploaded before
 - iPhone Live Photos as one item: the video, uploaded before or after its photo, plays as the photo's motion and leaves the lists

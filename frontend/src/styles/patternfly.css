@@ -45,6 +45,26 @@
   --shadow-lg: 0 10px 20px 0 rgba(41, 41, 41, 0.15);
 }
 
+/* Chinese, Japanese and Korean come from the system's fonts, as PatternFly
+   leaves them: macOS, Windows, then Noto CJK on Linux and Android. Han
+   characters are shared between the three but drawn differently in each, so
+   each language names its own fonts first. setLanguage sets the lang. */
+
+:root:lang(zh) {
+  --v-font-body: 'Red Hat Text Variable', 'Red Hat Text', 'Inter Cyrillic', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Noto Sans SC', Helvetica, Arial, sans-serif;
+  --v-font-heading: 'Red Hat Display Variable', 'Red Hat Display', 'Inter Cyrillic Display', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Noto Sans SC', Helvetica, Arial, sans-serif;
+}
+
+:root:lang(ja) {
+  --v-font-body: 'Red Hat Text Variable', 'Red Hat Text', 'Inter Cyrillic', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', Meiryo, 'Noto Sans CJK JP', 'Noto Sans JP', Helvetica, Arial, sans-serif;
+  --v-font-heading: 'Red Hat Display Variable', 'Red Hat Display', 'Inter Cyrillic Display', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', Meiryo, 'Noto Sans CJK JP', 'Noto Sans JP', Helvetica, Arial, sans-serif;
+}
+
+:root:lang(ko) {
+  --v-font-body: 'Red Hat Text Variable', 'Red Hat Text', 'Inter Cyrillic', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans CJK KR', 'Noto Sans KR', Helvetica, Arial, sans-serif;
+  --v-font-heading: 'Red Hat Display Variable', 'Red Hat Display', 'Inter Cyrillic Display', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans CJK KR', 'Noto Sans KR', Helvetica, Arial, sans-serif;
+}
+
 @layer vuetify-overrides {
   /* Plain links in text and tables, as PatternFly's link color: the accent,
      underlined on hover. Links that Vuetify components render, and links with
