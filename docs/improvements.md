@@ -1,6 +1,6 @@
 # Improvements
 
-The current list of improvements, in order of priority. All of them are done except 6, 8, 9, 13 and 14, which are planned, and 10, whose Google Takeout part is done and iCloud part planned. Stages 0 to 6 of the [roadmap](roadmap.md) are done too.
+The current list of improvements, in order of priority. All of them are done except 6, 8, 9, 13, 14 and 17, which are planned, and 10, whose Google Takeout part is done and iCloud part planned. Stages 0 to 6 of the [roadmap](roadmap.md) are done too.
 
 ## 1. Administration page
 
@@ -306,3 +306,31 @@ Plan:
 4. Fonts: system fonts for Chinese, Japanese and Korean, as PatternFly leaves them, named per language through `:lang()` so that Japanese text does not take Chinese glyph shapes (chosen with the user over bundling Noto subsets).
 5. Check the date fields' masks in Korean, Japanese and Chinese, whose short dates are written `2026. 12. 31.` and `2026/12/31`.
 6. Docs: the architecture row, the development guide, the README and the changelog.
+
+## 17. RAW photos from cameras
+
+**Status:** planned on 2026-11-20, not started.
+
+Raw files from cameras: Nikon NEF and NRW, Canon CR2 and CR3, Sony ARW, Adobe DNG (also from phones, such as Apple ProRAW), Fujifilm RAF, Olympus and OM System ORF, Panasonic RW2, Pentax PEF and Samsung SRW. Today ingest refuses them, and the README says RAW is not supported yet.
+
+What the image already has, checked on 2026-11-20 in `debian:trixie-slim`: Debian's libvips 8.16.1 depends on ImageMagick 7 (`libmagickcore-7.q16-10`), which is built with LibRaw 0.21.4 and lists all the formats above, CR3 included, under its `dng` coder. libvips 8.16 has `magickload` and no LibRaw loader of its own. Debian's ImageMagick policy blocks no coder; it limits a decode to 1 GiB of memory, 2 GiB of disk and 256 megapixels. Nothing has been decoded yet: no RAW sample was at hand. exiftool reads the tags of every RAW format and extracts the JPEG previews cameras embed.
+
+Where it is harder than HEIC:
+
+- **Detection.** NEF, CR2, ARW, DNG, PEF and SRW are TIFF files; only the extension tells them from a plain TIFF, which stays unsupported. CR2 has `CR` at byte 8, ORF starts with `IIRO`, `IIRS` or `MMOR`, RW2 with `IIU`, RAF with `FUJIFILMCCD-RAW`, and CR3 is an `ftyp` file with the brand `crx `. Detection takes the content where it is enough and the TIFF header with the extension for the rest.
+- **Decoding.** Opened by file, libvips would see a TIFF and load its first directory, a small preview or raw sensor data, instead of the image. `magickload` has to be called explicitly, which govips does not offer as is, and ImageMagick may sniff the TIFF header too, so a `DNG:` prefix on the path may be needed; LibRaw then finds the real format by content. `media.Dimensions` would quietly return the size of that first directory, so RAW types take another branch in `media`, which also covers the `render-previews` job and command and `imgbench`. Stored width and height must be those after rotation, like the preview's, or the grid distorts them.
+- **Look and speed.** LibRaw gives a flat rendering with the camera's white balance and no lens corrections, unlike the camera's JPEG, and a 24 MP file takes seconds and some hundreds of MB of memory to decode. The embedded JPEG is the camera's own rendering and costs almost nothing, but its size depends on the camera and is to be measured in step 1; from what is known, some makers embed a full-size JPEG and others one of about 1600 px, and DNG from phones a small one or none. exiftool names it differently by maker (`JpgFromRaw`, `PreviewImage`, `OtherImage`), so the largest is taken. The extracted JPEG carries no orientation of its own; the RAW's `Orientation` tag applies, while LibRaw rotates the image itself, so the two paths must not rotate twice. LibRaw 0.21.4 may not read the newest encodings, such as Nikon's High Efficiency NEF.
+- **The viewer.** No browser shows a RAW file, so the viewer never asks for the original and zooms the preview, as for HEIC outside Safari. Download gives the original.
+- **RAW and JPEG pairs.** A camera set to RAW+JPEG writes `DSC_0001.NEF` and `DSC_0001.JPG`. `photo_links` was made with such pairs in mind (see the "Versions" row of the architecture).
+
+Draft plan:
+
+1. A trial on a few CC0 files from raw.pixls.us, one or two per maker and a portrait one, in the runtime image: an explicit `magickload` of a NEF, CR2 and DNG gives the full sensor size, not the first directory; the portrait comes out upright on both paths; the time and peak memory of decodes on the NAS's N150 with the configured number of workers; the sizes of the embedded previews. If `magickload` does not work, the alternative, such as the `libraw-bin` tools, goes to the user. The result decides step 3.
+2. Ingest: MIME types such as `image/x-nikon-nef` with their extensions in `storage`, detection as above, the error message, the upload `ACCEPT` list and the extensions in `frontend/src/lib/uploadFiles.ts`, the OpenAPI description. Folder scans and WebDAV follow from ingest.
+3. Previews, in this order: the embedded JPEG when its long side reaches the viewer preview size; a decode through `magickload`; the embedded JPEG of any size; otherwise the file is unreadable. A branch by MIME type inside `media`, used by every caller.
+4. Viewer: no original for RAW types; the details panel names the format.
+5. Pairs: a `raw` kind in `photo_links` (the `CHECK` widened, a partial unique index as for `live`) hides the RAW under its JPEG, matched by owner, base name, `DateTimeOriginal` with sub-seconds, and make and model, not by folder, since cameras and people often keep `RAW/` and `JPG/` apart; the viewer's switch to the original shows the RAW's preview. A job pairs the files already imported. As with other hidden files, the RAW goes into the trash with its JPEG.
+6. RAW files already in scanned folders are picked up by the next scan, as scans only count unsupported files; Takeout entries recorded as `unsupported` are checked for a rerun.
+7. Tests with small fixtures, the architecture rows, the README, the deployment guide and the changelog.
+
+Settled with the user on 2026-11-20: all the formats above; previews from the embedded JPEG when it is large enough and a LibRaw decode otherwise; RAW and JPEG pairs linked in this improvement, the JPEG shown and the RAW under it.
