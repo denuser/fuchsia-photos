@@ -20,6 +20,7 @@ Edit `deploy/.env`:
 | `IMPORT_DIR` | `./data/import` | Folder scanned for imports, mounted read-only |
 | `IMPORT_STABLE_SECONDS` | `60` | How long a file must stay unchanged before a folder scan imports it |
 | `WORKERS` | `3` | Photos processed at once. Keep at least one core free for the UI |
+| `MEMORY_LIMIT` | `4G` | Memory the application container may take. See [RAW photos](#raw-photos) |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. See [Logs](#logs) |
 | `LOG_FORMAT` | `text` | `text`, or `json` for a log collector |
 | `BACKUP_DIR` | `./data/backups` | Nightly database dumps. See [Backups](#backups) |
@@ -149,6 +150,8 @@ The server logs every WebDAV request with its method, path, status and client, t
 Upload NEF, NRW, CR2, CR3, ARW, DNG (including Apple ProRAW), RAF, ORF, RW2, PEF and SRW through the browser, WebDAV or an import. Run a new folder or Takeout import to pick up RAW files counted as unsupported by an earlier version.
 
 For the viewer, the server uses the camera's largest embedded JPEG if it reaches the configured viewer size. Otherwise LibRaw decodes the image. Some camera encodings need a newer LibRaw release, such as Nikon's High Efficiency NEF. When decoding fails, an embedded JPEG can still make a preview. The download button saves the original.
+
+A full decode holds memory in proportion to the sensor: about 1.4 GB for 61 MP and 2.4 GB for 102 MP (measured on 2026-11-21). Only one runs at a time, whatever `WORKERS` is. The application container is limited to 4 GB (`MEMORY_LIMIT`), so a decode that goes wrong cannot take the NAS's memory. If the application goes over the limit, the kernel stops it, Docker starts it again, and the job queue processes the photo again. To see whether that happened, run `docker inspect <container> --format '{{.State.OOMKilled}}'`; `docker stats` shows the current use and the limit. Memory freed after a decode often stays with the process, so the use seen after an import is not a leak.
 
 A RAW and JPEG from the same owner are paired if the base name, capture time including sub-seconds, and camera make and model match. The files can come from different directories or uploads. The JPEG stays in the library view. Its owner can switch to RAW in the viewer. Both files go into and out of the trash together.
 
@@ -378,6 +381,10 @@ services:
       - /mnt/pool/fuchsia/library:/data/library
       - /mnt/pool/fuchsia/cache:/data/cache
       - /mnt/pool/fuchsia/import:/data/import:ro
+    deploy:
+      resources:
+        limits:
+          memory: 4G
 
   backup:
     image: postgres:18

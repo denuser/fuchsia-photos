@@ -341,10 +341,106 @@ After review on 2026-11-20, only one full decode runs at a time, whatever the nu
 
 To check on the NAS (N150) before the release:
 
-1. Memory: import a folder of large RAW files that need a full decode, such as Sony ARW (their 1616x1080 preview is below the default viewer size of 2048) and a 45 MP or larger NEF or CR3, with the default number of workers. Watch the container's peak memory with `docker stats`; it should stay near one decode, about 0.9 GB, not one per worker.
+1. Memory: import a folder of large RAW files that need a full decode, with the default number of workers. Watch the container's peak memory with `docker stats`; it should stay near one decode, not one per worker. Most current cameras embed a preview at or above the default viewer size of 2048 (Sony since about 2024 a full-size JPEG, Fujifilm GFX 4000x3000), so they take the embedded JPEG path. To force full decodes, set the viewer preview size to its maximum of 4096 in the settings, or strip the previews from a copy with `exiftool -JpgFromRaw= -PreviewImage= -OtherImage=` (this works for ARW, not for RAF, whose preview sits in the RAF header). Measured on 2026-11-21 in the test image (LibRaw 0.21.4, Apple silicon): a 102 MP GFX100S II RAF peaks at about 2.4 GB in 1.3 s, a 61 MP RX1R III ARW without previews at 1.4 GB in 1.0 s, the same ARW from its embedded JPEG at 0.3 GB. Samples come from raw.pixls.us (CC0; downloads redirect, so use `curl -L`).
 2. Time: the duration of one full decode of the largest file. It must stay well under the 2-minute processing timeout, and ideally under the 30-second grace period of a shutdown, which a running decode delays.
 3. Restart during a decode: stop the app while a large RAW is decoding and check how long it takes to stop, and that the photo is processed again after the start.
 4. Embedded JPEG path: the time to process a folder of NEF, CR2, CR3 and RAF files whose preview reaches the viewer size, against a folder of JPEGs of the same count.
 5. Formats: one file of each supported format from a real camera, if at hand. Files that LibRaw in the image cannot decode, such as Nikon High Efficiency NEF, should still get a preview from the embedded JPEG, and the log should give LibRaw's reason rather than an empty error.
 6. Pairs: a folder scan of a camera card with RAW + JPEG shows only the JPEGs, the viewer switches to the RAW, and the pair goes into the trash and back together. A rescan of a folder scanned by an earlier version picks up the RAW files it skipped.
 7. Bulk import of mixed files (photos, videos, RAW): the processing queue should drain at about the same rate as before RAW support, now that photos without a pair no longer take the linking lock.
+
+## 18. Lightroom XMP sidecars
+
+**Status:** draft plan of 2026-11-21, not started; choices below wait for the user.
+
+Lightroom Classic, with "Automatically write changes into XMP" on, keeps the edits of a proprietary RAW file in a sidecar next to it: `DSC_0001.NEF` gets `DSC_0001.xmp`. DNG and JPEG files get the XMP inside the file instead (other formats unchecked), and virtual copies live only in the catalog. The goal is to read the sidecar and make the RAW's previews from its settings, so the library shows the edited photo.
+
+What a sidecar holds:
+
+- **Metadata:** `xmp:Rating` (0 to 5, −1 for rejected), `xmp:Label` (a color name), `dc:subject` (keywords, flat; `lr:hierarchicalSubject` keeps the hierarchy), `dc:title`, `dc:description`, `tiff:Orientation`.
+- **Geometry:** `crs:HasCrop`, `crs:CropTop`, `CropLeft`, `CropBottom` and `CropRight` as fractions of the image before rotation, and `crs:CropAngle` in degrees.
+- **Global tone and color, process version 2012 and later:** `Exposure2012` (EV), `WhiteBalance` with `Temperature` and `Tint`, `Contrast2012`, `Highlights2012`, `Shadows2012`, `Whites2012`, `Blacks2012`, `Texture`, `Clarity2012`, `Dehaze`, `Vibrance`, `Saturation`, the parametric and point tone curves, HSL, color grading, the camera profile (`CameraProfile`, such as Adobe Color), sharpening, noise reduction, lens profile corrections.
+- **Local edits:** masks (`MaskGroupBasedCorrections`, including AI subject and sky masks), healing and cloning, AI denoise. They refer to Adobe's own processing.
+
+Adobe's rendering is closed, and no open tool applies these settings the way Lightroom does. Darktable imports a part of them on its own import, not from a command line. Adobe offers no library that applies them, checked on 2026-11-21. The Lightroom API, a cloud service of Adobe's Firefly Services, could apply an XMP to an image; it reached end of life on 2026-07-31, and Adobe points its users to the Photoshop API v2. Any cloud service would send the library's originals to Adobe. The DNG SDK (C++) does not read `crs:` settings, but its renderer, `dng_render`, takes a white point (`SetWhiteXY`), an exposure, a shadows level and a tone curve, and applies Adobe's own colour pipeline with the camera profiles a DNG carries. It could run the approximate level below in a separate container, with the application mapping `Temperature`, `Tint` and `Exposure2012` to it. It reads DNG only, and Adobe DNG Converter, which turns a NEF or ARW into DNG, has no Linux version. So the levels are:
+
+1. **Exact:** metadata, orientation, crop and its angle.
+2. **Approximate:** exposure, white balance, the five tone sliders, vibrance and saturation, applied by the application to LibRaw's linear output with libvips. White balance from Kelvin and tint needs the camera's color matrix; LibRaw carries Adobe's matrices, so this may come close, to be checked. Profiles, curves, HSL, clarity, dehaze and lens corrections would not be applied, so a strongly edited photo would look visibly different from Lightroom.
+3. **Not reproducible:** masks, healing, AI denoise.
+
+The exact Lightroom look comes only from Lightroom itself:
+
+- **Exported JPEG:** exported next to the RAW with the original's file name and all metadata, it pairs with the RAW today (owner, base name, capture time with sub-seconds, make and model). A later export after a new edit is a new file with a new hash, so today it would add a second photo; replacing the pair's JPEG would need a rule.
+- **Publish Service:** Lightroom Classic's built-in Hard Drive publish service exports a collection to a folder, and after an edit lists the photo under "Modified Photos to Re-Publish"; one click on Publish exports the changed ones again over the old files. Pointed at the folder the application scans, with the original's file name and all metadata, it keeps the library's JPEG in step with Lightroom's exact look and needs no Adobe engine on the NAS. The application's part is the rule above: a file that replaces one already imported from the same path, with a new hash, replaces that photo's JPEG in its pair rather than adding a photo.
+- **DNG with an updated preview:** Lightroom can convert to DNG and, on "Update DNG Previews & Metadata", write a full-size preview of the edit into the file, which the embedded-JPEG path already shows. This changes the user's workflow and the original's hash on every update.
+
+- **Darktable instead of Lightroom:** LinuxServer.io publishes a darktable image (`lscr.io/linuxserver/darktable`) that shows the whole desktop application in a browser: one user's remote desktop, not an editor the application could embed per user. Edits made there are darktable's own XMP (`DSC_0001.ARW.xmp`), which `darktable-cli` renders exactly, so previews could match the editor, at the cost of a darktable sidecar container and full renders on the NAS. It would replace Lightroom in the user's workflow; darktable reads only a part of Lightroom's settings, once, on import.
+
+How a sidecar reaches the application and stays current:
+
+- **Sources.** A folder scan leaves `.aae` and Takeout JSON out as sidecars and would count an `.xmp` as unsupported. WebDAV refuses it with 415, and the browser's folder upload filters it out by extension. All three would accept `.xmp`, matched to a RAW of the same owner by folder and base name, case-insensitive. When a RAW and a JPEG share the base name, the sidecar belongs to the RAW.
+- **Storage.** The library keeps originals by hash, and a sidecar changes on every edit, so it is not a photo: a table keeps the XMP text, its hash and the photo, one current sidecar per RAW. A sidecar that comes before its RAW waits, by path, for the RAW to arrive.
+- **Updates.** A folder scan reads a sidecar again when its size or modification time changes, even if the RAW is already imported, and a WebDAV PUT over it replaces it. A changed sidecar queues `render-previews` for its photo. A removed sidecar is not seen by a scan, so the last one stays.
+- **Pairs.** A RAW with edits and the camera's JPEG: today the JPEG is shown and the RAW hidden under it. With a sidecar, the edited RAW is the photo worth showing, so the pair may need to show the RAW and hide the JPEG, or show the JPEG with the RAW's metadata.
+- **Cost.** Edits apply to the sensor data, so a photo with a sidecar needs a full decode at every render, about 1.4 GB for 61 MP and 2.4 GB for 102 MP, one at a time; on the NAS's N150 likely several seconds each, to be measured. Crop and orientation alone could apply to the embedded JPEG, which costs almost nothing. A Lightroom library of thousands of edited RAW would take hours to process, and every change of a setting such as the viewer size would render them again.
+
+Draft plan:
+
+1. A trial: a few RAW files with sidecars from the user's Lightroom (light and heavy edits, a crop with an angle, a portrait, a rejected and a five-star one), and Lightroom's own export of each for comparison. Parse the XMP with exiftool, which the image has (`-xmp:all`, `-XMP-crs:all`). Measure a full decode with the approximate settings on the N150.
+2. Storage and matching: the sidecar table, acceptance of `.xmp` in folder scans, WebDAV and the browser, waiting sidecars, rescans on change.
+3. Metadata: rating, label, keywords, title and description into the application's fields, as chosen below.
+4. Previews: crop and orientation, then the approximate tone and color if chosen, in `media` behind the RAW branch, with the sidecar's hash part of what decides that previews are current.
+5. Pairs, the viewer (an "edited in Lightroom" mark, download of the RAW with its sidecar), tests with small fixtures, the architecture rows, the README, the deployment guide and the changelog.
+
+The user stays on Lightroom Classic (2026-11-21). The files reach the NAS as a share Lightroom works in: originals with their sidecars in one folder, exports in another, both under the import folder. The catalog itself stays on the Mac, as Lightroom Classic does not open a catalog on a network drive. Today a folder scan copies the originals into the library, doubling the space RAW files take, and runs only when an administrator starts it; the user asked for the files to stay where they are.
+
+To decide with the user:
+
+1. Settled on 2026-11-21: the share is indexed in place, without copying; see improvement 19, which this one builds on.
+2. How far to go: the Publish Service as the shown photo, with the sidecar for metadata (exact look, a click in Lightroom after edits); metadata, crop and orientation only (exact, cheap); or those plus the approximate global settings, with libvips or the DNG SDK (closer, still visibly different from Lightroom, a full decode for every edited RAW).
+3. What the application does with each metadata field: the rating (the application has favorites, not stars; five stars as a favorite, or a new rating field), rejected photos (hidden, into the archive, or nothing), keywords as tags, title and description into the description.
+4. Which photo a RAW + JPEG pair shows once the RAW has edits.
+
+Pairing keeps the file name (settled with the user on 2026-11-21): a pair needs the same base name, capture time with sub-seconds, make and model, so a repeated name alone never pairs. Exports must keep the original's file name; matching by Lightroom document IDs or the body serial number was considered and left out.
+
+## 19. Library folders indexed in place
+
+**Status:** planned on 2026-11-21, not started.
+
+The user keeps the RAW files Lightroom works on in a share on the NAS and wants the application to show them without copying them into its library (decided on 2026-11-21, see improvement 18). Today every source goes through `Ingest`, which moves the file to `originals/<owner>/<hash>` (`storage.Layout.Original`), and a folder scan copies, hashes every file on every run and is started by hand. This improvement adds a second kind of folder: a library folder, read where it is, rescanned on a schedule, with the files allowed to change, move and disappear. It is the base for improvement 18: the sidecars, the pairs with Lightroom's exports and their re-publishing all happen in such a folder.
+
+What assumes today that the original is in the library:
+
+- Eight places build the path from the hash: `ingest.store` (moves the file in) and `ingest.Purge` (removes it), `api/photos.go` (download and the original in the viewer), `webdav.go` (GET), `jobs.go` (processing, the motion and video HDR backfills), `transcode.go` (the source of a copy). The ML service reads the viewer preview, not the original, and is not affected.
+- A photo's hash is its identity: `UNIQUE (owner_id, sha256)`, duplicates, the record a permanent delete leaves behind, the lock in `LockPhotoFile`. An original never changes.
+- The transcoder reads originals at the same paths as the application, from the library mounted read-only.
+
+Design:
+
+1. **Configuration.** A mount for library folders, `/data/folders`, read-only, separate from `/data/import`. An administrator adds a library folder in the interface: a subfolder of the mount and its owner, one owner per folder. Photos from it are the owner's like any other; others see them through albums and shares.
+2. **Where an original lives.** A table `photo_files` keeps, for each photo from a library folder, the folder, the relative path, size and modification time. A photo without a row has its original in the library as today. One function, used by the eight places above, gives a photo's original path. A file whose path is also in the library (the same hash uploaded earlier) keeps the library copy as its source.
+3. **Scanning.** A scan lists the folder and compares each file with its row by size and modification time. Only new and changed files are hashed, so a rescan of a large folder reads directories, not files. A file whose size or time is still changing waits, as today. A scheduled job rescans each library folder at an interval set per folder, every 10 minutes by default, and the folder page has a button to scan now. A scan that is still running when the next is due is not started twice. A watcher for changes (inotify) is not part of this improvement. Hidden files, `@eaDir` and `#recycle` are left out as today; `.xmp` files are recorded for improvement 18 and not ingested as photos.
+4. **Identity is the path.** A `photo_files` row is keyed by folder and path, and outlives a missing file and a permanent delete. A file at a path the folder already knows is always that row's file, unchanged or changed, whatever its hash; a hash is matched only for a path the folder has never seen. Lightroom with "Automatically write changes into XMP" rewrites JPEG, DNG and TIFF originals on every rating or keyword, and the Publish Service may delete a file before writing it again, so matching by hash would turn edits into new photos.
+5. **New path.** Hashed in place, then `Ingest` without copying, with the same processing job. If the owner has no photo with that hash, it becomes a new photo with this file as its source. If the hash belongs to a photo that went missing in this folder, it is that file moved or renamed: the row takes the new path and nothing is processed again. Otherwise the file is a duplicate: its row is kept, marked as such, and never becomes a source; a photo in the trash or purged stays there, as with any scan. One photo has one source file, and a photo whose original is in the application's library is never re-pointed to a folder.
+6. **Changed file at a known path.** The photo keeps its id, albums, tags, favorites, shares and its RAW pair, and takes the new hash; its previews, motion, copy, EXIF and embedding are made again. The change takes the file lock (`LockPhotoFile`) on the old and the new hash in a fixed order, as a purge or an upload may race it. If the new hash belongs to another photo of the owner, the two are not merged: the file is reported and left. A purged photo's row stays purged whatever its content, so an edit in Lightroom does not bring it back. Every rating or keyword set in Lightroom on a JPEG or DNG original changes the file, so it costs a full processing, for a DNG a full decode; RAW files with sidecars do not change.
+7. **Missing file.** A file not found by two scans in a row (so a Publish Service that deletes before it writes again is not caught in between) is marked missing and its photo goes to the trash, with the reason kept. In the trash the photo shows a "file not available" notice, and download and the original zoom say the same; the previews stay. When the path comes back, with the same or another hash, the row is found again by its path, and a photo the scan moved to the trash comes out of it; one the owner moved there stays. The trash has no expiry, so nothing is purged while a file is away. A scan that finds the folder itself missing or empty stops without marking anything, as an unmounted share would otherwise send every photo to the trash.
+8. **The application's own deletes.** The folder is mounted read-only, so the trash and a permanent delete never touch the file. A permanent delete removes previews and keeps the record with the hash and the path row, so the next scan skips the file; the folder page lists such skipped files.
+9. **Unavailable originals in jobs.** Processing, `render-previews` (all photos, after a change of the preview settings), the motion and video HDR backfills and transcoding read the original. When it is missing or the share is down, they skip the photo and leave it for the next run instead of marking it failed, so a settings change during an outage does not fail a whole folder.
+10. **Other services.** The transcoder mounts `/data/folders` read-only at the same path. The nightly backup covers the database only, as today; the originals in library folders are backed up with the share, which the deployment guide says.
+11. **Interface.** An administration page for library folders: path, owner, last scan, counts of photos, missing, skipped and failed files, the scan button. The viewer's details name the file's path in the folder, and a missing file shows a notice instead of the download.
+
+Draft plan:
+
+1. Migration: `library_folders` (path, owner, scan interval, last scan) and `photo_files` (photo, folder, path, size, mtime, first scan that missed it, missing since, whether the scan put the photo in the trash). The original path function and its use in the eight places, with tests that a photo from a folder is read from there and never removed.
+2. Scanning a library folder: listing, comparison with `photo_files`, hashing of new and changed files only, moves, missing files and the guard against an empty folder. Ingest without copying.
+3. A changed file: the photo takes the new hash under both file locks and everything derived is made again, with the current processing and render jobs; the jobs that read originals skip an unavailable one rather than fail.
+4. The scheduled job and the scan button; the administration page; the viewer's notice for missing files.
+5. Deployment: the `/data/folders` mount in the three compose files and the TrueNAS YAML, the transcoder's mount, permissions for UID 568, a note on backups.
+6. A check on the NAS with a copy of a real Lightroom folder: the first scan's time for the share's size, a rescan's time, a re-publish replacing a JPEG in a pair, a move in Lightroom, an unmounted share.
+7. Tests, the architecture rows ("Folder scan", "Permanently deleted photos", a new "Library folders"), the README, the deployment guide and the changelog.
+
+Settled with the user on 2026-11-21:
+
+1. A missing file sends its photo to the trash, where it shows with a notice; it comes back out when the file does, unless the owner put it there.
+2. The scan interval is set per folder, every 10 minutes by default.
+3. Subfolders do not become albums.
