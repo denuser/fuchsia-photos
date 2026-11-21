@@ -349,6 +349,16 @@ To check on the NAS (N150) before the release:
 6. Pairs: a folder scan of a camera card with RAW + JPEG shows only the JPEGs, the viewer switches to the RAW, and the pair goes into the trash and back together. A rescan of a folder scanned by an earlier version picks up the RAW files it skipped.
 7. Bulk import of mixed files (photos, videos, RAW): the processing queue should drain at about the same rate as before RAW support, now that photos without a pair no longer take the linking lock.
 
+Found on 2026-11-21 with 20 hard CC0 files from raw.pixls.us, rendered at the default viewer size of 2048 in the test image (LibRaw 0.21.4, Apple silicon, one container per file limited to 4 GB):
+
+- **Memory.** A 177 MP high-resolution shot of a Panasonic S1R II (16288x10848, embedded preview 1920 px) takes a full decode and peaks at 3.9 GB, at the container's limit before the application and the other workers count. With 4 GB the NAS would likely stop the application on such a file, and the job would run it again after the restart. Other full decodes: Sony A7R IV 1.4 GB, Samsung S23 Ultra DNG 1.5 GB, Panasonic S1R 1.1 GB, Sony A7R III 1.0 GB, Pentax K-1 II pixel shift DNG 0.8 GB.
+- **Wrong colours without an error.** A Canon R5 II CR3 shot with HDR PQ on has its previews in Canon's own HEIF-like container (`CISZ`), which neither exiftool nor libvips reads, and LibRaw 0.21.4 does not know the camera: the preview comes out with a purple and green cast and the masked border of the sensor (8480x5650 instead of 8192x5464). LibRaw 0.22 knows it.
+- **Embedded JPEG refused.** The S23 Ultra's full-size preview fails in libvips on a warning ("2 extraneous bytes before marker"), so the file takes a full decode it did not need.
+- **Dimensions.** When the embedded JPEG is the source, the stored size is the JPEG's: 4000x3000 for a 102 MP GFX 100, 3200x2400 for an 80 MP OM-3 high-resolution shot, 4416x2944 for a 40 MP X-T5, as the architecture row says; the details panel shows these sizes.
+- **Fine:** Nikon Z6III and Z5II High Efficiency NEF (LibRaw cannot decode them, the full-size embedded JPEG is used), Canon R5 dual pixel and R6 III CR3, 5DS R CR2, Sigma fp L and iPhone 12 Pro DNG, Pixel 8 Pro DNG, Pentax PEF, Samsung NX1 SRW, Fujifilm X-T5 and GFX 100 RAF.
+
+The fixes are improvement 20.
+
 ## 18. Lightroom XMP sidecars
 
 **Status:** draft plan of 2026-11-21, not started; choices below wait for the user.
@@ -444,3 +454,20 @@ Settled with the user on 2026-11-21:
 1. A missing file sends its photo to the trash, where it shows with a notice; it comes back out when the file does, unless the owner put it there.
 2. The scan interval is set per folder, every 10 minutes by default.
 3. Subfolders do not become albums.
+
+## 20. Safer RAW decoding
+
+**Status:** planned on 2026-11-21, not started. The user asked for all four fixes below and chose, the same day, the LibRaw backport with direct calls through cgo (fix 4).
+
+From the trial of 20 hard files in improvement 17 ("Found on 2026-11-21"). Samples are the files named there, from raw.pixls.us; the check is a render of each at the default viewer size in a container limited to 4 GB, watching the peak memory.
+
+1. **A ceiling on full decodes.** Above a pixel count, such as 120 MP, a full decode is not run: the largest embedded preview is used however small, or, if LibRaw's half-size mode can be reached through ImageMagick's `dng` coder (to check: its `-define` options), the file is decoded at half size, a quarter of the memory and still above the viewer size. A 177 MP Panasonic S1R II shot peaks at 3.9 GB today, at the container's 4 GB limit, and would stop the application on the NAS, then again after every restart, as the job runs again. The ceiling may be a setting next to the preview settings. Test: the S1R II file stays well under the limit and gets a preview.
+2. **Embedded JPEGs that libvips warns about.** Load them without failing on warnings (libvips `fail` off, the default of `vips_jpegload`'s `fail_on` being checked in govips), so a Samsung S23 Ultra DNG takes its full-size embedded JPEG instead of a 1.5 GB decode. A JPEG that does not decode at all still falls through to LibRaw.
+3. **No wrong image from a camera LibRaw does not know.** LibRaw 0.21.4 decodes a Canon R5 II CR3 with the colours and the masked border of an unknown camera, without an error. When LibRaw reports the camera as unknown, or ImageMagick's coder gives no colour matrix for it (to check which signal is reachable), use any embedded preview, and if there is none, mark the photo failed with a message that names the camera, rather than show a wrong picture. Canon's HDR PQ previews, in Canon's own container (`CISZ`), are not readable; this case then fails clearly.
+4. **LibRaw 0.22 in the image.** Checked in the Debian archive on 2026-11-21: trixie has LibRaw 0.21.4 (`libraw23t64`), ImageMagick 7.1.1.43 and libvips 8.16.1; testing (forky) has LibRaw 0.22.3 (`libraw25`, a new soname), ImageMagick 7.1.2.35 and libvips 8.18.7, whose Debian build links ImageMagick, not LibRaw; trixie-backports has no LibRaw. Installing `libraw25` alone changes nothing, as trixie's ImageMagick links `libraw23t64`. The ways:
+   - the image on `debian:forky-slim`: consistent, but testing moves under the build and has no security support to speak of;
+   - testing's ImageMagick pinned into trixie: pulls much of testing with it, fragile;
+   - **a backport of our own** (chosen by the user on 2026-11-21): a build stage on trixie rebuilds Debian's `libraw` 0.22.3 source package, the runtime installs that `.deb`, and the application calls LibRaw through cgo instead of `magickload`. ImageMagick and libvips stay Debian's with their security updates; only LibRaw is ours to follow, until forky is stable. Calling LibRaw directly also gives fix 1 its half-size mode (`half_size`) and fix 3 its signal for a camera without colour data, neither of which ImageMagick's coder exposes. It replaces the decode path of improvement 17.
+   Test: the R5 II file decodes with the right colours and size.
+
+Order: 2 first, as a small change of its own. Then 1, 3 and 4 together: the LibRaw 0.22.3 backport stage in `deploy/Dockerfile`, a cgo binding to LibRaw in `media` in place of `magickload` for full decodes, with `half_size` above the pixel ceiling and a refusal for a camera without colour data. The embedded-preview path, the one-decode-at-a-time slot and the 4 GB limit stay. Tests run against the image's LibRaw with the fixtures of improvement 17; the 20 hard files are checked again as in "Found on 2026-11-21". When forky becomes Debian stable, the backport stage goes.
