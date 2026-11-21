@@ -6,10 +6,10 @@
 - Go 1.27
 - Node.js 24 and pnpm 12
 - Google Chrome, for `make e2e`
-- libvips, pkg-config, exiftool and ffmpeg: `brew install vips pkg-config exiftool ffmpeg`. RAW decoding uses libvips with the ImageMagick loader and ImageMagick with LibRaw, as packaged in the Debian image.
+- libvips, LibRaw, pkg-config, exiftool and ffmpeg: `brew install vips libraw pkg-config exiftool ffmpeg`. The Docker build backports Debian’s LibRaw 0.22.3 package to trixie for RAW decoding.
 - uv, for the ML service: `brew install uv`
 
-The backend links against libvips through cgo, so it needs a working C toolchain on the host.
+The backend links against libvips and LibRaw through cgo, so it needs a working C toolchain on the host.
 
 Videos are processed with `ffprobe` and `ffmpeg` run as separate processes. Without them the server warns at the start, and videos wait in the queue until processing gives up on them. Homebrew's ffmpeg has no `zscale` filter, so on the host the posters of HDR videos, such as an iPhone's, are not tone mapped and look grey; the image has it.
 

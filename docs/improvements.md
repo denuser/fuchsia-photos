@@ -457,7 +457,7 @@ Settled with the user on 2026-11-21:
 
 ## 20. Safer RAW decoding
 
-**Status:** planned on 2026-11-21, not started. The user asked for all four fixes below and chose, the same day, the LibRaw backport with direct calls through cgo (fix 4).
+**Status:** implemented on 2026-11-21. The two available camera samples and a synthetic large DNG were checked on Linux amd64. The Canon HDR PQ file and full set of 20 files still need a rerun.
 
 From the trial of 20 hard files in improvement 17 ("Found on 2026-11-21"). Samples are the files named there, from raw.pixls.us; the check is a render of each at the default viewer size in a container limited to 4 GB, watching the peak memory.
 
@@ -471,3 +471,12 @@ From the trial of 20 hard files in improvement 17 ("Found on 2026-11-21"). Sampl
    Test: the R5 II file decodes with the right colours and size.
 
 Order: 2 first, as a small change of its own. Then 1, 3 and 4 together: the LibRaw 0.22.3 backport stage in `deploy/Dockerfile`, a cgo binding to LibRaw in `media` in place of `magickload` for full decodes, with `half_size` above the pixel ceiling and a refusal for a camera without colour data. The embedded-preview path, the one-decode-at-a-time slot and the 4 GB limit stay. Tests run against the image's LibRaw with the fixtures of improvement 17; the 20 hard files are checked again as in "Found on 2026-11-21". When forky becomes Debian stable, the backport stage goes.
+
+
+Implementation uses direct LibRaw 0.22.3 calls with the backported Debian package. Mosaic sensors over 120 MP use half size up to a 240 MP sensor ceiling. The unpacker also has a 1536 MiB allocation limit, and a large input that LibRaw cannot reduce to half size falls back to the embedded JPEG. Multi-colour sensors with no colour conversion are refused. The original, upright dimensions are kept for a successful half-size decode.
+
+Local checks on 2026-11-21 used LibRaw 0.22.3 and host libvips, measuring peak process RSS outside Docker:
+
+- Samsung Galaxy S23 Ultra 50 MP used the 8160×6120 embedded JPEG despite libjpeg warnings, at about 130 MiB.
+- Panasonic DC-S1RM2 177 MP used its 1920×1280 embedded JPEG after LibRaw returned an I/O error during unpack, at about 65 MiB.
+- A synthetic 123 MP Bayer DNG exercised the half-size sensor path and kept its 9600×12800 upright source dimensions, at about 593 MiB.
