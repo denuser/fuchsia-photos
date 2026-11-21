@@ -25,3 +25,8 @@ The first release.
 - iPhone Live Photos as one item: the video, uploaded before or after its photo, plays as the photo's motion and leaves the lists
 - H.264 copies of HEVC, VP9 and AV1 videos, of HDR H.264 videos and of the motion of photos, made on Intel graphics by a transcoder service so that every browser plays them, at 1080p with HDR tone mapped, when the video is first played or after upload, as the administrator chooses
 - Images for `linux/amd64` and `linux/arm64`, and `amd64` images of the transcoder, `fuchsia-photos-transcoder:latest-intel` with VAAPI and OpenCL, and `latest-amd` with Mesa's driver for SDR videos, built by hand
+
+### Known limitations
+
+- Very large RAW files that need a full decode can exceed the container's default 4 GB memory limit and trigger repeated restarts as the processing job retries. Try importing a small sample from your camera first. See [RAW photos](https://github.com/denuser/fuchsia-photos/blob/master/docs/deployment.md#raw-photos).
+- Folder imports copy originals into the managed library. Lightroom XMP develop settings are not applied to previews.

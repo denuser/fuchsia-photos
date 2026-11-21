@@ -4,7 +4,7 @@ A self-hosted photo library for a home NAS. Photos come in from the browser, fro
 
 It is built for modest hardware. It is developed and measured on an Intel N150 with 4 cores and 16 GB of memory, and runs as one Go binary next to PostgreSQL, with no Redis or other services. Search by description is optional and can run on another machine.
 
-**Status:** in active development, with no release yet. The [roadmap](docs/roadmap.md) shows what is done and what comes next.
+**Status:** in active development. See [releases](https://github.com/denuser/fuchsia-photos/releases) and the [roadmap](docs/roadmap.md).
 
 <img src="docs/images/tour.gif" alt="A tour of Fuchsia Photos: the timeline, the viewer, search by description and albums" width="100%">
 
@@ -53,15 +53,16 @@ Supported formats: JPEG, PNG, WebP and HEIC photos, MP4 and MOV videos, and the 
 
 ## Quick start
 
-This runs the published image with PostgreSQL, the nightly backup and Caddy for HTTPS. Run the commands on the NAS:
+This runs release `0.1.0` with PostgreSQL, the nightly backup and Caddy for HTTPS. Run the commands on the NAS:
 
 ```sh
 mkdir fuchsia-photos && cd fuchsia-photos
 curl -fsSL -o docker-compose.yml \
-  https://raw.githubusercontent.com/denuser/fuchsia-photos/master/deploy/compose.image.yaml
+  https://raw.githubusercontent.com/denuser/fuchsia-photos/v0.1.0/deploy/compose.image.yaml
 cat > .env <<'ENV'
 POSTGRES_PASSWORD=change-me
 SITE_ADDRESS=192.168.0.10
+IMAGE_TAG=0.1.0
 ENV
 mkdir -p data/library data/cache data/import
 sudo chown 1000:1000 data/library data/cache
