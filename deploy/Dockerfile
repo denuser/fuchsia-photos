@@ -76,10 +76,33 @@ RUN ./configure $FFMPEG_OPTIONS \
     && grep -q '^#define HAVE_VAAPI_DRM 1' config.h \
     && make -j"$(nproc)" && make install
 
-FROM golang:1.27-trixie AS backend
+# Backport Debian's LibRaw to trixie for current camera support. Verify the
+# descriptor and let dpkg-source verify the source archives it lists.
+FROM debian:trixie-slim AS libraw
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
+        build-essential ca-certificates curl debhelper dh-sequence-pkgkde-symbolshelper \
+        liblcms2-dev libjpeg-dev pkgconf xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+RUN base=https://deb.debian.org/debian/pool/main/libr/libraw \
+    && for file in libraw_0.22.3-1exp1.dsc libraw_0.22.3-1exp1.debian.tar.xz libraw_0.22.3.orig.tar.gz; do \
+        curl --retry 3 -fsSLO "$base/$file" || exit 1; \
+    done \
+    && echo '4d42ba9326350dd1186ae3330f0bd49ad16cfaa1c8b6ed267c29a6a3139c02b9  libraw_0.22.3-1exp1.dsc' | sha256sum -c - \
+    && dpkg-source --no-check-signature -x libraw_0.22.3-1exp1.dsc \
+    && cd libraw-0.22.3 \
+    && sed -i 's/debhelper-compat (= 14)/debhelper-compat (= 13)/' debian/control \
+    && dpkg-buildpackage -B -us -uc \
+    && mkdir /out \
+    && cp ../libraw25_*.deb ../libraw-dev_*.deb /out/
+
+FROM golang:1.27-trixie AS backend
+RUN --mount=type=bind,from=libraw,source=/out,target=/tmp/libraw \
+    apt-get update \
+    && apt-get install --yes --no-install-recommends \
         libvips-dev libheif-plugin-libde265 libimage-exiftool-perl libdav1d7 libzimg2 \
+        /tmp/libraw/libraw25_*.deb /tmp/libraw/libraw-dev_*.deb \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=ffmpeg /opt/ffmpeg/bin/ffmpeg /opt/ffmpeg/bin/ffprobe /usr/local/bin/
 WORKDIR /src/backend
@@ -120,9 +143,11 @@ COPY backend/ ./
 RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/fuchsia-photos-transcoder ./cmd/fuchsia-photos-transcoder
 
 FROM debian:trixie-slim AS runtime
-RUN apt-get update \
+RUN --mount=type=bind,from=libraw,source=/out,target=/tmp/libraw \
+    apt-get update \
     && apt-get install --yes --no-install-recommends \
         libvips42t64 libheif-plugin-libde265 libimage-exiftool-perl libdav1d7 libzimg2 \
+        /tmp/libraw/libraw25_*.deb \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/ /usr/local/bin/
 EXPOSE 8080

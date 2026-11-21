@@ -4,6 +4,8 @@ Changes in each release. Add changes under "Unreleased" as they are made; `make 
 
 ## Unreleased
 
+- RAW previews tolerate warnings in the camera JPEG, use LibRaw 0.22.3 for sensor decoding and reduce memory use on very large mosaic sensors.
+
 ## 0.1.0 - 2026-11-21
 
 The first release.

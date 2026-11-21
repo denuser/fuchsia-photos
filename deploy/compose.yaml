@@ -38,9 +38,8 @@ services:
       options:
         max-size: 10m
         max-file: "5"
-    # A full RAW decode holds up to about 2.5 GB. The limit keeps a runaway decode from
-    # taking the NAS's memory: the kernel stops the application, and Docker
-    # starts it again.
+    # The limit bounds the application's memory use on the NAS. Docker restarts
+    # the application if it exceeds the limit.
     deploy:
       resources:
         limits:
