@@ -480,3 +480,7 @@ Local checks on 2026-11-21 used LibRaw 0.22.3 and host libvips, measuring peak p
 - Samsung Galaxy S23 Ultra 50 MP used the 8160×6120 embedded JPEG despite libjpeg warnings, at about 130 MiB.
 - Panasonic DC-S1RM2 177 MP used its 1920×1280 embedded JPEG after LibRaw returned an I/O error during unpack, at about 65 MiB.
 - A synthetic 123 MP Bayer DNG exercised the half-size sensor path and kept its 9600×12800 upright source dimensions, at about 593 MiB.
+
+On 2026-11-21 the user uploaded the problematic RAW samples to the NAS (Intel N150). All uploads succeeded, and the user observed no memory issues. No peak memory or timing figures were reported for this run.
+
+A timed NAS run on 2026-11-21 imported all 20 difficult RAW samples in 102.1 s on the Intel N150 at 800 MHz with Turbo disabled. Fuchsia Photos and PostgreSQL together peaked at 1,392 MiB of cgroup working set sampled every 250 ms. The test used three workers and the default 2048 px WebP viewer preview. The 177 MP Panasonic used its 1920×1280 embedded preview. See the [NAS comparison](benchmark.md#comparison-with-immich-and-photoprism) for the full results.

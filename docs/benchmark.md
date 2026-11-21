@@ -143,6 +143,53 @@ Measured on 2026-11-02 on the NAS (Intel N150) with 475 JPEG photos and `/out` o
 
 HEIC photos were left out, because they are not currently relevant, and originals on the HDD were not compared with the SSD. Previews are kept on the SSD in any case.
 
+## Comparison with Immich and PhotoPrism
+
+Measured on 2026-11-21 on one TrueNAS SCALE NAS with a four-core Intel N150 capped at 800 MHz, Turbo disabled, 15.4 GiB of RAM available to Linux, no swap and an NVMe SSD. Tested versions were Fuchsia Photos `9982507`, Immich 3.4.2 and PhotoPrism `261029-963b58c50`. The applications ran separately in fresh test stacks. Other NAS services stayed online. Input copies were on the same SSD and mounted read-only. Each input set was read once before its run to warm the filesystem cache.
+
+The timer covers folder import or indexing through completed preview work. Fuchsia copies originals into its library. Immich and PhotoPrism index the shared input folder in place. Fuchsia and PhotoPrism used three workers. Immich was set to three concurrent thumbnail jobs and three concurrent metadata jobs. ML and face processing were disabled. Memory is the sum of the stack's cgroup working sets, including the database and, for Immich, Valkey. Each working set is `memory.current` minus `inactive_file`. The sampler runs every 250 ms before and during the workload. Idle is the pre-run median and peak is the highest simultaneous sum.
+
+### Matched viewer previews
+
+Two runs in different app orders used the same 96 unique landscape 4:3 JPEGs. All 96 viewer files per app and per run were verified at 1600×1200. All three used JPEG at a configured quality of 80. Fuchsia used a 1600 px viewer long edge, Immich a 1200 px short edge, and PhotoPrism a 1920×1200 fit. PhotoPrism also generated more thumbnail sizes. The files counted below exclude Immich's stored blur hashes.
+
+| App | Elapsed (s) | Photos/s | Idle (MiB) | Peak (MiB) | Preview files per input |
+|---|---:|---:|---:|---:|---:|
+| Fuchsia Photos | 31.1–31.4 | 3.06–3.08 | 153–163 | 616–621 | 2 |
+| PhotoPrism | 82.4–82.7 | 1.16 | 320–412 | 866–975 | 8 |
+| Immich | 157.5–157.9 | 0.61 | 1,786–1,873 | 2,881–3,168 | 2 |
+
+### Larger JPEG import with default viewer settings
+
+One run used 475 JPEG files from a private library. Fuchsia and PhotoPrism produced 464 gallery items after handling 11 exact duplicates. Immich produced 475 gallery items. Fuchsia used WebP with a 2048 px long edge, Immich used JPEG with a 1440 px short edge, and PhotoPrism generated its standard sizes up to the 1920×1200 fit.
+
+| App | Ready | Elapsed (s) | Ready photos/s | Idle (MiB) | Peak (MiB) |
+|---|---:|---:|---:|---:|---:|
+| Fuchsia Photos | 464 | 248.9 | 1.86 | 147 | 2,069 |
+| PhotoPrism | 464 | 464.7 | 1.00 | 347 | 1,267 |
+| Immich | 475 | 873.3 | 0.54 | 1,738 | 4,095 |
+
+### Difficult RAW files with default viewer settings
+
+One run used 20 difficult files from [raw.pixls.us](https://raw.pixls.us/). Immich indexed all 20 but did not generate a viewer file for the Panasonic S1R II 177 MP RW2 or Nikon Z6 III High Efficiency NEF. Fuchsia used the Panasonic's embedded 1920×1280 preview. RAW preview sizes and decode paths varied by app. These timings include any attempts that did not yield a preview.
+
+| App | Viewer previews | Elapsed (s) | Idle (MiB) | Peak (MiB) |
+|---|---:|---:|---:|---:|
+| Fuchsia Photos | 20/20 | 102.1 | 151 | 1,392 |
+| PhotoPrism | 19/20 | 558.0 | 463 | 6,308 |
+| Immich | 18/20 | 281.7 | 1,747 | 5,882 |
+
+### Reproducing the comparison
+
+Use the [benchmark scripts](../scripts/compare-nas/) on a Linux host with cgroup v2, Docker Compose and Python 3.11 or newer. Supply your own JPEGs and assemble the public RAW set using the [sample names and checksums](../scripts/compare-nas/raw-samples.sha256). The private JPEGs used above are kept on the NAS. Point the corpus and test outputs at the SSD under test and allow room for local copies, previews and databases.
+
+```sh
+python3 scripts/compare-nas/prepare-corpus.py /path/to/jpegs /path/to/raw-samples /path/to/new-corpus
+bash scripts/compare-nas/run.sh /path/to/new-corpus
+```
+
+Use `bash scripts/compare-nas/run.sh --help` for image selection, repeat counts and optional noninteractive sudo. Pin the tested image versions for comparisons across hosts. The runner prepares one default JPEG round, one RAW round and two matched JPEG repeats. It verifies input checksums and checks output dimensions for the matched repeats.
+
 ## Video transcoding
 
 `scripts/video-bench.sh` measures how fast the NAS makes H.264 copies of videos that some browsers cannot play, such as HEVC from phones. Its results decide step 2 of stage 8 in the [roadmap](roadmap.md). The plan is hardware encoding with `h264_vaapi`, turned on in the administration page where the graphics allow it; libx264 on the CPU is measured for comparison.
