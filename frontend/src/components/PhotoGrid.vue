@@ -266,17 +266,22 @@ onBeforeUnmount(() => {
                 <v-icon v-bind="tooltip" icon="fa-triangle-exclamation" data-testid="tile-failed" />
               </template>
             </v-tooltip>
-            <span
-              v-if="isVideo(photo)"
-              class="badge"
-              data-testid="tile-video"
-              :title="t('grid.video', { duration: formatDuration(photo.duration ?? 0) })"
-            >
-              <v-icon icon="fa-play" size="small" />
-              <span v-if="photo.duration !== null">{{ formatDuration(photo.duration) }}</span>
-            </span>
-            <span v-else-if="photo.hasMotion" class="badge" data-testid="tile-motion" :title="t('grid.motion')">
-              <v-icon icon="fa-regular-circle-dot" size="small" />
+            <span v-if="isVideo(photo) || photo.hasMotion || photo.hasRaw" class="badges">
+              <span
+                v-if="isVideo(photo)"
+                class="badge"
+                data-testid="tile-video"
+                :title="t('grid.video', { duration: formatDuration(photo.duration ?? 0) })"
+              >
+                <v-icon icon="fa-play" size="small" />
+                <span v-if="photo.duration !== null">{{ formatDuration(photo.duration) }}</span>
+              </span>
+              <template v-else>
+                <span v-if="photo.hasRaw" class="badge raw" data-testid="tile-raw" :title="t('grid.raw')">RAW</span>
+                <span v-if="photo.hasMotion" class="badge" data-testid="tile-motion" :title="t('grid.motion')">
+                  <v-icon icon="fa-regular-circle-dot" size="small" />
+                </span>
+              </template>
             </span>
           </button>
           <button
@@ -396,11 +401,18 @@ onBeforeUnmount(() => {
   transition: transform 0.1s;
 }
 
-/* A video's length or a motion photo's mark, in the corner a player puts it. */
-.badge {
+/* A video's length, or the marks of a RAW and a motion photo, in the corner
+   a player puts them. */
+.badges {
   position: absolute;
   right: 4px;
   bottom: 4px;
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.badge {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -411,6 +423,10 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
+}
+
+.badge.raw {
+  font-weight: 600;
 }
 
 .check {

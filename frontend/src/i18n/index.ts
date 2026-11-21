@@ -129,6 +129,24 @@ export function formatDate(value: string | Date) {
   return new Date(value).toLocaleDateString(intlLocale.value, { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
+// A size in bytes in the largest unit that keeps it at 1 or more, such as
+// 1.2 GB or 340 MB, with the interface language's unit names.
+export function formatBytes(bytes: number) {
+  const units = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte']
+  let value = bytes
+  let unit = 0
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000
+    unit++
+  }
+  return value.toLocaleString(intlLocale.value, {
+    style: 'unit',
+    unit: units[unit],
+    unitDisplay: 'short',
+    maximumFractionDigits: value < 10 && unit > 0 ? 1 : 0,
+  })
+}
+
 // A date and time in short form, such as 31.12.2026, 14:05.
 export function formatDateTime(value: string | Date) {
   return new Date(value).toLocaleString(intlLocale.value, { dateStyle: 'short', timeStyle: 'short' })

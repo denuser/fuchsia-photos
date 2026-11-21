@@ -24,7 +24,7 @@ export interface PhotoQuery {
   tags?: number[]
   cameras?: string[]
   lenses?: string[]
-  // Still photos, photos with motion or videos.
+  // Still photos, photos with motion, videos, or RAW photos (any of them).
   kinds?: MediaKind[]
   from?: string
   to?: string

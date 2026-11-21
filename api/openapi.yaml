@@ -394,7 +394,7 @@ paths:
               type: string
         - name: kind
           in: query
-          description: Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them
+          description: Only items of any of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them. A camera RAW, or a photo with a RAW hidden under it, is also `raw`
           schema:
             type: array
             items:
@@ -667,7 +667,7 @@ paths:
               type: string
         - name: kind
           in: query
-          description: Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them
+          description: Only items of any of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them. A camera RAW, or a photo with a RAW hidden under it, is also `raw`
           schema:
             type: array
             items:
@@ -761,7 +761,7 @@ paths:
               type: string
         - name: kind
           in: query
-          description: Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them
+          description: Only items of any of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them. A camera RAW, or a photo with a RAW hidden under it, is also `raw`
           schema:
             type: array
             items:
@@ -2092,7 +2092,7 @@ components:
     Photo:
       type: object
       description: A photo or a video, which the MIME type tells apart
-      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, duration, hasMotion, hiddenUnder, videoCopy, hdr, description, camera, location]
+      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, duration, hasMotion, hasRaw, hiddenUnder, videoCopy, hdr, description, camera, location]
       properties:
         id:
           type: integer
@@ -2135,6 +2135,9 @@ components:
           type: [number, "null"]
         hasMotion:
           description: Whether a motion photo or a Live Photo has a video to play from /photos/{id}/motion
+          type: boolean
+        hasRaw:
+          description: Whether the photo is a camera RAW or has one hidden under it, as a RAW + JPEG pair does
           type: boolean
         hiddenUnder:
           description: Set on a file hidden under another photo to the kind of link, live for the video of a Live Photo, edited for the original of an edited copy, and raw for a camera RAW paired with its JPEG. Lists leave such files out; only events carry them, so that pages drop them
@@ -2239,7 +2242,7 @@ components:
             $ref: "#/components/schemas/NameCount"
     MediaKind:
       type: string
-      enum: [photo, motion, video]
+      enum: [photo, motion, video, raw]
     NameCount:
       type: object
       required: [name, count]

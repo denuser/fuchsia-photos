@@ -247,7 +247,7 @@ func (q *Queries) GetWebDAVEntry(ctx context.Context, arg GetWebDAVEntryParams) 
 }
 
 const getWebDAVPhoto = `-- name: GetWebDAVPhoto :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr FROM photos WHERE id = $1 AND owner_id = $2 AND purged_at IS NULL
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw FROM photos WHERE id = $1 AND owner_id = $2 AND purged_at IS NULL
 `
 
 type GetWebDAVPhotoParams struct {
@@ -290,6 +290,7 @@ func (q *Queries) GetWebDAVPhoto(ctx context.Context, arg GetWebDAVPhotoParams) 
 		&i.ImportedLongitude,
 		&i.Description,
 		&i.Hdr,
+		&i.HasRaw,
 	)
 	return i, err
 }

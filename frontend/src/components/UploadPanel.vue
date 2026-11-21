@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import { useUploadsStore } from '../stores/uploads'
-import { t } from '../i18n'
+import { formatBytes, t } from '../i18n'
 
 const uploads = useUploadsStore()
 
@@ -16,6 +16,9 @@ const title = computed(() => {
 // One line each, so that none is cut off in the narrow panel.
 const lines = computed(() => {
   const parts = []
+  if (uploads.running) {
+    parts.push(t('uploads.bytes', { sent: formatBytes(uploads.sentBytes), total: formatBytes(uploads.totalBytes) }))
+  }
   if (uploads.album) {
     parts.push(t('uploads.into', { album: uploads.album.name }))
   }

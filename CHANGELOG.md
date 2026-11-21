@@ -20,7 +20,7 @@ The first release.
 - Nightly database dumps with a tested restore, request logs in text or JSON
 - The interface in ten languages (English, Russian, Simplified Chinese, Spanish, Brazilian Portuguese, German, French, Japanese, Korean and Italian), light, dark and high contrast themes and a glass mode
 - JPEG, PNG, WebP and HEIC photos, and MP4 and MOV videos up to 4 GiB, which play in the viewer, with a download when the browser cannot play the codec
-- RAW photos from cameras and phones, with browser previews, original downloads and a viewer switch between matched JPEG and RAW files
+- RAW photos from cameras and phones, with browser previews, original downloads and a viewer switch between matched JPEG and RAW files. A RAW badge marks them and RAW + JPEG pairs in the grid, and the type filter finds them
 - The motion of Google and Samsung motion photos, played in the viewer by a button, including for photos uploaded before
 - iPhone Live Photos as one item: the video, uploaded before or after its photo, plays as the photo's motion and leaves the lists
 - H.264 copies of HEVC, VP9 and AV1 videos, of HDR H.264 videos and of the motion of photos, made on Intel graphics by a transcoder service so that every browser plays them, at 1080p with HDR tone mapped, when the video is first played or after upload, as the administrator chooses

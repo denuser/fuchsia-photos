@@ -125,6 +125,7 @@ type Photo struct {
 	ImportedLongitude *float64
 	Description       string
 	Hdr               *bool
+	HasRaw            bool
 }
 
 type PhotoArchive struct {

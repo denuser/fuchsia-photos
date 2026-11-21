@@ -148,6 +148,9 @@ export const vuetify = createVuetify({
     VSwitch: { color: 'primary', inset: true },
     VCheckbox: { color: 'primary' },
     // PatternFly's compact tables: 8px above and below the cell text.
+    // The track takes 'border-opacity', which is 1 here, so in the bar's own
+    // color it would look full; PatternFly's track is the secondary background.
+    VProgressLinear: { color: 'primary', bgColor: 'surface-light' },
     VTable: { density: 'compact' },
     VTabs: { density: 'compact' },
   },

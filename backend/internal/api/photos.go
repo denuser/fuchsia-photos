@@ -59,6 +59,8 @@ type photoJSON struct {
 	Duration *float64 `json:"duration"`
 	// Whether a motion photo or a Live Photo has a video to play.
 	HasMotion bool `json:"hasMotion"`
+	// Whether the photo is a camera RAW or has one hidden under it.
+	HasRAW bool `json:"hasRaw"`
 	// The kind of link a photo is hidden under another one with: live for the
 	// video of a Live Photo, edited for the original of an edited copy, and
 	// raw for a camera RAW paired with a JPEG. Only events carry hidden photos.
@@ -122,6 +124,7 @@ func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 		Location:       location,
 		Duration:       p.Duration,
 		HasMotion:      p.HasMotion,
+		HasRAW:         p.HasRaw || storage.IsRAW(p.Mime),
 		VideoCopy:      p.VideoCopy,
 		HDR:            p.Hdr,
 		Description:    p.Description,
@@ -221,7 +224,7 @@ func (s *server) timelineFilter(w http.ResponseWriter, r *http.Request) (store.L
 	params.Lenses = query["lens"]
 	for _, kind := range query["kind"] {
 		switch kind {
-		case "photo", "motion", "video":
+		case "photo", "motion", "video", "raw":
 			params.Kinds = append(params.Kinds, kind)
 		default:
 			writeError(w, http.StatusBadRequest, "invalid kind")

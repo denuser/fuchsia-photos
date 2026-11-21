@@ -41,6 +41,12 @@ export const useUploadsStore = defineStore('uploads', () => {
   const done = ref(0)
   const duplicates = ref(0)
   const restored = ref(0)
+  // Bytes of every file added since the panel was last empty, and of the
+  // files that are finished or failed. sending holds the bytes sent so far of
+  // each file on its way, so that the bar moves within a large file too.
+  const totalBytes = ref(0)
+  const endedBytes = ref(0)
+  const sending = ref(new Map<Upload, number>())
   // The paths of files in chosen or dropped folders that are not photos or videos.
   const skipped = shallowRef<string[]>([])
   const failures = shallowRef<FailedUpload[]>([])
@@ -62,7 +68,14 @@ export const useUploadsStore = defineStore('uploads', () => {
 
   const running = computed(() => active.value > 0)
   const visible = computed(() => total.value > 0)
-  const progress = computed(() => (total.value ? ((done.value + failures.value.length) / total.value) * 100 : 0))
+  const sentBytes = computed(() => {
+    let sent = endedBytes.value
+    for (const loaded of sending.value.values()) {
+      sent += loaded
+    }
+    return Math.min(sent, totalBytes.value)
+  })
+  const progress = computed(() => (totalBytes.value ? (sentBytes.value / totalBytes.value) * 100 : 0))
 
   let queue: Upload[] = []
 
@@ -78,6 +91,8 @@ export const useUploadsStore = defineStore('uploads', () => {
       done.value = 0
       duplicates.value = 0
       restored.value = 0
+      totalBytes.value = 0
+      endedBytes.value = 0
       skipped.value = []
       failures.value = []
       album.value = into
@@ -85,6 +100,7 @@ export const useUploadsStore = defineStore('uploads', () => {
       album.value = null
     }
     total.value += files.length
+    totalBytes.value += bytes(files)
     skipped.value = [...skipped.value, ...skippedFiles]
     queue.push(...files.map((file) => ({ file, album: into })))
     pump()
@@ -100,6 +116,19 @@ export const useUploadsStore = defineStore('uploads', () => {
     }
   }
 
+  function bytes(files: File[]) {
+    return files.reduce((sum, file) => sum + file.size, 0)
+  }
+
+  // A file stops counting as on its way and counts in full as ended,
+  // whether it was uploaded or failed.
+  function ended(uploads: Upload[]) {
+    for (const u of uploads) {
+      sending.value.delete(u)
+    }
+    endedBytes.value += bytes(uploads.map((u) => u.file))
+  }
+
   async function run(upload: Upload) {
     for (let attempt = 1; ; attempt++) {
       try {
@@ -113,10 +142,12 @@ export const useUploadsStore = defineStore('uploads', () => {
         } else if (result.duplicate) {
           duplicates.value++
         }
+        ended([upload])
         done.value++
         return
       } catch (error) {
         if (error instanceof SessionEndedError) {
+          sending.value.delete(upload)
           queue = []
           notifyUnauthorized()
           return
@@ -125,11 +156,13 @@ export const useUploadsStore = defineStore('uploads', () => {
           // The files still waiting for that album would fail the same way.
           const gone = queue.filter((u) => u.album?.id === upload.album?.id)
           queue = queue.filter((u) => u.album?.id !== upload.album?.id)
+          ended([upload, ...gone])
           failures.value = [...failures.value, ...[upload, ...gone].map((u) => ({ ...u, error: error.message }))]
           return
         }
         if (!(error instanceof RetryableError) || attempt >= MAX_ATTEMPTS) {
           const message = error instanceof Error ? error.message : t('uploads.failed')
+          ended([upload])
           failures.value = [...failures.value, { ...upload, error: message }]
           return
         }
@@ -138,16 +171,25 @@ export const useUploadsStore = defineStore('uploads', () => {
     }
   }
 
-  async function send({ file, album }: Upload): Promise<UploadResult> {
+  async function send(upload: Upload): Promise<UploadResult> {
+    const { file, album } = upload
     const body = new FormData()
     body.append('file', file)
 
+    // XMLHttpRequest rather than fetch, which reports no upload progress.
+    sending.value.set(upload, 0)
     let response: Response
     try {
       const query = album ? `?album=${album.id}` : ''
-      response = await fetch(`${API_BASE}/photos${query}`, { method: 'POST', body })
+      response = await post(`${API_BASE}/photos${query}`, body, (loaded) => {
+        // The form adds a few hundred bytes around the file.
+        sending.value.set(upload, Math.min(loaded, file.size))
+      })
     } catch {
       throw new RetryableError(t('uploads.network'))
+    } finally {
+      // A retry starts from zero; a finished file counts through ended.
+      sending.value.set(upload, 0)
     }
     if (response.ok) {
       return (await response.json()) as UploadResult
@@ -162,6 +204,24 @@ export const useUploadsStore = defineStore('uploads', () => {
     throw response.status >= 500 ? new RetryableError(message) : new Error(message)
   }
 
+  function post(url: string, body: FormData, onProgress: (loaded: number) => void) {
+    return new Promise<Response>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', url)
+      xhr.upload.onprogress = (event) => onProgress(event.loaded)
+      xhr.onload = () => {
+        try {
+          resolve(new Response(xhr.responseText || null, { status: xhr.status }))
+        } catch (error) {
+          reject(error)
+        }
+      }
+      xhr.onerror = () => reject(new Error('network'))
+      xhr.onabort = () => reject(new Error('aborted'))
+      xhr.send(body)
+    })
+  }
+
   async function errorMessage(response: Response) {
     try {
       return apiError(((await response.json()) as { error: string }).error)
@@ -174,6 +234,9 @@ export const useUploadsStore = defineStore('uploads', () => {
     const failed = failures.value
     failures.value = []
     total.value -= failed.length
+    const failedBytes = bytes(failed.map((f) => f.file))
+    totalBytes.value -= failedBytes
+    endedBytes.value -= failedBytes
     // Files of different albums go back each with its own.
     const byAlbum = new Map<number | null, Upload[]>()
     for (const f of failed) {
@@ -205,6 +268,8 @@ export const useUploadsStore = defineStore('uploads', () => {
     running,
     visible,
     progress,
+    sentBytes,
+    totalBytes,
     album,
     landed,
     dialogOpen,

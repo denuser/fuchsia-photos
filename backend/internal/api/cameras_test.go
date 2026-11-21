@@ -117,9 +117,10 @@ func TestCameraFilters(t *testing.T) {
 	})
 }
 
-// Each item is exactly one kind: a video, a photo with motion or a still
-// photo. The video of a paired Live Photo is not an item of its own, and its
-// photo counts as motion.
+// Each item is exactly one of a video, a photo with motion or a still photo.
+// The video of a paired Live Photo is not an item of its own, and its photo
+// counts as motion. A camera RAW, and a JPEG with its RAW hidden under it, are
+// also raw, so a RAW + JPEG pair with motion is both motion and raw.
 func TestKindFilter(t *testing.T) {
 	e := setup(t)
 	e.addUser("anna", auth.RoleUser)
@@ -141,20 +142,57 @@ func TestKindFilter(t *testing.T) {
 	if paired := pairLivePhotos(t, e); paired != 1 {
 		t.Fatalf("paired %d, want 1", paired)
 	}
+	upload := func(name string) int64 {
+		t.Helper()
+		res := anna.uploadBytes(name, []byte("II*\x00\x08\x00\x00\x00"+name))
+		wantStatus(t, res, http.StatusCreated)
+		id := decode[uploadResult](t, res).Photo.ID
+		markReady(t, e, id)
+		return id
+	}
+	raw := upload("solo.DNG")
+	pairRAW := upload("pair.NEF")
+	pairJPEG := anna.addPhoto("rotated.jpg")
+	markReady(t, e, pairJPEG)
+	for _, id := range []int64{pairRAW, pairJPEG} {
+		_, err := e.pool.Exec(context.Background(), `UPDATE photos SET exif = exif || jsonb_build_object(
+			'DateTimeOriginal', '2019:09:21 10:00:00', 'SubSecTimeOriginal', '12', 'Make', 'Nikon', 'Model', 'D5200'),
+			original_name = CASE WHEN id = $2 THEN 'pair.jpg' ELSE original_name END,
+			has_motion = id = $2
+			WHERE id = $1`, id, pairJPEG)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := linkVersions(t, e); n != 1 {
+		t.Fatalf("linked %d photos, want one RAW + JPEG pair", n)
+	}
 
 	t.Run("filters by any of the kinds", func(t *testing.T) {
-		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=photo"), still)
+		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=photo"), raw, still)
 		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=video"), video)
-		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=motion"), live, motion)
-		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=motion&kind=video"), live, motion, video)
-		wantMonths(t, anna.months("/api/v1/photos/months?tz=UTC&kind=motion"), monthJSON{time.Now().UTC().Format("2006-01"), 2})
+		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=motion"), pairJPEG, live, motion)
+		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=raw"), pairJPEG, raw)
+		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=motion&kind=video"), pairJPEG, live, motion, video)
+		wantIDs(t, anna.photoIDs("/api/v1/photos?kind=motion&kind=raw"), pairJPEG, raw, live, motion)
+		wantMonths(t, anna.months("/api/v1/photos/months?tz=UTC&kind=motion"), monthJSON{time.Now().UTC().Format("2006-01"), 3})
+	})
+
+	t.Run("marks a RAW and a photo with one under it", func(t *testing.T) {
+		res := anna.get("/api/v1/photos")
+		wantStatus(t, res, http.StatusOK)
+		for _, p := range decode[page](t, res).Items {
+			if want := p.ID == raw || p.ID == pairJPEG; p.HasRAW != want {
+				t.Errorf("photo %d hasRaw = %v, want %v", p.ID, p.HasRAW, want)
+			}
+		}
 	})
 
 	t.Run("counts the kinds with the other filters but its own", func(t *testing.T) {
 		got := decode[struct {
 			Kinds []nameCountJSON `json:"kinds"`
 		}](t, anna.get("/api/v1/photos/cameras?kind=video"))
-		want := []nameCountJSON{{"motion", 2}, {"photo", 1}, {"video", 1}}
+		want := []nameCountJSON{{"motion", 3}, {"photo", 2}, {"raw", 2}, {"video", 1}}
 		if !reflect.DeepEqual(got.Kinds, want) {
 			t.Errorf("kinds = %+v, want %+v", got.Kinds, want)
 		}

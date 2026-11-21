@@ -55,7 +55,7 @@ const cameraList = shallowRef<NameCount[]>([])
 const lensList = shallowRef<NameCount[]>([])
 
 // The order the types are offered in, rather than the server's alphabetical one.
-const kindOrder: MediaKind[] = ['photo', 'motion', 'video']
+const kindOrder: MediaKind[] = ['photo', 'motion', 'video', 'raw']
 function isKind(name: string): name is MediaKind {
   return (kindOrder as string[]).includes(name)
 }

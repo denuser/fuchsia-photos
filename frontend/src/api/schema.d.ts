@@ -1439,6 +1439,8 @@ export interface components {
             duration: number | null;
             /** @description Whether a motion photo or a Live Photo has a video to play from /photos/{id}/motion */
             hasMotion: boolean;
+            /** @description Whether the photo is a camera RAW or has one hidden under it, as a RAW + JPEG pair does */
+            hasRaw: boolean;
             /**
              * @description Set on a file hidden under another photo to the kind of link, live for the video of a Live Photo, edited for the original of an edited copy, and raw for a camera RAW paired with its JPEG. Lists leave such files out; only events carry them, so that pages drop them
              * @enum {string|null}
@@ -1501,7 +1503,7 @@ export interface components {
             kinds: components["schemas"]["NameCount"][];
         };
         /** @enum {string} */
-        MediaKind: "photo" | "motion" | "video";
+        MediaKind: "photo" | "motion" | "video" | "raw";
         NameCount: {
             name: string;
             /** Format: int64 */
@@ -2115,7 +2117,7 @@ export interface operations {
                 camera?: string[];
                 /** @description Only photos taken with one of these lenses, named as listCameras gives them */
                 lens?: string[];
-                /** @description Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them */
+                /** @description Only items of any of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them. A camera RAW, or a photo with a RAW hidden under it, is also `raw` */
                 kind?: components["schemas"]["MediaKind"][];
                 /** @description Only photos of this album */
                 album?: number;
@@ -2381,7 +2383,7 @@ export interface operations {
                 camera?: string[];
                 /** @description Only photos taken with one of these lenses, named as listCameras gives them */
                 lens?: string[];
-                /** @description Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them */
+                /** @description Only items of any of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them. A camera RAW, or a photo with a RAW hidden under it, is also `raw` */
                 kind?: components["schemas"]["MediaKind"][];
                 /** @description Only photos of this album */
                 album?: number;
@@ -2444,7 +2446,7 @@ export interface operations {
                 camera?: string[];
                 /** @description Only photos taken with one of these lenses, named as listCameras gives them */
                 lens?: string[];
-                /** @description Only items of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them */
+                /** @description Only items of any of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them. A camera RAW, or a photo with a RAW hidden under it, is also `raw` */
                 kind?: components["schemas"]["MediaKind"][];
                 /** @description Only photos of this album */
                 album?: number;
