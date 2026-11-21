@@ -4,6 +4,8 @@ Changes in each release. Add changes under "Unreleased" as they are made; `make 
 
 ## Unreleased
 
+## 0.1.0 - 2026-11-21
+
 The first release.
 
 - Upload from the browser, with previews made in the background and progress shown as it goes
