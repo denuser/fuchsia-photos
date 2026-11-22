@@ -13,7 +13,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 7 | [Interface language](#7-interface-language) | Done | |
 | 8 | [Place names in the viewer](#8-place-names-in-the-viewer) | Planned | Everything |
 | 9 | [OPPO motion photos and older Huawei moving pictures](#9-oppo-motion-photos-and-older-huawei-moving-pictures) | Planned | A real OPPO file; a backfill for old Huawei photos |
-| 10 | [Import from Google Takeout and iCloud](#10-import-from-google-takeout-and-icloud) | Takeout done, iCloud plan drafted | iCloud: a real export (step 0), then the build |
+| 10 | [Import from Google Takeout and iCloud](#10-import-from-google-takeout-and-icloud) | Takeout done, iCloud plan drafted | iCloud: a real export from the library's owner (step 0), then the build |
 | 11 | [Grid tile size](#11-grid-tile-size) | Done | |
 | 12 | [Upload into an album, and whole folders](#12-upload-into-an-album-and-whole-folders) | Done | Check "Choose folder" on iPhone and Android |
 | 13 | [Public links to albums](#13-public-links-to-albums) | Planned | Open questions, then a plan |
@@ -239,7 +239,7 @@ Steps 0 to 4 make a working import, released on their own. Versions come next, a
 
 ### iCloud
 
-**Status:** plan drafted on 2026-11-22, waiting for a real export (step 0).
+**Status:** plan reviewed and drafted on 2026-11-22; the hidden and deleted choices are decided. Waiting for a real export (step 0): the owner of the library requests the copy at privacy.apple.com, which Apple prepares in a few days.
 
 The source is the copy of the data that Apple prepares at privacy.apple.com (decided on 2026-11-15, see above). The WebDAV upload from an iPhone already brings new photos in (checked on 2026-11-22), so the import is for the history: what a library of files does not say, such as favorites, hidden and deleted photos, albums and the dates Apple keeps. If only the files are needed, a plain folder scan of the unpacked parts already imports them.
 
@@ -252,8 +252,8 @@ Plan, to be corrected by step 0:
 2. **Matching.** Each row of `Photo Details.csv` is matched to its file by name within one export, and by `fileChecksum` where a name repeats. The result goes into the tables Takeout fills (`imported_metadata`: date, favorite, archived, trashed), so dates, favorites, the archive, the trash and linking edited copies work from one place for both services, and the "newest export wins" rule stays if the parts' names say when they were made; if they carry only a part number, a folder holds one export, and a second one is told apart some other way.
 3. **Rules to decide on the real data:**
    - `favorite` marks a favorite of the import's owner, as Takeout does.
-   - `hidden`: to be decided by the owner of the library. An archived photo here still shows in albums, favorites, search and shares, while Apple's Hidden album is a privacy feature, so the choices are the archive, the trash, leaving hidden photos out, or importing them as ordinary photos.
-   - `deleted` goes to the trash, with the date of the run as the date of deletion, only for photos the run added, as in 6d, if the owner confirms it.
+   - `hidden` goes to the archive (decided on 2026-11-22), the nearest thing to Apple's Hidden album, though not as private: an archived photo here still shows in albums, favorites, search and shares, so a hidden photo that must stay unseen by others is not shared by hand. The other choices were the trash, leaving hidden photos out, and importing them as ordinary photos.
+   - `deleted` goes to the trash (decided on 2026-11-22), with the date of the run as the date of deletion, only for photos the run added, as in 6d.
    - `originalCreationDate` fills a date the file lacks or has without an offset by the Takeout rule, only if step 0 shows that it is a true instant.
    - Photos other people added to a shared album: Takeout imports them for the owner of the import; iCloud needs its own decision once step 0 shows whether they are in the copy.
    - Albums from `Albums/*.csv` by their name, as Takeout albums are made by their title.
