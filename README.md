@@ -55,16 +55,16 @@ Supported formats: JPEG, PNG, WebP and HEIC photos, MP4 and MOV videos, and the 
 
 ## Quick start
 
-This runs release `0.1.1` with PostgreSQL, the nightly backup and Caddy for HTTPS. Run the commands on the NAS:
+This runs release `0.2.0` with PostgreSQL, the nightly backup and Caddy for HTTPS. Run the commands on the NAS:
 
 ```sh
 mkdir fuchsia-photos && cd fuchsia-photos
 curl -fsSL -o docker-compose.yml \
-  https://raw.githubusercontent.com/denuser/fuchsia-photos/v0.1.1/deploy/compose.image.yaml
+  https://raw.githubusercontent.com/denuser/fuchsia-photos/v0.2.0/deploy/compose.image.yaml
 cat > .env <<'ENV'
 POSTGRES_PASSWORD=change-me
 SITE_ADDRESS=192.168.0.10
-IMAGE_TAG=0.1.1
+IMAGE_TAG=0.2.0
 ENV
 mkdir -p data/library data/cache data/import
 sudo chown 1000:1000 data/library data/cache
