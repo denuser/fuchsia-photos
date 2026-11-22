@@ -216,6 +216,6 @@ make release VERSION=0.1.0
 git push --follow-tags
 ```
 
-`make release` turns "Unreleased" into `## 0.1.0 - <today>`, starts a new empty "Unreleased" above it, commits that as "Release 0.1.0" and tags the commit `v0.1.0`. It pushes nothing, so the commit and the tag can still be dropped with `git tag -d v0.1.0` and `git reset --hard HEAD~1`. It stops if the "Unreleased" section is empty or the tag exists.
+`make release` turns "Unreleased" into `## 0.1.0 - <today>`, starts a new empty "Unreleased" above it, pins the version in the README's quick start, commits both as "Release 0.1.0" and tags the commit `v0.1.0`. It pushes nothing, so the commit and the tag can still be dropped with `git tag -d v0.1.0` and `git reset --hard HEAD~1`. It stops if the "Unreleased" section is empty or the tag exists.
 
 On the tag, CI publishes the image with the version tags and creates the release with that section of `CHANGELOG.md` as its notes. Do not create the release on GitHub or with `gh release create`: the release job would then fail, as the release would exist already. A version with a hyphen, such as `0.2.0-rc.1`, becomes a pre-release and gets no `X.Y` tag.

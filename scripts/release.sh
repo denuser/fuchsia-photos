@@ -1,8 +1,9 @@
 #!/bin/sh
 # Prepares a release: turns the "Unreleased" section of CHANGELOG.md into the
 # given version with today's date, starts a new empty "Unreleased" section,
-# commits that and tags the commit vVERSION. It pushes nothing. Pushing the tag
-# makes CI publish the image and the GitHub release.
+# pins the README's quick start to it, commits both and tags the commit
+# vVERSION. It pushes nothing. Pushing the tag makes CI publish the image and
+# the GitHub release.
 #
 # Usage: scripts/release.sh 0.1.0
 set -eu
@@ -38,7 +39,16 @@ awk -v heading="## $version - $(date +%Y-%m-%d)" '
 cat "$tmp" >"$changelog"
 rm "$tmp"
 
-git commit -q -m "Release $version" -- "$changelog"
+# Pin the README's quick start to this release. A pre-release suffix is left alone.
+if echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+	sed -E -i.bak \
+		-e "s|(runs release \`)[0-9.]+(\`)|\1$version\2|" \
+		-e "s|(fuchsia-photos/)v[0-9.]+(/deploy/compose.image.yaml)|\1$tag\2|" \
+		-e "s|^(IMAGE_TAG=)[0-9.]+\$|\1$version|" README.md
+	rm -f README.md.bak
+fi
+
+git commit -q -m "Release $version" -- "$changelog" README.md
 git tag -a "$tag" -m "$tag"
 
 echo "Committed \"Release $version\" and tagged it $tag. To publish:"
