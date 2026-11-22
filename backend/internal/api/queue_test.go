@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/denuser/magellanica-photos/backend/internal/auth"
-	"github.com/denuser/magellanica-photos/backend/internal/jobs"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/auth"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/jobs"
 )
 
 func TestQueue(t *testing.T) {

@@ -261,14 +261,14 @@ Caddy runs on the host network, and the application listens only on `127.0.0.1:1
 
 This file uses Compose `configs` with `content`, which needs Docker Compose 2.23 or later.
 
-It uses the image that CI publishes to `ghcr.io/denuser/magellanica-photos`, for `linux/amd64` and `linux/arm64`; Docker picks the one for the NAS. The `arm64` image has not been tried on an ARM NAS yet. The tags are:
+It uses the image that CI publishes to `ghcr.io/magellanica-app/magellanica-photos`, for `linux/amd64` and `linux/arm64`; Docker picks the one for the NAS. The `arm64` image has not been tried on an ARM NAS yet. The tags are:
 
 - `latest`, the newest build of `master`;
 - `sha-<commit>`, for example `sha-6593702`, which never changes;
 - `X.Y.Z`, for example `0.1.0`, a release, which never changes;
 - `X.Y`, the newest release of that minor version.
 
-The transcoder, which makes H.264 copies of videos on the graphics as described in [Video copies](#video-copies), has an image of its own for each maker of graphics, `ghcr.io/denuser/magellanica-photos-transcoder`, built by hand for `linux/amd64` only. The tags are `latest-intel` and `latest-amd`, moved when they are built from `master`, and `X.Y.Z-intel` and `X.Y.Z-amd` for a release.
+The transcoder, which makes H.264 copies of videos on the graphics as described in [Video copies](#video-copies), has an image of its own for each maker of graphics, `ghcr.io/magellanica-app/magellanica-photos-transcoder`, built by hand for `linux/amd64` only. The tags are `latest-intel` and `latest-amd`, moved when they are built from `master`, and `X.Y.Z-intel` and `X.Y.Z-amd` for a release.
 
 Release notes are on the GitHub releases page and in `CHANGELOG.md`.
 
@@ -306,8 +306,8 @@ The copies are made by the transcoder, a service next to the application whose i
 
 | Image | Graphics |
 |---|---|
-| `ghcr.io/denuser/magellanica-photos-transcoder:latest-intel` | Intel, with Intel's iHD driver and OpenCL runtime |
-| `ghcr.io/denuser/magellanica-photos-transcoder:latest-amd` | AMD, with Mesa's radeonsi driver. It makes no copies of HDR videos yet: they keep the poster and the download |
+| `ghcr.io/magellanica-app/magellanica-photos-transcoder:latest-intel` | Intel, with Intel's iHD driver and OpenCL runtime |
+| `ghcr.io/magellanica-app/magellanica-photos-transcoder:latest-amd` | AMD, with Mesa's radeonsi driver. It makes no copies of HDR videos yet: they keep the poster and the download |
 
 The transcoder reads the videos from the library and the cache, and writes the copies into the cache, at the same paths as the application. It runs as the same user, as it writes into files the application made, and it needs the render node of the graphics and the group that may open it:
 
@@ -323,7 +323,7 @@ The transcoder reads the videos from the library and the cache, and writes the c
          TRANSCODER_TOKEN: change-me
 
      transcoder:
-       image: ghcr.io/denuser/magellanica-photos-transcoder:latest-intel
+       image: ghcr.io/magellanica-app/magellanica-photos-transcoder:latest-intel
        restart: unless-stopped
        environment:
          TRANSCODER_TOKEN: change-me
@@ -382,7 +382,7 @@ services:
       start_period: 60s
 
   app:
-    image: ghcr.io/denuser/magellanica-photos:latest
+    image: ghcr.io/magellanica-app/magellanica-photos:latest
     restart: unless-stopped
     user: '568:568'
     depends_on:
@@ -496,7 +496,7 @@ and the transcoder under `services`, with the image for your graphics, the group
 
 ```yaml
   transcoder:
-    image: ghcr.io/denuser/magellanica-photos-transcoder:latest-intel
+    image: ghcr.io/magellanica-app/magellanica-photos-transcoder:latest-intel
     restart: unless-stopped
     user: '568:568'
     group_add:

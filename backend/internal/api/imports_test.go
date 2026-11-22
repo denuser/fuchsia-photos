@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/denuser/magellanica-photos/backend/internal/auth"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/auth"
 )
 
 func TestImports(t *testing.T) {

@@ -22,7 +22,7 @@ services:
 
   app:
     # Published by CI on every push to master. IMAGE_TAG selects a sha-<commit> tag instead.
-    image: ghcr.io/denuser/magellanica-photos:${IMAGE_TAG:-latest}
+    image: ghcr.io/magellanica-app/magellanica-photos:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       postgres:

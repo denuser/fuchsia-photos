@@ -3,7 +3,7 @@ package ingest
 import (
 	"testing"
 
-	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
 )
 
 func TestDetectRAW(t *testing.T) {

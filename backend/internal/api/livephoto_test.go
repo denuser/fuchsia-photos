@@ -14,10 +14,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/denuser/magellanica-photos/backend/internal/auth"
-	"github.com/denuser/magellanica-photos/backend/internal/jobs"
-	"github.com/denuser/magellanica-photos/backend/internal/storage"
-	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/auth"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/jobs"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
 )
 
 // markLive marks a file processed with the ContentIdentifier of a Live Photo,

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/denuser/magellanica-photos/backend/internal/auth"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/auth"
 )
 
 // The owner sets a photo's description, cleaned as it is stored; everyone

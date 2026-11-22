@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/denuser/magellanica-photos/backend/internal/auth"
-	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/auth"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
 )
 
 func TestRAWVersions(t *testing.T) {

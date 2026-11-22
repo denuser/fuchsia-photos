@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/denuser/magellanica-photos/backend/internal/vaapi"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/vaapi"
 )
 
 // Request asks for the copy of the video at In, written to Out.

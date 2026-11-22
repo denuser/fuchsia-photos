@@ -11,13 +11,13 @@ import (
 	"github.com/davidbyttow/govips/v2/vips"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/denuser/magellanica-photos/backend/internal/ingest"
-	"github.com/denuser/magellanica-photos/backend/internal/jobs"
-	"github.com/denuser/magellanica-photos/backend/internal/media"
-	"github.com/denuser/magellanica-photos/backend/internal/metadata"
-	"github.com/denuser/magellanica-photos/backend/internal/storage"
-	"github.com/denuser/magellanica-photos/backend/internal/store"
-	"github.com/denuser/magellanica-photos/backend/internal/testdb"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/ingest"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/jobs"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/media"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/metadata"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/testdb"
 )
 
 func TestMain(m *testing.M) {

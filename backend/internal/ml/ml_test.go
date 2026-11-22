@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/denuser/magellanica-photos/backend/internal/storage"
-	"github.com/denuser/magellanica-photos/backend/internal/store"
-	"github.com/denuser/magellanica-photos/backend/internal/testdb"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/testdb"
 )
 
 const testModel = "test-model@1"

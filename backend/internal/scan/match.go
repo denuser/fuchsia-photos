@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/denuser/magellanica-photos/backend/internal/jobs"
-	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/jobs"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
 )
 
 // The suffix of a photo's JSON file before ".json". Long names cut it short,

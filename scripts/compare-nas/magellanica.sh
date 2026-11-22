@@ -35,7 +35,7 @@ ln -s "$2" inputs
 find -L inputs -maxdepth 1 -type f -print0 | sort -z | xargs -0 -r cat > /dev/null
 mkdir library cache
 chmod 777 library cache
-image=${MAGELLANICA_IMAGE:-ghcr.io/denuser/magellanica-photos:latest}
+image=${MAGELLANICA_IMAGE:-ghcr.io/magellanica-app/magellanica-photos:latest}
 export BENCH_IMAGE="$image"
 export BENCH_PASSWORD="$(openssl rand -hex 24)"
 printf "BENCH_IMAGE=%s\nBENCH_PASSWORD=%s\n" "$BENCH_IMAGE" "$BENCH_PASSWORD" > .env

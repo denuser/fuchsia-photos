@@ -3,9 +3,9 @@ package api
 import (
 	"net/http"
 
-	"github.com/denuser/magellanica-photos/backend/internal/storage"
-	"github.com/denuser/magellanica-photos/backend/internal/store"
-	"github.com/denuser/magellanica-photos/backend/internal/transcode"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/transcode"
 )
 
 // playsVideo tells whether an item plays something that may get a copy: a

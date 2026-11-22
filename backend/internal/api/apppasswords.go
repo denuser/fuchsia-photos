@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/denuser/magellanica-photos/backend/internal/auth"
-	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/auth"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
 )
 
 const (

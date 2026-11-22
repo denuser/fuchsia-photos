@@ -28,10 +28,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	dav "golang.org/x/net/webdav"
 
-	"github.com/denuser/magellanica-photos/backend/internal/auth"
-	"github.com/denuser/magellanica-photos/backend/internal/ingest"
-	"github.com/denuser/magellanica-photos/backend/internal/storage"
-	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/auth"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/ingest"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
 )
 
 // Prefix is where the WebDAV tree is served.

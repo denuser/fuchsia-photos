@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/denuser/magellanica-photos/backend/internal/transcoder"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/transcoder"
 )
 
 func main() {

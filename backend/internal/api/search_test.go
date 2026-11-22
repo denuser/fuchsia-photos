@@ -8,9 +8,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/denuser/magellanica-photos/backend/internal/auth"
-	"github.com/denuser/magellanica-photos/backend/internal/ml"
-	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/auth"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/ml"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
 )
 
 const searchModel = "test-model@1"

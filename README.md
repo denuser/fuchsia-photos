@@ -4,7 +4,7 @@ A self-hosted photo library for a home NAS. Formerly Fuchsia Photos. Photos come
 
 It is built for modest hardware. It is developed and measured on an Intel N150 with 4 cores and 16 GB of memory, and runs as one Go binary next to PostgreSQL, with no Redis or other services. Search by description is optional and can run on another machine.
 
-**Status:** in active development. See [releases](https://github.com/denuser/magellanica-photos/releases) and the [roadmap](docs/roadmap.md).
+**Status:** in active development. See [releases](https://github.com/magellanica-app/magellanica-photos/releases) and the [roadmap](docs/roadmap.md).
 
 <img src="docs/images/tour.gif" alt="A tour of Magellanica Photos: the timeline, the viewer, search by description and albums" width="100%">
 
@@ -60,7 +60,7 @@ This runs release `0.2.0` with PostgreSQL, the nightly backup and Caddy for HTTP
 ```sh
 mkdir magellanica-photos && cd magellanica-photos
 curl -fsSL -o docker-compose.yml \
-  https://raw.githubusercontent.com/denuser/magellanica-photos/v0.2.0/deploy/compose.image.yaml
+  https://raw.githubusercontent.com/magellanica-app/magellanica-photos/v0.2.0/deploy/compose.image.yaml
 cat > .env <<'ENV'
 POSTGRES_PASSWORD=change-me
 SITE_ADDRESS=192.168.0.10

@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"github.com/denuser/magellanica-photos/backend/internal/media"
-	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/media"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
 )
 
 type previewSettingsJSON struct {

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/denuser/magellanica-photos/backend/internal/auth"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/auth"
 )
 
 func favorite(t *testing.T, b *browser, value bool, photos ...int64) {

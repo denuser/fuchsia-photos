@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/denuser/magellanica-photos/backend/db"
+	"github.com/magellanica-app/magellanica-photos/backend/db"
 )
 
 // New returns a pool for a new database, or skips the test if TEST_DATABASE_URL is not set.

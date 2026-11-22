@@ -1,4 +1,4 @@
-module github.com/denuser/magellanica-photos/backend
+module github.com/magellanica-app/magellanica-photos/backend
 
 go 1.27.3
 

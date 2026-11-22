@@ -6,7 +6,7 @@ Only the latest release gets security fixes. Update to it before reporting, if y
 
 ## Reporting a vulnerability
 
-Please do not open a public issue for a security problem. Use GitHub's private reporting instead: open the [Security tab](https://github.com/denuser/magellanica-photos/security/advisories/new) of the repository and choose **Report a vulnerability**.
+Please do not open a public issue for a security problem. Use GitHub's private reporting instead: open the [Security tab](https://github.com/magellanica-app/magellanica-photos/security/advisories/new) of the repository and choose **Report a vulnerability**.
 
 Describe what you found, the version or image tag, and the steps to reproduce it. This is a one-person project, so a first reply may take a few days. A confirmed problem is fixed in a new release, and the report is credited in its notes unless you prefer otherwise.
 

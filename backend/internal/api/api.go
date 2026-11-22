@@ -16,13 +16,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/denuser/magellanica-photos/backend/internal/ingest"
-	"github.com/denuser/magellanica-photos/backend/internal/jobs"
-	"github.com/denuser/magellanica-photos/backend/internal/ml"
-	"github.com/denuser/magellanica-photos/backend/internal/scan"
-	"github.com/denuser/magellanica-photos/backend/internal/storage"
-	"github.com/denuser/magellanica-photos/backend/internal/store"
-	"github.com/denuser/magellanica-photos/backend/internal/transcode"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/ingest"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/jobs"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/ml"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/scan"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/transcode"
 )
 
 // Pinger reports whether the database is reachable.

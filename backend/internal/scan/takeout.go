@@ -20,8 +20,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/denuser/magellanica-photos/backend/internal/ingest"
-	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/ingest"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
 )
 
 const (

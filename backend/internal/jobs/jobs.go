@@ -17,10 +17,10 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivertype"
 
-	"github.com/denuser/magellanica-photos/backend/internal/media"
-	"github.com/denuser/magellanica-photos/backend/internal/metadata"
-	"github.com/denuser/magellanica-photos/backend/internal/storage"
-	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/media"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/metadata"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
 )
 
 const (

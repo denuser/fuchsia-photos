@@ -244,7 +244,7 @@ DRIVER=radeonsi HDR_TONEMAP="vaapi vulkan cpu" \
 The transcoder's images, described in [Video copies](deployment.md#video-copies), run the VAAPI modes too, which checks their own ffmpeg build and drivers:
 
 ```sh
-IMAGE=ghcr.io/denuser/magellanica-photos-transcoder:latest-intel TOOLS=/usr/local/bin \
+IMAGE=ghcr.io/magellanica-app/magellanica-photos-transcoder:latest-intel TOOLS=/usr/local/bin \
   scripts/video-bench.sh /path/to/videos /path/on/ssd/video-bench > video-results.md
 ```
 

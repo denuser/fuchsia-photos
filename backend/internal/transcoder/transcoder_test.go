@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/denuser/magellanica-photos/backend/internal/vaapi"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/vaapi"
 )
 
 var intel = vaapi.Hardware{Device: "/dev/dri/renderD128", Driver: "Intel iHD driver", Vendor: vaapi.VendorIntel}

@@ -196,12 +196,12 @@ On failure it prints the failed step and saves a screenshot to `frontend/e2e/res
 
 ## CI
 
-`.github/workflows/ci.yml` builds the production image, which includes the frontend type checks and build and the backend build. On pull requests it only builds it for `linux/amd64`. On pushes to `master` and of version tags it builds `linux/amd64` and `linux/arm64`, each on a runner of its own architecture, and publishes both to `ghcr.io/denuser/magellanica-photos` as one image:
+`.github/workflows/ci.yml` builds the production image, which includes the frontend type checks and build and the backend build. On pull requests it only builds it for `linux/amd64`. On pushes to `master` and of version tags it builds `linux/amd64` and `linux/arm64`, each on a runner of its own architecture, and publishes both to `ghcr.io/magellanica-app/magellanica-photos` as one image:
 
 - a push to `master` tags it `latest` and `sha-<commit>`;
 - a tag `vX.Y.Z` tags it `X.Y.Z`, `X.Y` and `sha-<commit>`, leaves `latest` alone and creates a GitHub release.
 
-The transcoder's images, the `transcoder-intel` and `transcoder-amd` targets of `deploy/Dockerfile`, are built only by hand, so that pushes do not make large images each time, and published to `ghcr.io/denuser/magellanica-photos-transcoder`. They are `linux/amd64` only. Start them with `gh workflow run ci.yml` or "Run workflow" in the Actions tab: from `master` they move `latest-intel` and `latest-amd`, and from a tag (`gh workflow run ci.yml --ref v0.1.0`) they add `0.1.0-intel` and `0.1.0-amd`. Started from any other branch, they fail before building. To build one locally, run `docker build --platform linux/amd64 --target transcoder-intel -f deploy/Dockerfile .`. The transcoder is `backend/cmd/magellanica-photos-transcoder`, built without cgo, and what differs between makers of graphics lives in a file per vendor in `backend/internal/vaapi`.
+The transcoder's images, the `transcoder-intel` and `transcoder-amd` targets of `deploy/Dockerfile`, are built only by hand, so that pushes do not make large images each time, and published to `ghcr.io/magellanica-app/magellanica-photos-transcoder`. They are `linux/amd64` only. Start them with `gh workflow run ci.yml` or "Run workflow" in the Actions tab: from `master` they move `latest-intel` and `latest-amd`, and from a tag (`gh workflow run ci.yml --ref v0.1.0`) they add `0.1.0-intel` and `0.1.0-amd`. Started from any other branch, they fail before building. To build one locally, run `docker build --platform linux/amd64 --target transcoder-intel -f deploy/Dockerfile .`. The transcoder is `backend/cmd/magellanica-photos-transcoder`, built without cgo, and what differs between makers of graphics lives in a file per vendor in `backend/internal/vaapi`.
 
 Only the publishing jobs can write packages, and only the release job can write to the repository.
 

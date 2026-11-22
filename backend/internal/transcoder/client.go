@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/denuser/magellanica-photos/backend/internal/vaapi"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/vaapi"
 )
 
 // ErrUnavailable means the service could not be asked: it does not answer,
