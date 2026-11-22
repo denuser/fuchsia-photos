@@ -87,7 +87,7 @@ Features people tend to expect before moving their photos to a new library. None
 - **Duplicates.** Near-duplicates and bursts, from the stage 7 embedding.
 - **Faces.** A model of their own, processed at home only, as face vectors are biometric data.
 - **Public links.** Albums opened by a link without an account, planned in [improvement 13](improvements.md#13-public-links-to-albums).
-- **Memories.** Photos from the same day in earlier years, planned in [improvement 14](improvements.md#14-memories-on-this-day).
+- **Memories.** Photos from the same day in earlier years, done in [improvement 14](improvements.md#14-memories-on-this-day).
 
 ## Acceptance criteria
 

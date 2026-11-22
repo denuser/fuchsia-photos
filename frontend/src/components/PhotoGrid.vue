@@ -16,7 +16,7 @@ import { t } from '../i18n'
 // asked for, so that a large library loads only the months being looked at.
 // Selectable tells which photos the user may select: a list can mix the user's
 // photos with other users' read-only ones.
-const props = defineProps<{ sections: Section[]; byMonth: boolean; selected: ReadonlySet<number>; selectable: (photo: Photo) => boolean }>()
+const props = defineProps<{ sections: Section[]; byMonth: boolean; titled: boolean; selected: ReadonlySet<number>; selectable: (photo: Photo) => boolean }>()
 const emit = defineEmits<{ open: [photo: Photo]; toggle: [photo: Photo, range: boolean]; want: [keys: string[]]; retry: [key: string] }>()
 
 // The photos line up with the page title and the toolbar: their sides keep
@@ -48,7 +48,7 @@ const inner = computed(() => width.value - paddingX.value * 2)
 const side = computed(() => tileSide(inner.value, auth.user?.gridSize ?? 'medium'))
 const square = computed(() => (auth.user?.gridSquares ? side.value : null))
 
-const layout = computed(() => layoutTimeline(props.sections, inner.value, props.byMonth, side.value, square.value))
+const layout = computed(() => layoutTimeline(props.sections, inner.value, props.titled, side.value, square.value))
 const canvasHeight = computed(() => layout.value.height + PADDING_TOP + paddingBottom.value)
 const canvasStyle = computed(() => ({ height: `${canvasHeight.value}px` }))
 

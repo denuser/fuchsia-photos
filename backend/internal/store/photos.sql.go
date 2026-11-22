@@ -1053,6 +1053,86 @@ func (q *Queries) ListLenses(ctx context.Context, arg ListLensesParams) ([]ListL
 	return items, nil
 }
 
+const listMemories = `-- name: ListMemories :many
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw
+FROM photos p
+JOIN (SELECT unnest($1::timestamptz[]) AS from_time, unnest($2::timestamptz[]) AS to_time) w
+  ON p.sort_at >= w.from_time AND p.sort_at < w.to_time
+WHERE (p.owner_id = $3
+       OR (photo_shared_directly(p, $3::bigint) OR photo_in_visible_album(p, $3::bigint)))
+  AND p.status = 'ready'
+  AND p.deleted_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
+  AND NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = $3)
+ORDER BY p.sort_at, p.id
+LIMIT 5000
+`
+
+type ListMemoriesParams struct {
+	FromTimes []time.Time
+	ToTimes   []time.Time
+	OwnerID   int64
+}
+
+// The photos a user sees on the timeline with "include shared" on, sorted
+// inside the windows of days that the memories of one date take from earlier
+// years: from_times[i] up to to_times[i]. The API picks the days to show from
+// them. The windows are worked out outside, in the viewer's time zone, so that
+// the photos_timeline_idx indexes can serve them. The user's archived photos
+// are left out, as on the timeline. A photo that is not ready has no preview
+// for a card.
+func (q *Queries) ListMemories(ctx context.Context, arg ListMemoriesParams) ([]Photo, error) {
+	rows, err := q.db.Query(ctx, listMemories, arg.FromTimes, arg.ToTimes, arg.OwnerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Photo
+	for rows.Next() {
+		var i Photo
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.Sha256,
+			&i.Mime,
+			&i.Size,
+			&i.Width,
+			&i.Height,
+			&i.TakenAt,
+			&i.Exif,
+			&i.Status,
+			&i.Error,
+			&i.Visibility,
+			&i.CreatedAt,
+			&i.DeletedAt,
+			&i.OriginalName,
+			&i.PreviewFormat,
+			&i.SortAt,
+			&i.UpdatedAt,
+			&i.PurgedAt,
+			&i.Camera,
+			&i.Lens,
+			&i.PreviewVersion,
+			&i.Duration,
+			&i.HasMotion,
+			&i.ContentIdentifier,
+			&i.VideoCopy,
+			&i.ImportedLatitude,
+			&i.ImportedLongitude,
+			&i.Description,
+			&i.Hdr,
+			&i.HasRaw,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMotionSources = `-- name: ListMotionSources :many
 SELECT c.id AS photo_id, v.owner_id AS video_owner_id, v.sha256 AS video_sha256, v.mime AS video_mime
 FROM (
@@ -1636,6 +1716,21 @@ func (q *Queries) MarkPhotoReady(ctx context.Context, arg MarkPhotoReadyParams) 
 		arg.ID,
 	)
 	return err
+}
+
+const oldestPhotoTime = `-- name: OldestPhotoTime :one
+SELECT coalesce(min(sort_at), now())::timestamptz AS oldest
+FROM photos
+WHERE status = 'ready' AND deleted_at IS NULL
+`
+
+// The sort time of the oldest photo, which bounds how many years of memories
+// are looked through.
+func (q *Queries) OldestPhotoTime(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRow(ctx, oldestPhotoTime)
+	var oldest time.Time
+	err := row.Scan(&oldest)
+	return oldest, err
 }
 
 const pairLivePhotos = `-- name: PairLivePhotos :many

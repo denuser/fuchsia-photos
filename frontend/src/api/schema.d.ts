@@ -450,6 +450,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/photos/memories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Photos taken on the same day of earlier years
+         * @description For each earlier year that has photos, the photos of the day that has the same month and day as `date`
+         *     (29 February is 28 February in other years). A year with none on that day takes the closest day within
+         *     3 days before or after that has some, and `exact` is false. The photos are the user's own and those shared
+         *     with them, as the timeline lists with `withShared`, without the user's archived photos. Years come newest
+         *     first, at most 60 photos each, oldest photo first.
+         */
+        get: operations["listMemories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/photos/cameras": {
         parameters: {
             query?: never;
@@ -1407,6 +1431,19 @@ export interface components {
             add?: number[];
             /** @description Users to stop sharing with */
             remove?: number[];
+        };
+        MemoryYear: {
+            year: number;
+            /** @description How many years before the requested date this year is */
+            yearsAgo: number;
+            /**
+             * Format: date
+             * @description The day the photos are from, in the time zone of the request
+             */
+            date: string;
+            /** @description Whether the photos are from the same day of the year as the requested date, not from a nearby day */
+            exact: boolean;
+            photos: components["schemas"]["Photo"][];
         };
         /** @description A photo or a video, which the MIME type tells apart */
         Photo: {
@@ -2431,6 +2468,34 @@ export interface operations {
                     "text/event-stream": components["schemas"]["PhotoEvent"];
                 };
             };
+        };
+    };
+    listMemories: {
+        parameters: {
+            query: {
+                /** @description The IANA time zone that days are told in, such as `Europe/Moscow` */
+                tz: string;
+                /** @description The day to remember, `YYYY-MM-DD` in `tz`. Today by default */
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The years that have memories */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        years: components["schemas"]["MemoryYear"][];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
         };
     };
     listCameras: {

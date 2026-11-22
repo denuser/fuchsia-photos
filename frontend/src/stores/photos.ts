@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 
-import { API_BASE, api, type MediaKind, type Photo, type PhotoEvent } from '../api/client'
+import { API_BASE, api, type MediaKind, type MemoryYear, type Photo, type PhotoEvent } from '../api/client'
+import { formatDate, t } from '../i18n'
+import { today } from '../lib/today'
 
 // The server takes this many photos in one bulk action.
 const BULK_SIZE = 500
@@ -32,6 +34,8 @@ export interface PhotoQuery {
   search?: string
   // Photos that look like this one, nearest first.
   similarTo?: number
+  // Photos taken on this day in earlier years, one section per year.
+  memories?: boolean
 }
 
 // Search results come in one piece, nearest first.
@@ -47,6 +51,23 @@ async function fetchRanked({ search, similarTo }: PhotoQuery) {
     ? await api.GET('/search', { params: { query: { q: search, limit: RANKED_LIMIT } } })
     : await api.GET('/photos/{id}/similar', { params: { path: { id: similarTo! }, query: { limit: RANKED_LIMIT } } })
   return { data: data ? { items: data.items, nextCursor: null as string | null } : undefined }
+}
+
+// The memories of one year: complete, as the server gives them in one piece.
+function memorySection(year: MemoryYear): Section {
+  const date = formatDate(`${year.date}T12:00:00`)
+  const when = year.exact ? date : t('memories.around', { date })
+  return {
+    key: `memories-${year.year}`,
+    month: null,
+    title: `${t('memories.yearsAgo', { n: year.yearsAgo }, year.yearsAgo)} · ${when}`,
+    count: year.photos.length,
+    photos: [...year.photos].sort(newestFirst),
+    cursor: null,
+    complete: true,
+    loading: false,
+    failed: false,
+  }
 }
 
 function newestFirst(a: Photo, b: Photo) {
@@ -77,6 +98,8 @@ export interface Section {
   // The number of photos in the section, including those not loaded yet. A
   // whole list does not know it, and counts its loaded photos.
   count: number
+  // The title of a section that is not a month, such as a year of memories.
+  title?: string
   // Loaded photos, newest first. A section loads page by page.
   photos: Photo[]
   cursor: string | null
@@ -187,7 +210,9 @@ export const usePhotosStore = defineStore('photos', () => {
 
   // The trash is ordered by when photos were deleted, and search results by
   // how well they match, so neither is split into months.
-  const byMonth = computed(() => !query.value.trash && !ranked(query.value))
+  const byMonth = computed(() => !query.value.trash && !ranked(query.value) && !query.value.memories)
+  // Whether the grid puts a title over each section: months, or years of memories.
+  const titled = computed(() => byMonth.value || Boolean(query.value.memories))
   // All loaded photos in order. Months not loaded yet leave gaps.
   const photos = computed(() => sections.value.flatMap((s) => s.photos))
   const empty = computed(() => loadedOnce.value && sections.value.every((s) => s.complete && s.photos.length === 0))
@@ -206,6 +231,7 @@ export const usePhotosStore = defineStore('photos', () => {
     const { shared, everyone, album, favorites, archived, tags, cameras, lenses, kinds, from, to } = query.value
     return (
       !ranked(query.value) &&
+      !query.value.memories &&
       !shared &&
       !favorites &&
       !archived &&
@@ -383,8 +409,8 @@ export const usePhotosStore = defineStore('photos', () => {
       // it out too, and joins them from the event that says it is ready.
       if (photo.hiddenUnder !== null || Boolean(photo.deletedAt) !== inTrash || (!inTrash && photo.status === 'pending')) {
         gone.add(photo.id)
-      } else if (known.has(photo.id) && ranked(query.value)) {
-        // A search result keeps its place.
+      } else if (known.has(photo.id) && (ranked(query.value) || query.value.memories)) {
+        // A search result or a memory keeps its place.
         sections.value = sections.value.map((s) => ({ ...s, photos: s.photos.map((p) => (p.id === photo.id ? photo : p)) }))
       } else if (known.has(photo.id)) {
         // It may have moved to another month once its EXIF was read.
@@ -439,7 +465,7 @@ export const usePhotosStore = defineStore('photos', () => {
         return [s]
       }
       const count = Math.max(photos.length, s.count - removed)
-      return s.month && count === 0 ? [] : [{ ...s, photos, count }]
+      return (s.month || s.title) && count === 0 ? [] : [{ ...s, photos, count }]
     })
   }
 
@@ -451,6 +477,16 @@ export const usePhotosStore = defineStore('photos', () => {
     sections.value = []
     loadedOnce.value = false
     failedToOpen.value = false
+    if (query.value.memories) {
+      const { data } = await api.GET('/photos/memories', { params: { query: { tz: timeZone(), date: today() } } })
+      if (started !== generation) {
+        return
+      }
+      failedToOpen.value = !data
+      sections.value = data ? data.years.map(memorySection) : []
+      loadedOnce.value = true
+      return
+    }
     if (!byMonth.value) {
       sections.value = [wholeList()]
       await loadSection(WHOLE_LIST)
@@ -595,6 +631,7 @@ export const usePhotosStore = defineStore('photos', () => {
     photos,
     query,
     byMonth,
+    titled,
     loadedOnce,
     failedToOpen,
     empty,

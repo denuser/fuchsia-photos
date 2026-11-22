@@ -152,6 +152,9 @@ export function visibleSections(layout: TimelineLayout, top: number, bottom: num
 
 // Such as "November 2026" or "Ноябрь 2026 г.": Russian writes the month in lower case, which a title capitalizes.
 export function monthTitle(section: Section) {
+  if (section.title) {
+    return section.title
+  }
   const title = section.month?.start.toLocaleDateString(intlLocale.value, { month: 'long', year: 'numeric' }) ?? ''
   return title.charAt(0).toUpperCase() + title.slice(1)
 }

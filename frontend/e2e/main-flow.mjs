@@ -676,6 +676,17 @@ const steps = {
     await page.getByTestId('applied-filters').getByRole('button', { name: 'Clear all filters' }).click()
     await tiles(5)
   },
+  'memories show the photos of this day in earlier years, in a strip and on a page': async () => {
+    // The page's clock stands on the day the video was taken, two years on, so
+    // that no photo of the run is from the current year. It stays so for the
+    // rest of the run, which has no test that depends on the date.
+    await page.clock.setFixedTime(new Date('2026-06-01T12:00:00'))
+    await page.goto(BASE)
+    await page.getByTestId('memory-card').getByText('2 years ago').waitFor()
+    await page.getByRole('link', { name: 'See all' }).click()
+    await page.getByTestId('month').getByText(/^2 years ago/).waitFor()
+    await page.getByTestId('tile-video').waitFor()
+  },
   'the server agrees with the screen': async () => {
     const [library, trash] = [await apiTotal('photos'), await apiTotal('photos/trash')]
     if (library !== 5 || trash !== 0) {

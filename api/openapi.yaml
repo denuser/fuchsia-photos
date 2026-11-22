@@ -719,6 +719,44 @@ paths:
             text/event-stream:
               schema:
                 $ref: "#/components/schemas/PhotoEvent"
+  /photos/memories:
+    get:
+      operationId: listMemories
+      summary: Photos taken on the same day of earlier years
+      description: |
+        For each earlier year that has photos, the photos of the day that has the same month and day as `date`
+        (29 February is 28 February in other years). A year with none on that day takes the closest day within
+        3 days before or after that has some, and `exact` is false. The photos are the user's own and those shared
+        with them, as the timeline lists with `withShared`, without the user's archived photos. Years come newest
+        first, at most 60 photos each, oldest photo first.
+      parameters:
+        - name: tz
+          in: query
+          required: true
+          description: The IANA time zone that days are told in, such as `Europe/Moscow`
+          schema:
+            type: string
+        - name: date
+          in: query
+          description: The day to remember, `YYYY-MM-DD` in `tz`. Today by default
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: The years that have memories
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [years]
+                properties:
+                  years:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MemoryYear"
+        "400":
+          $ref: "#/components/responses/Error"
   /photos/cameras:
     get:
       operationId: listCameras
@@ -2089,6 +2127,26 @@ components:
           items:
             type: integer
             format: int64
+    MemoryYear:
+      type: object
+      required: [year, yearsAgo, date, exact, photos]
+      properties:
+        year:
+          type: integer
+        yearsAgo:
+          type: integer
+          description: How many years before the requested date this year is
+        date:
+          type: string
+          format: date
+          description: The day the photos are from, in the time zone of the request
+        exact:
+          type: boolean
+          description: Whether the photos are from the same day of the year as the requested date, not from a nearby day
+        photos:
+          type: array
+          items:
+            $ref: "#/components/schemas/Photo"
     Photo:
       type: object
       description: A photo or a video, which the MIME type tells apart

@@ -353,6 +353,7 @@ defineExpose({ clearSelection, say })
         v-else
         :sections="photos.sections"
         :by-month="photos.byMonth"
+        :titled="photos.titled"
         :selected="selected"
         :selectable="selectable"
         @open="opened = $event"

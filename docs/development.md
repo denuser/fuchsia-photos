@@ -9,7 +9,7 @@
 - libvips, LibRaw, pkg-config, exiftool and ffmpeg: `brew install vips libraw pkg-config exiftool ffmpeg`. The Docker build backports Debian’s LibRaw 0.22.3 package to trixie for RAW decoding.
 - uv, for the ML service: `brew install uv`
 
-The backend links against libvips and LibRaw through cgo, so it needs a working C toolchain on the host.
+The backend links against libvips and LibRaw through cgo, so it needs a working C toolchain on the host. Homebrew's `libraw.pc` asks for `-Xpreprocessor -fopenmp`, which Go refuses with "invalid flag in pkg-config --libs"; `make dev-backend` allows it, and a `go build` or `go test` on the host needs `CGO_LDFLAGS_ALLOW='-Xpreprocessor|-fopenmp'`.
 
 Videos are processed with `ffprobe` and `ffmpeg` run as separate processes. Without them the server warns at the start, and videos wait in the queue until processing gives up on them. Homebrew's ffmpeg has no `zscale` filter, so on the host the posters of HDR videos, such as an iPhone's, are not tone mapped and look grey; the image has it.
 

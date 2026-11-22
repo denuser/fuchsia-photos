@@ -671,3 +671,31 @@ DELETE FROM photo_archive WHERE user_id = @user_id AND photo_id = ANY (@ids::big
 
 -- name: IsArchived :one
 SELECT EXISTS (SELECT 1 FROM photo_archive WHERE user_id = @user_id AND photo_id = @photo_id);
+
+-- The photos a user sees on the timeline with "include shared" on, sorted
+-- inside the windows of days that the memories of one date take from earlier
+-- years: from_times[i] up to to_times[i]. The API picks the days to show from
+-- them. The windows are worked out outside, in the viewer's time zone, so that
+-- the photos_timeline_idx indexes can serve them. The user's archived photos
+-- are left out, as on the timeline. A photo that is not ready has no preview
+-- for a card.
+-- name: ListMemories :many
+SELECT p.*
+FROM photos p
+JOIN (SELECT unnest(@from_times::timestamptz[]) AS from_time, unnest(@to_times::timestamptz[]) AS to_time) w
+  ON p.sort_at >= w.from_time AND p.sort_at < w.to_time
+WHERE (p.owner_id = @owner_id
+       OR (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint)))
+  AND p.status = 'ready'
+  AND p.deleted_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
+  AND NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = @owner_id)
+ORDER BY p.sort_at, p.id
+LIMIT 5000;
+
+-- The sort time of the oldest photo, which bounds how many years of memories
+-- are looked through.
+-- name: OldestPhotoTime :one
+SELECT coalesce(min(sort_at), now())::timestamptz AS oldest
+FROM photos
+WHERE status = 'ready' AND deleted_at IS NULL;

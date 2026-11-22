@@ -6,6 +6,7 @@ import { useDisplay } from 'vuetify'
 import { api, type MediaKind, type NameCount } from '../api/client'
 import AppAutocomplete from '../components/AppAutocomplete.vue'
 import EmptyState from '../components/EmptyState.vue'
+import MemoriesStrip from '../components/MemoriesStrip.vue'
 import FilterChips, { type FilterGroup } from '../components/FilterChips.vue'
 import PhotoBrowser from '../components/PhotoBrowser.vue'
 import UploadDropZone from '../components/UploadDropZone.vue'
@@ -275,6 +276,9 @@ function onTagged() {
 <template>
   <UploadDropZone :hint="t('timeline.drop')" @files="(chosen) => uploads.add(chosen.files, null, chosen.skipped)">
     <PhotoBrowser ref="browser" mode="library" @tagged="onTagged">
+      <template #header>
+        <MemoriesStrip v-if="!filtered" />
+      </template>
       <template #toolbar>
         <div class="filters">
           <v-btn-toggle

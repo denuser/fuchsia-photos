@@ -60,9 +60,13 @@ migration:
 dev-psql:
 	docker exec -it fuchsia-photos-dev-db psql -U photos photos
 
+# The libraw.pc of Homebrew asks for -Xpreprocessor -fopenmp, which cgo refuses
+# unless it is allowed.
+HOST_CGO = CGO_LDFLAGS_ALLOW='-Xpreprocessor|-fopenmp'
+
 dev-backend:
 	mkdir -p "$(DEV_DATA)/import"
-	cd backend && $(DEV_ENV) go run ./cmd/fuchsia-photos serve
+	cd backend && $(DEV_ENV) $(HOST_CGO) go run ./cmd/fuchsia-photos serve
 
 # Sync apps such as FolderSync connect only over HTTPS, so the dev server
 # serves it on the standard port with a self-signed certificate, made once.

@@ -17,7 +17,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 11 | [Grid tile size](#11-grid-tile-size) | Done | |
 | 12 | [Upload into an album, and whole folders](#12-upload-into-an-album-and-whole-folders) | Done | Check "Choose folder" on iPhone and Android |
 | 13 | [Public links to albums](#13-public-links-to-albums) | Planned | Open questions, then a plan |
-| 14 | [Memories: on this day](#14-memories-on-this-day) | Planned | Open questions, then a plan |
+| 14 | [Memories: on this day](#14-memories-on-this-day) | Done, not released | |
 | 15 | [Wait for the copy of an HDR video](#15-wait-for-the-copy-of-an-hdr-video) | Done | Check in Firefox on the NAS |
 | 16 | [Ten interface languages](#16-ten-interface-languages) | Done | Check date fields and fonts in Chinese, Japanese and Korean |
 | 17 | [RAW photos from cameras](#17-raw-photos-from-cameras) | Done, released in 0.1.0 | NAS checks 2, 3, 4, 6 and 7 |
@@ -289,15 +289,26 @@ Open questions before a plan:
 
 ## 14. Memories: on this day
 
-**Status:** planned, not started.
+**Status:** done on 2026-11-22, not released. The strip above the timeline and the Memories page work, with a backend test (`memories_test.go`) and a step in the browser test, whose page clock stands on 1 June 2026 so that the video taken on 1 June 2024 is "2 years ago".
 
-The timeline or a page of its own shows photos taken on the same day in earlier years. It needs no ML: the date of the photo is enough. People moving from other photo libraries tend to expect it.
+Photos taken on the same day in earlier years, shown without the user asking. The date filter cannot do this: it selects one continuous range, while memories take one day from every earlier year. It needs no ML, only `sort_at`. Immich and Nextcloud Memories put a strip of "N years ago" cards above the timeline; Google Photos adds curated trips and people on top, which needs ML and is left out.
 
-Open questions before a plan:
+Decided on 2026-11-22:
 
-- Where it is shown: above the timeline, on a page of its own, or both.
-- Whether it covers only the user's own photos or also the photos shared with them, and whether archived photos are left out, as on the timeline.
-- Whether a day with nothing shows the nearest days instead, and how the date is taken for photos without a time zone.
+- **Where:** a strip of cards above the timeline, one per earlier year, and a page of its own (`/memories`) that the strip and the menu open. The strip is hidden when there is nothing to show, so an empty library or a day with nothing does not take height from the photos.
+- **Whose photos:** the user's own photos and those shared with them, as the timeline with "include shared" does, without the user's archived photos, the trash and hidden versions (the same WHERE block as `ListTimeline`).
+- **A day with nothing:** per year, only the exact day if it has photos; otherwise the closest day within 3 days before or after that has some, and its card says "around 22 Nov 2023" instead of "22 Nov 2023". A year with nothing in the window has no card.
+- **Which day a photo is on:** its `sort_at` in the viewer's time zone, as the timeline's month counts do, so a card's date always matches the day the photo shows under on the timeline. The database does not record whether a date came with an offset, and a date without one is read as UTC, so such a photo taken late in the evening can land on the next day in a time zone east of UTC. Fixing that is a matter for the dates themselves, not for memories.
+
+Plan:
+
+1. API: `GET /photos/memories?tz=<IANA zone>&date=YYYY-MM-DD` (`date` optional, today in `tz` by default, so tests can fix it). It returns years, newest first, each with its day and its photos, at most 60 photos per year. The current year is left out.
+2. SQL: `ListMemories` in `photos.sql`, with the same WHERE block as `ListTimeline` (`with_shared` always on, archived left out), except `status = 'ready'`, as a card needs a preview. A condition on the local date of each row would scan the whole library and could not use `photos_timeline_idx`, so Go computes the windows: for each year from the earliest photo (a cheap `MIN(sort_at)`) to the year before the current one, the days `date−3 … date+3` in the viewer's zone as instants, and passes them as `from[]` and `to[]` arrays joined with `unnest`. Windows across New Year need no special case. Go's `time.Date` moves 29 February of a non-leap year to 1 March, so the day is clamped to 28 February explicitly. Go then picks, per year, the exact day, or else the closest day that has photos.
+3. OpenAPI, then `make sqlc` and `make api-types`; a store `memories` (Pinia) next to `photos.ts`.
+4. Strip: `PhotoBrowser`'s `toolbar` and `header` slots sit above `.content`, which holds the scroller, so the strip goes outside the scroller as a row of fixed height and the grid's computed coordinates, scroll bar and scrubber are untouched (the grid measures its own container). It shows only when no filter is set and there is something to show. Cards have a cover photo, "N years ago" and the date. The page `MemoriesView.vue` has an `AppPageHeader` and a section per year; a photo opens the viewer with the year's photos as its sequence.
+5. Strings in all ten language files; a backend test (exact day, nearest days, year boundary, 29 February, archived and shared photos, other users' private photos, a year with nothing) and a step in the browser test with photos dated on the fixed day.
+
+Built as planned, with one change: the page reuses `PhotoBrowser` and `PhotoGrid` (so the viewer, selection and bulk actions work), through a `memories` query of the photos store that gives one titled section per year (`Section.title`) and has no scrubber. The browser sends its own date (`lib/today.ts`) with the request.
 
 ## 15. Wait for the copy of an HDR video
 
