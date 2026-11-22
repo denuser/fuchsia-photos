@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** stages 0 to 6 are done, and version 0.1.0 was released on 2026-11-21. Stage 7 works: search by description and similar photos, with the ML service on a Mac; the speed on the NAS is still to be measured. Stage 8 works on the NAS: videos, motion photos and Live Photos upload and play, and the Intel transcoder makes H.264 copies of videos that browsers cannot play. Left in stage 8: an iPhone library uploaded over WebDAV, and HDR tone mapping on AMD graphics. Work beyond the stages, such as the Google Takeout import, RAW photos and the ten interface languages, is tracked in [improvements](improvements.md).
+**Status:** stages 0 to 6 are done, and version 0.1.0 was released on 2026-11-21. Stage 7 works: search by description and similar photos, with the ML service on a Mac; the speed on the NAS is still to be measured. Stage 8 works on the NAS: videos, motion photos and Live Photos upload and play, and the Intel transcoder makes H.264 copies of videos that browsers cannot play. Left in stage 8: HDR tone mapping on AMD graphics. An iPhone library uploaded over WebDAV was checked on 2026-11-22. Work beyond the stages, such as the Google Takeout import, RAW photos and the ten interface languages, is tracked in [improvements](improvements.md).
 
 Decisions are in the [architecture](architecture.md).
 
@@ -58,7 +58,7 @@ Decisions are in the [architecture](architecture.md).
     - Pairing checked on 2026-11-12 with the iPhone 15 pair of [MotionPhotoSamples](https://github.com/NightMean/MotionPhotoSamples): the HEIC and the HEVC MOV share the tag, and the video paired with the photo whichever came first
     - The motion checked on 2026-11-12 in Chrome on a Mac, with Live Photos from an iPad uploaded to the development stack. The browser's file picker gave only their photos, so their videos were uploaded too
     - The motion checked on 2026-11-12 in Safari and in Firefox
-    - [ ] Check on real devices: an iPhone library uploaded over WebDAV
+    - [x] Check on real devices: an iPhone library uploaded over WebDAV, checked on 2026-11-22
   - [ ] Step 2, if needed: transcoding
     - Planned on 2026-11-13: hardware encoding with `h264_vaapi` only, with no libx264 fallback on the CPU. An administrator turns it on in the administration page, where the graphics allow it. Without `/dev/dri`, or with the setting off, videos the browser cannot play keep the poster and the download, as in step 1
     - [x] Benchmark on the NAS with `scripts/video-bench.sh`, as described under [Video transcoding](benchmark.md#video-transcoding): 1080p and 4K HEVC to H.264 through VAAPI, with libx264 for comparison

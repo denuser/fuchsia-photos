@@ -13,7 +13,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 7 | [Interface language](#7-interface-language) | Done | |
 | 8 | [Place names in the viewer](#8-place-names-in-the-viewer) | Planned | Everything |
 | 9 | [OPPO motion photos and older Huawei moving pictures](#9-oppo-motion-photos-and-older-huawei-moving-pictures) | Planned | A real OPPO file; a backfill for old Huawei photos |
-| 10 | [Import from Google Takeout and iCloud](#10-import-from-google-takeout-and-icloud) | Takeout done, iCloud planned | The iCloud import |
+| 10 | [Import from Google Takeout and iCloud](#10-import-from-google-takeout-and-icloud) | Takeout done, iCloud plan drafted | iCloud: a real export (step 0), then the build |
 | 11 | [Grid tile size](#11-grid-tile-size) | Done | |
 | 12 | [Upload into an album, and whole folders](#12-upload-into-an-album-and-whole-folders) | Done | Check "Choose folder" on iPhone and Android |
 | 13 | [Public links to albums](#13-public-links-to-albums) | Planned | Open questions, then a plan |
@@ -150,7 +150,7 @@ Motion photos play for Google's formats (Motion Photo and the older MicroVideo, 
 
 ## 10. Import from Google Takeout and iCloud
 
-**Status:** Google Takeout done: steps 0 to 6 merged into `master` by 2026-11-17, step 7 (tests) done on 2026-11-18. iCloud planned, not started.
+**Status:** Google Takeout done: steps 0 to 6 merged into `master` by 2026-11-17, step 7 (tests) done on 2026-11-18. iCloud: plan drafted on 2026-11-22, waiting for a real export.
 
 Steps 0 to 6 were checked on the development stack with real exports, except 6d, which backend tests cover. Step 7 added a backend test of a whole export, imported a whole real export on the NAS and measured the timeline on a large synthetic library.
 
@@ -237,7 +237,28 @@ Plan for Google Takeout:
 
 Steps 0 to 4 make a working import, released on their own. Versions come next, and descriptions, favorites and the archive each as a change of its own.
 
-iCloud later: the parts of a copy from privacy.apple.com hold the files, `Photo Details.csv` (`imgName`, `fileChecksum`, `favorite`, `hidden`, `deleted`, `originalCreationDate`, `importDate`) and `Albums/*.csv`. Rows are matched to files by name, and by `fileChecksum` when a name repeats in a part. Live Photos are paired by `ContentIdentifier` as they are now.
+### iCloud
+
+**Status:** plan drafted on 2026-11-22, waiting for a real export (step 0).
+
+The source is the copy of the data that Apple prepares at privacy.apple.com (decided on 2026-11-15, see above). The WebDAV upload from an iPhone already brings new photos in (checked on 2026-11-22), so the import is for the history: what a library of files does not say, such as favorites, hidden and deleted photos, albums and the dates Apple keeps. If only the files are needed, a plain folder scan of the unpacked parts already imports them.
+
+What the format is said to hold, from reports of other projects and not yet seen by us: parts of the copy are `.zip` files holding the photos and videos, `Photo Details.csv` (`imgName`, `fileChecksum`, `favorite`, `hidden`, `deleted`, `originalCreationDate`, `importDate`) and `Albums/*.csv`. The names of files and parts, the format and time zone of `originalCreationDate`, how edited copies and Live Photos are named, what `fileChecksum` is, and whether captions and locations survive are all unknown until step 0.
+
+Plan, to be corrected by step 0:
+
+0. **A real export first**, as for Takeout. Whether privacy.apple.com can export a part of a library at all is not known: it may offer only the whole iCloud Photos category, with the size of the parts as the one choice, and then a small library of a test Apple ID with a Live Photo, an edited photo, a hidden one, a deleted one and a favorite is the sample. Whether shared albums are a category of their own is checked too. Written down here: the names of the parts, and whether they carry a time like Takeout's, since grouping parts into exports and "the newest export wins" both depend on it; where the CSV files are, and whether every part has its own; the date format and zone; whether an edited copy has a row of its own; whether the Live Photo's photo and video share a name and `ContentIdentifier`; what `fileChecksum` is (compared with the SHA-256 of the file); whether `hidden` and `deleted` photos are in the parts; whether `originalCreationDate` is a true instant or a local clock time labelled GMT, checked against files whose EXIF date has an offset; whether the files are the originals; and what the Albums files hold.
+1. **A second kind of scan.** The scan form already chooses a Takeout import; it gets "iCloud" next to it. `import_runs.kind` has a `CHECK` of `folder` and `takeout` (migration 00023), so a migration widens it and `scan.go` gets a `KindICloud`. Reading parts, resuming, hashing, duplicates and `takeout_entries` stay as they are; what changes is how parts are grouped into exports and which entries are metadata.
+2. **Matching.** Each row of `Photo Details.csv` is matched to its file by name within one export, and by `fileChecksum` where a name repeats. The result goes into the tables Takeout fills (`imported_metadata`: date, favorite, archived, trashed), so dates, favorites, the archive, the trash and linking edited copies work from one place for both services, and the "newest export wins" rule stays if the parts' names say when they were made; if they carry only a part number, a folder holds one export, and a second one is told apart some other way.
+3. **Rules to decide on the real data:**
+   - `favorite` marks a favorite of the import's owner, as Takeout does.
+   - `hidden`: to be decided by the owner of the library. An archived photo here still shows in albums, favorites, search and shares, while Apple's Hidden album is a privacy feature, so the choices are the archive, the trash, leaving hidden photos out, or importing them as ordinary photos.
+   - `deleted` goes to the trash, with the date of the run as the date of deletion, only for photos the run added, as in 6d, if the owner confirms it.
+   - `originalCreationDate` fills a date the file lacks or has without an offset by the Takeout rule, only if step 0 shows that it is a true instant.
+   - Photos other people added to a shared album: Takeout imports them for the owner of the import; iCloud needs its own decision once step 0 shows whether they are in the copy.
+   - Albums from `Albums/*.csv` by their name, as Takeout albums are made by their title.
+4. **Edited copies and Live Photos.** If an edited copy is a file of its own, it is linked to its original as `edited`, with the same EXIF date check; Live Photos are paired by `ContentIdentifier` as now.
+5. **Tests.** A small export built in memory from the real names, read as `.zip` parts and unpacked, as `TestTakeoutWholeExport` does; a whole real export on the NAS.
 
 ## 11. Grid tile size
 
