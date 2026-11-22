@@ -17,14 +17,14 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 11 | [Grid tile size](#11-grid-tile-size) | Done | |
 | 12 | [Upload into an album, and whole folders](#12-upload-into-an-album-and-whole-folders) | Done | Check "Choose folder" on iPhone and Android |
 | 13 | [Public links to albums](#13-public-links-to-albums) | Planned | Open questions, then a plan |
-| 14 | [Memories: on this day](#14-memories-on-this-day) | Done, not released | |
+| 14 | [Memories: on this day](#14-memories-on-this-day) | Done, released in 0.2.0 | |
 | 15 | [Wait for the copy of an HDR video](#15-wait-for-the-copy-of-an-hdr-video) | Done | Check in Firefox on the NAS |
 | 16 | [Ten interface languages](#16-ten-interface-languages) | Done | Check date fields and fonts in Chinese, Japanese and Korean |
 | 17 | [RAW photos from cameras](#17-raw-photos-from-cameras) | Done, released in 0.1.0 | NAS checks 2, 3, 4, 6 and 7 |
 | 18 | [Lightroom XMP sidecars](#18-lightroom-xmp-sidecars) | Draft plan | Open questions 2 to 4; builds on 19 |
 | 19 | [Library folders indexed in place](#19-library-folders-indexed-in-place) | Planned | Everything |
-| 20 | [Safer RAW decoding](#20-safer-raw-decoding) | Done, not released | |
-| 21 | [Map](#21-map) | Done, not released | Check the map on a phone and with a larger library |
+| 20 | [Safer RAW decoding](#20-safer-raw-decoding) | Done, released in 0.1.1 | |
+| 21 | [Map](#21-map) | Done, released in 0.2.0 | Check the map on a phone and with a larger library |
 
 ## 1. Administration page
 
@@ -311,7 +311,7 @@ Open questions before a plan:
 
 ## 14. Memories: on this day
 
-**Status:** done on 2026-11-22, not released. The strip above the timeline and the Memories page work, with a backend test (`memories_test.go`) and a step in the browser test, whose page clock stands on 1 June 2026 so that the video taken on 1 June 2024 is "2 years ago".
+**Status:** done on 2026-11-22, released in 0.2.0. The strip above the timeline and the Memories page work, with a backend test (`memories_test.go`) and a step in the browser test, whose page clock stands on 1 June 2026 so that the video taken on 1 June 2024 is "2 years ago".
 
 Photos taken on the same day in earlier years, shown without the user asking. The date filter cannot do this: it selects one continuous range, while memories take one day from every earlier year. It needs no ML, only `sort_at`. Immich and Nextcloud Memories put a strip of "N years ago" cards above the timeline; Google Photos adds curated trips and people on top, which needs ML and is left out.
 
@@ -515,7 +515,7 @@ Decided on 2026-11-21:
 
 ## 20. Safer RAW decoding
 
-**Status:** done on 2026-11-21, not released yet (under "Unreleased" in the changelog). All 20 difficult files were imported on the NAS on 2026-11-21, each with a preview. On 2026-11-22 the Canon R5 II CR3 preview was checked by eye: its colours are right, and its size is 8222x5488. That is LibRaw's visible area, without the masked border of 8480x5650 and 30x24 pixels larger than the camera's own 8192x5464 crop, as LibRaw's inset crops are not applied.
+**Status:** done on 2026-11-21, released in 0.1.1. All 20 difficult files were imported on the NAS on 2026-11-21, each with a preview. On 2026-11-22 the Canon R5 II CR3 preview was checked by eye: its colours are right, and its size is 8222x5488. That is LibRaw's visible area, without the masked border of 8480x5650 and 30x24 pixels larger than the camera's own 8192x5464 crop, as LibRaw's inset crops are not applied.
 
 From the trial of 20 hard files in improvement 17 ("Found on 2026-11-21"). Samples are the files named there, from raw.pixls.us; the check is a render of each at the default viewer size in a container limited to 4 GB, watching the peak memory.
 
@@ -545,7 +545,7 @@ A timed NAS run on 2026-11-21 imported all 20 difficult RAW samples in 102.1 s o
 
 ## 21. Map
 
-**Status:** done on 2026-11-22, not released. The Map page, the clusters API, the `bbox` filter and the viewer's link work, with a backend test (`map_test.go`) and a step in the browser test. Not yet checked on a phone or with a large library.
+**Status:** done on 2026-11-22, released in 0.2.0. The Map page, the clusters API, the `bbox` filter and the viewer's link work, with a backend test (`map_test.go`) and a step in the browser test. Not yet checked on a phone or with a large library.
 
 A page with the user's photos on a map, by the GPS location of each, as Immich, Nextcloud Memories and Google Photos have. The viewer today links a photo's coordinates to openstreetmap.org in a new tab (`PhotoViewer.vue`); nothing shows many photos at once. Place names ([improvement 8](#8-place-names-in-the-viewer)) are a separate piece and do not block this one.
 
