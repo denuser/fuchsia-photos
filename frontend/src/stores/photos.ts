@@ -36,6 +36,8 @@ export interface PhotoQuery {
   similarTo?: number
   // Photos taken on this day in earlier years, one section per year.
   memories?: boolean
+  // Only photos taken inside a box of coordinates, `west,south,east,north`.
+  bbox?: string
 }
 
 // Search results come in one piece, nearest first.
@@ -187,8 +189,9 @@ function fetchMonths(query: PhotoQuery) {
 }
 
 // The filters of the user's own list, other than the album and the dates. An empty one is left out.
-export function listFilters({ withShared, favorites, archived, tags, cameras, lenses, kinds }: PhotoQuery) {
+export function listFilters({ withShared, favorites, archived, tags, cameras, lenses, kinds, bbox }: PhotoQuery) {
   return {
+    bbox: bbox || undefined,
     withShared: withShared || undefined,
     favorites: favorites || undefined,
     archived: archived || undefined,
@@ -228,7 +231,7 @@ export const usePhotosStore = defineStore('photos', () => {
   const uploadedInto = new Map<number, number>()
 
   function withoutFilters(inAlbum?: number) {
-    const { shared, everyone, album, favorites, archived, tags, cameras, lenses, kinds, from, to } = query.value
+    const { shared, everyone, album, favorites, archived, tags, cameras, lenses, kinds, bbox, from, to } = query.value
     return (
       !ranked(query.value) &&
       !query.value.memories &&
@@ -241,6 +244,7 @@ export const usePhotosStore = defineStore('photos', () => {
       !cameras?.length &&
       !lenses?.length &&
       !kinds?.length &&
+      !bbox &&
       !from &&
       !to
     )

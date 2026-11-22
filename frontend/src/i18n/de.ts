@@ -36,6 +36,7 @@ const de: typeof en = {
     tags: 'Schlagwörter',
     archive: 'Archiv',
     favorites: 'Favoriten',
+    map: 'Karte',
     memories: 'Erinnerungen',
     trash: 'Papierkorb',
     upload: 'Hochladen',
@@ -133,6 +134,7 @@ const de: typeof en = {
     trashed: '{n} Foto in den Papierkorb verschoben | {n} Fotos in den Papierkorb verschoben',
   },
   viewer: {
+    showOnMap: 'Auf der Karte zeigen',
     download: 'Original herunterladen',
     equivalent: '{focal} ({value} mm KB-äquiv.)',
     flash: 'Blitz',
@@ -309,6 +311,16 @@ const de: typeof en = {
     description: 'Deine Lieblingsfotos, eigene und solche, die andere mit dir teilen. Nur du siehst deine Markierungen.',
     empty: 'Noch keine Favoriten',
     emptyText: 'Markiere ein Foto im Betrachter mit dem Stern, um es hier zu finden.',
+  },
+  map: {
+    back: 'Zurück zur Karte',
+    description: 'Ihre Fotos nach Aufnahmeort, zusammen mit den mit Ihnen geteilten. Ein Klick auf eine Gruppe zoomt hinein; in der größten Stufe listet er ihre Fotos auf.',
+    empty: 'Keine Fotos mit Ort',
+    emptyText: 'Hier erscheinen Fotos, deren Dateien GPS-Daten oder einen Ort aus einem Import haben.',
+    failed: 'Die Karte konnte nicht geladen werden',
+    hidden: 'Orte sind ausgeblendet',
+    hiddenText: 'Ein Administrator hat die Anzeige der Aufnahmeorte abgeschaltet, deshalb gibt es auf der Karte nichts zu zeigen.',
+    photosHere: '{n} Foto hier | {n} Fotos hier',
   },
   memories: {
     around: 'um den {date}',

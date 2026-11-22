@@ -126,6 +126,8 @@ type Photo struct {
 	Description       string
 	Hdr               *bool
 	HasRaw            bool
+	Latitude          *float64
+	Longitude         *float64
 }
 
 type PhotoArchive struct {

@@ -36,6 +36,7 @@ const es: typeof en = {
     tags: 'Etiquetas',
     archive: 'Archivo',
     favorites: 'Favoritos',
+    map: 'Mapa',
     memories: 'Recuerdos',
     trash: 'Papelera',
     upload: 'Subir',
@@ -133,6 +134,7 @@ const es: typeof en = {
     trashed: '{n} foto movida a la papelera | {n} fotos movidas a la papelera',
   },
   viewer: {
+    showOnMap: 'Mostrar en el mapa',
     download: 'Descargar el original',
     equivalent: '{focal} (equiv. {value} mm)',
     flash: 'Flash',
@@ -309,6 +311,16 @@ const es: typeof en = {
     description: 'Tus fotos favoritas, las tuyas y las que otros comparten contigo. Solo tú ves tus marcas.',
     empty: 'Aún no hay favoritos',
     emptyText: 'Marca una foto con la estrella en el visor para encontrarla aquí.',
+  },
+  map: {
+    back: 'Volver al mapa',
+    description: 'Tus fotos según dónde se tomaron, junto con las que comparten contigo. Un clic en un grupo acerca el mapa; con el máximo zoom muestra sus fotos.',
+    empty: 'No hay fotos con ubicación',
+    emptyText: 'Aquí aparecen las fotos cuyos archivos tienen datos GPS o una ubicación de una importación.',
+    failed: 'No se pudo cargar el mapa',
+    hidden: 'Las ubicaciones están ocultas',
+    hiddenText: 'Un administrador desactivó mostrar dónde se tomaron las fotos, así que el mapa no tiene nada que mostrar.',
+    photosHere: '{n} foto aquí | {n} fotos aquí',
   },
   memories: {
     around: 'hacia el {date}',

@@ -36,6 +36,7 @@ export default {
     tags: 'Tags',
     archive: 'Archive',
     favorites: 'Favorites',
+    map: 'Map',
     memories: 'Memories',
     trash: 'Trash',
     upload: 'Upload',
@@ -133,6 +134,7 @@ export default {
     trashed: '{n} photo moved to the trash | {n} photos moved to the trash',
   },
   viewer: {
+    showOnMap: 'Show on the map',
     download: 'Download the original',
     equivalent: '{focal} ({value} mm equiv.)',
     flash: 'Flash',
@@ -309,6 +311,16 @@ export default {
     description: 'Your favorite photos, your own and those others share with you. Only you see your marks.',
     empty: 'No favorites yet',
     emptyText: 'Mark a photo with the star in the viewer to find it here.',
+  },
+  map: {
+    back: 'Back to the map',
+    description: 'Your photos by where they were taken, with those shared with you. A click on a group zooms in; at the closest zoom it lists its photos.',
+    empty: 'No photos with a location',
+    emptyText: 'Photos whose files have GPS data, or a location from an import, show up here.',
+    failed: 'The map could not be loaded',
+    hidden: 'Locations are hidden',
+    hiddenText: 'An administrator turned off showing where photos were taken, so the map has nothing to show.',
+    photosHere: '{n} photo here | {n} photos here',
   },
   memories: {
     around: 'around {date}',

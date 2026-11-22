@@ -222,7 +222,7 @@ const location = computed(() => {
   }
   const lat = l.latitude.toFixed(5)
   const lon = l.longitude.toFixed(5)
-  return { text: `${lat}, ${lon}`, url: `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=15/${lat}/${lon}` }
+  return { text: `${lat}, ${lon}`, to: { path: '/map', query: { lat, lon, zoom: '15' } } }
 })
 
 // Formats the shooting details the way cameras show them, such as
@@ -1056,9 +1056,9 @@ onBeforeUnmount(() => {
     <div v-if="camera || location" ref="bottomBar" class="bar bottom">
       <div class="details" data-testid="camera">
         {{ camera }}<template v-if="camera && location"> · </template>
-        <a v-if="location" :href="location.url" target="_blank" rel="noopener noreferrer" class="location">{{
+        <router-link v-if="location" :to="location.to" class="location" :title="t('viewer.showOnMap')">{{
           location.text
-        }}</a>
+        }}</router-link>
       </div>
     </div>
 

@@ -4,6 +4,8 @@ Changes in each release. Add changes under "Unreleased" as they are made; `make 
 
 ## Unreleased
 
+- A Map page with the photos that have a location, in clusters that zoom in and open their photos, drawn with MapLibre GL JS on OpenStreetMap tiles loaded by the browser. The viewer's coordinates link to it. It follows the administrator's setting that hides locations.
+
 - Memories: a strip of "N years ago" cards above the timeline and a Memories page with the photos taken on this day in earlier years, or on the closest day within three days.
 
 ## 0.1.1 - 2026-11-22

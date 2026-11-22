@@ -36,6 +36,7 @@ It is built for modest hardware. It is developed and measured on an Intel N150 w
 - Import from a folder on the NAS, which stays untouched. A repeated import skips the photos already imported or deleted
 - Import from Google Takeout, straight from its `.zip` or `.tgz` parts: dates and places from Google, albums, descriptions, favorites, the archive and the trash, with edited copies shown over their originals
 - A timeline that stays fast in large libraries, with a year scrubber and filters by date, tag, camera and lens
+- A map of photos by where they were taken, with clusters that open their photos, on OpenStreetMap tiles
 - Memories: a strip above the timeline and a page with the photos taken on this day in earlier years, or on the closest day within three days
 - Albums, personal tags, favorites, an archive, descriptions, bulk actions and a trash
 - Sharing of photos and albums with all users or with specific ones, read-only for the recipient

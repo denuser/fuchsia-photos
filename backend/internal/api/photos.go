@@ -191,6 +191,10 @@ func (s *server) countPhotoMonths(w http.ResponseWriter, r *http.Request) {
 		Cameras:    filter.Cameras,
 		Lenses:     filter.Lenses,
 		Kinds:      filter.Kinds,
+		South:      filter.South,
+		West:       filter.West,
+		North:      filter.North,
+		East:       filter.East,
 	})
 	if err != nil {
 		internalError(w, r, err)
@@ -230,6 +234,19 @@ func (s *server) timelineFilter(w http.ResponseWriter, r *http.Request) (store.L
 			writeError(w, http.StatusBadRequest, "invalid kind")
 			return params, false
 		}
+	}
+	if text := query.Get("bbox"); text != "" {
+		west, south, east, north, ok := parseBox(text)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "invalid bbox")
+			return params, false
+		}
+		// Narrowing a box would find where photos were taken, so it follows the
+		// setting that hides locations.
+		if !s.requireLocations(w, r) {
+			return params, false
+		}
+		params.West, params.South, params.East, params.North = &west, &south, &east, &north
 	}
 	switch query.Get("withShared") {
 	case "", "false":

@@ -37,6 +37,7 @@ const it: typeof en = {
     tags: 'Tag',
     archive: 'Archivio',
     favorites: 'Preferiti',
+    map: 'Mappa',
     memories: 'Ricordi',
     trash: 'Cestino',
     upload: 'Carica',
@@ -134,6 +135,7 @@ const it: typeof en = {
     trashed: '{n} foto spostata nel cestino | {n} foto spostate nel cestino',
   },
   viewer: {
+    showOnMap: 'Mostra sulla mappa',
     download: 'Scarica l’originale',
     equivalent: '{focal} (equiv. {value} mm)',
     flash: 'Flash',
@@ -310,6 +312,16 @@ const it: typeof en = {
     description: 'Le tue foto preferite, tue e quelle che altri condividono con te. Solo tu vedi i tuoi segni.',
     empty: 'Ancora nessun preferito',
     emptyText: 'Segna una foto con la stella nel visualizzatore per trovarla qui.',
+  },
+  map: {
+    back: 'Torna alla mappa',
+    description: 'Le tue foto in base al luogo di scatto, insieme a quelle condivise con te. Un clic su un gruppo ingrandisce la mappa; al massimo zoom ne elenca le foto.',
+    empty: 'Nessuna foto con una posizione',
+    emptyText: 'Qui compaiono le foto i cui file hanno dati GPS o una posizione da un’importazione.',
+    failed: 'Impossibile caricare la mappa',
+    hidden: 'Le posizioni sono nascoste',
+    hiddenText: 'Un amministratore ha disattivato la visualizzazione del luogo delle foto, quindi la mappa non ha nulla da mostrare.',
+    photosHere: '{n} foto qui | {n} foto qui',
   },
   memories: {
     around: 'intorno al {date}',

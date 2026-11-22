@@ -450,6 +450,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/photos/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The photos in a box, grouped into clusters for a zoom level
+         * @description The same photos as the memories: the user's own and those shared with them, without the user's archived
+         *     photos. A cluster is a cell of a grid that follows the zoom, at the centre of its photos, with the newest
+         *     photo as its cover and the box that holds them, which opens them through `bbox` of listPhotos. Answers 403
+         *     where an administrator hides locations.
+         */
+        get: operations["listMap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/photos/memories": {
         parameters: {
             query?: never;
@@ -1432,6 +1455,20 @@ export interface components {
             /** @description Users to stop sharing with */
             remove?: number[];
         };
+        MapCluster: {
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            longitude: number;
+            /** Format: int64 */
+            count: number;
+            /** @description West, south, east and north of the cluster's photos */
+            box: number[];
+            /** Format: int64 */
+            coverId: number;
+            /** @description The preview version of the cover, for its URL */
+            coverVersion: number;
+        };
         MemoryYear: {
             year: number;
             /** @description How many years before the requested date this year is */
@@ -2156,6 +2193,8 @@ export interface operations {
                 lens?: string[];
                 /** @description Only items of any of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them. A camera RAW, or a photo with a RAW hidden under it, is also `raw` */
                 kind?: components["schemas"]["MediaKind"][];
+                /** @description Only photos taken inside this box of coordinates, as `west,south,east,north`. West may be greater than east, for a box across the date line. Answers 403 where an administrator hides locations */
+                bbox?: string;
                 /** @description Only photos of this album */
                 album?: number;
                 /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
@@ -2422,6 +2461,8 @@ export interface operations {
                 lens?: string[];
                 /** @description Only items of any of these kinds. A still photo is `photo`, a photo that plays motion (an Android motion photo or a Live Photo) is `motion`, and a video is `video`; each item is exactly one of them. A camera RAW, or a photo with a RAW hidden under it, is also `raw` */
                 kind?: components["schemas"]["MediaKind"][];
+                /** @description Only photos taken inside this box of coordinates, as `west,south,east,north`. West may be greater than east, for a box across the date line. Answers 403 where an administrator hides locations */
+                bbox?: string;
                 /** @description Only photos of this album */
                 album?: number;
                 /** @description Also other users' processed photos that the current user can see, such as photos of shared albums. A tag filter still keeps only the user's own photos. Cannot be combined with `album` */
@@ -2468,6 +2509,35 @@ export interface operations {
                     "text/event-stream": components["schemas"]["PhotoEvent"];
                 };
             };
+        };
+    };
+    listMap: {
+        parameters: {
+            query: {
+                /** @description The box as `west,south,east,north`; west may be greater than east, for a box across the date line */
+                bbox: string;
+                /** @description The zoom level of the map, 0 to 22 */
+                zoom: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The clusters */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        clusters: components["schemas"]["MapCluster"][];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
         };
     };
     listMemories: {

@@ -37,6 +37,7 @@ const fr: typeof en = {
     tags: 'Étiquettes',
     archive: 'Archives',
     favorites: 'Favoris',
+    map: 'Carte',
     memories: 'Souvenirs',
     trash: 'Corbeille',
     upload: 'Importer',
@@ -134,6 +135,7 @@ const fr: typeof en = {
     trashed: '{n} photo mise à la corbeille | {n} photos mises à la corbeille',
   },
   viewer: {
+    showOnMap: 'Afficher sur la carte',
     download: 'Télécharger l’original',
     equivalent: '{focal} (équiv. {value} mm)',
     flash: 'Flash',
@@ -310,6 +312,16 @@ const fr: typeof en = {
     description: 'Vos photos favorites, les vôtres et celles que d’autres partagent avec vous. Vous seul voyez vos marques.',
     empty: 'Aucun favori pour l’instant',
     emptyText: 'Marquez une photo avec l’étoile dans la visionneuse pour la retrouver ici.',
+  },
+  map: {
+    back: 'Retour à la carte',
+    description: 'Vos photos selon le lieu de prise de vue, avec celles qu’on partage avec vous. Un clic sur un groupe zoome ; au zoom maximal, il liste ses photos.',
+    empty: 'Aucune photo avec un lieu',
+    emptyText: 'Les photos dont les fichiers contiennent des données GPS, ou un lieu venant d’un import, apparaissent ici.',
+    failed: 'Impossible de charger la carte',
+    hidden: 'Les lieux sont masqués',
+    hiddenText: 'Un administrateur a désactivé l’affichage du lieu des photos, la carte n’a donc rien à montrer.',
+    photosHere: '{n} photo ici | {n} photos ici',
   },
   memories: {
     around: 'vers le {date}',

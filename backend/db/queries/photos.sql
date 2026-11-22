@@ -63,6 +63,13 @@ WHERE (p.owner_id = @owner_id
   AND (sqlc.narg(cameras)::text[] IS NULL OR p.camera = ANY (sqlc.narg(cameras)::text[]))
   AND (sqlc.narg(lenses)::text[] IS NULL OR p.lens = ANY (sqlc.narg(lenses)::text[]))
   AND (sqlc.narg(kinds)::text[] IS NULL OR photo_kinds(p.mime, p.has_motion, p.has_raw) && sqlc.narg(kinds)::text[])
+  -- The photos taken inside a box of coordinates, which may cross the date
+  -- line (west east of east). The API allows it only where it shows locations.
+  AND (sqlc.narg(south)::double precision IS NULL
+       OR (p.latitude BETWEEN sqlc.narg(south)::double precision AND sqlc.narg(north)::double precision
+           AND (CASE WHEN sqlc.narg(west)::double precision <= sqlc.narg(east)::double precision
+                     THEN p.longitude BETWEEN sqlc.narg(west)::double precision AND sqlc.narg(east)::double precision
+                     ELSE p.longitude >= sqlc.narg(west)::double precision OR p.longitude <= sqlc.narg(east)::double precision END)))
 ORDER BY p.sort_at DESC, p.id DESC
 LIMIT @max_rows;
 
@@ -98,6 +105,13 @@ WHERE (p.owner_id = @owner_id
   AND (sqlc.narg(cameras)::text[] IS NULL OR p.camera = ANY (sqlc.narg(cameras)::text[]))
   AND (sqlc.narg(lenses)::text[] IS NULL OR p.lens = ANY (sqlc.narg(lenses)::text[]))
   AND (sqlc.narg(kinds)::text[] IS NULL OR photo_kinds(p.mime, p.has_motion, p.has_raw) && sqlc.narg(kinds)::text[])
+  -- The photos taken inside a box of coordinates, which may cross the date
+  -- line (west east of east). The API allows it only where it shows locations.
+  AND (sqlc.narg(south)::double precision IS NULL
+       OR (p.latitude BETWEEN sqlc.narg(south)::double precision AND sqlc.narg(north)::double precision
+           AND (CASE WHEN sqlc.narg(west)::double precision <= sqlc.narg(east)::double precision
+                     THEN p.longitude BETWEEN sqlc.narg(west)::double precision AND sqlc.narg(east)::double precision
+                     ELSE p.longitude >= sqlc.narg(west)::double precision OR p.longitude <= sqlc.narg(east)::double precision END)))
 GROUP BY 1
 ORDER BY 1 DESC;
 
@@ -699,3 +713,38 @@ LIMIT 5000;
 SELECT coalesce(min(sort_at), now())::timestamptz AS oldest
 FROM photos
 WHERE status = 'ready' AND deleted_at IS NULL;
+
+-- The photos of the map in one box, grouped into cells of a grid that follows
+-- the zoom: cells is how many columns the world has at it, and a cell is as tall
+-- as it is wide on the Mercator projection, so that cells do not stretch near
+-- the poles. Each cell is a cluster at the centre of its photos, with the newest
+-- photo as its cover and the box that holds them. The same photos as
+-- ListMemories: the user's own and shared with them, out of the archive, the
+-- trash and hidden versions. The API allows it only where it shows locations.
+-- name: ListMapClusters :many
+SELECT count(*)::bigint AS count,
+       avg(p.latitude)::double precision AS latitude,
+       avg(p.longitude)::double precision AS longitude,
+       min(p.latitude)::double precision AS south,
+       min(p.longitude)::double precision AS west,
+       max(p.latitude)::double precision AS north,
+       max(p.longitude)::double precision AS east,
+       (array_agg(p.id ORDER BY p.sort_at DESC, p.id DESC))[1]::bigint AS cover_id,
+       (array_agg(p.preview_version ORDER BY p.sort_at DESC, p.id DESC))[1]::integer AS cover_version
+FROM photos p
+WHERE (p.owner_id = @owner_id
+       OR (photo_shared_directly(p, @owner_id::bigint) OR photo_in_visible_album(p, @owner_id::bigint)))
+  AND p.status = 'ready'
+  AND p.deleted_at IS NULL
+  AND p.latitude IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
+  AND NOT EXISTS (SELECT 1 FROM photo_archive a WHERE a.photo_id = p.id AND a.user_id = @owner_id)
+  AND p.latitude BETWEEN @south::double precision AND @north::double precision
+  AND (CASE WHEN @west::double precision <= @east::double precision
+            THEN p.longitude BETWEEN @west::double precision AND @east::double precision
+            ELSE p.longitude >= @west::double precision OR p.longitude <= @east::double precision END)
+GROUP BY floor((p.longitude + 180) / 360 * @cells::double precision),
+         floor((1 - ln(tan(radians(least(greatest(p.latitude, -85.05), 85.05)))
+                        + 1 / cos(radians(least(greatest(p.latitude, -85.05), 85.05))))
+                    / pi()) / 2 * @cells::double precision)
+ORDER BY count DESC;

@@ -460,6 +460,33 @@ const steps = {
     await openRotated()
     await location.waitFor()
   },
+  'the map shows a located photo, opened from the viewer, and lists its photos': async () => {
+    // The located rotated.jpg of the library belongs to the second user and is not shared, so the
+    // administrator's map has none of it until the administrator uploads it too.
+    await page.goto(BASE)
+    await page.getByTestId('upload-files').setInputFiles(join(FIXTURES, 'rotated.jpg'))
+    await page.getByLabel('rotated.jpg', { exact: true }).click()
+    await page.getByTestId('viewer').getByRole('link', { name: '59.93000, 30.33000' }).click()
+    await page.waitForURL(/\/map\?/)
+    // Tiles come from the public servers and are not checked: the markers are.
+    const marker = page.locator('.fp-marker').first()
+    await marker.waitFor()
+    await marker.click()
+    await page.getByTestId('map-photos').getByTestId('tile-open').first().waitFor()
+    await page.getByRole('button', { name: 'Back to the map' }).click()
+    await page.getByTestId('map-photos').waitFor({ state: 'detached' })
+    // The photo was uploaded for this step only: the steps after it count the library's photos.
+    await page.evaluate(async (name) => {
+      const list = await (await fetch('/api/v1/photos?limit=200')).json()
+      const ids = list.items.filter((p) => p.name === name).map((p) => p.id)
+      for (const action of ['trash', 'purge']) {
+        const res = await fetch(`/api/v1/photos/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) })
+        if (!res.ok) {
+          throw new Error(`${action} answered ${res.status}`)
+        }
+      }
+    }, 'rotated.jpg')
+  },
   'zoom a photo to its own resolution, then choose originals for zooming and details in the profile': async () => {
     const image = page.getByTestId('viewer-image')
     const source = (want) =>

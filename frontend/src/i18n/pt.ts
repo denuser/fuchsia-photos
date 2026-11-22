@@ -37,6 +37,7 @@ const pt: typeof en = {
     tags: 'Etiquetas',
     archive: 'Arquivo',
     favorites: 'Favoritos',
+    map: 'Mapa',
     memories: 'Memórias',
     trash: 'Lixeira',
     upload: 'Enviar',
@@ -134,6 +135,7 @@ const pt: typeof en = {
     trashed: '{n} foto movida para a lixeira | {n} fotos movidas para a lixeira',
   },
   viewer: {
+    showOnMap: 'Mostrar no mapa',
     download: 'Baixar o original',
     equivalent: '{focal} (equiv. {value} mm)',
     flash: 'Flash',
@@ -310,6 +312,16 @@ const pt: typeof en = {
     description: 'Suas fotos favoritas, suas e as que outras pessoas compartilham com você. Só você vê suas marcações.',
     empty: 'Ainda não há favoritos',
     emptyText: 'Marque uma foto com a estrela no visualizador para encontrá-la aqui.',
+  },
+  map: {
+    back: 'Voltar ao mapa',
+    description: 'As suas fotos por local de captura, com as que partilham consigo. Um clique num grupo aproxima o mapa; no zoom máximo lista as suas fotos.',
+    empty: 'Sem fotos com localização',
+    emptyText: 'Aqui aparecem as fotos cujos ficheiros têm dados GPS ou uma localização de uma importação.',
+    failed: 'Não foi possível carregar o mapa',
+    hidden: 'As localizações estão ocultas',
+    hiddenText: 'Um administrador desativou a apresentação do local das fotos, por isso o mapa não tem nada para mostrar.',
+    photosHere: '{n} foto aqui | {n} fotos aqui',
   },
   memories: {
     around: 'por volta de {date}',

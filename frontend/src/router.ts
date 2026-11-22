@@ -28,6 +28,8 @@ export const router = createRouter({
     { path: '/albums/:id(\\d+)', component: AlbumView },
     { path: '/favorites', component: FavoritesView },
     { path: '/memories', component: MemoriesView },
+    // Loaded when first opened, so that the map library stays out of the main bundle.
+    { path: '/map', component: () => import('./views/MapView.vue') },
     { path: '/archive', component: ArchiveView },
     { path: '/shared', component: SharedView },
     { path: '/tags', component: TagsView },

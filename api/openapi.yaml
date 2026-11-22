@@ -399,6 +399,11 @@ paths:
             type: array
             items:
               $ref: "#/components/schemas/MediaKind"
+        - name: bbox
+          in: query
+          description: Only photos taken inside this box of coordinates, as `west,south,east,north`. West may be greater than east, for a box across the date line. Answers 403 where an administrator hides locations
+          schema:
+            type: string
         - name: album
           in: query
           description: Only photos of this album
@@ -672,6 +677,11 @@ paths:
             type: array
             items:
               $ref: "#/components/schemas/MediaKind"
+        - name: bbox
+          in: query
+          description: Only photos taken inside this box of coordinates, as `west,south,east,north`. West may be greater than east, for a box across the date line. Answers 403 where an administrator hides locations
+          schema:
+            type: string
         - name: album
           in: query
           description: Only photos of this album
@@ -719,6 +729,47 @@ paths:
             text/event-stream:
               schema:
                 $ref: "#/components/schemas/PhotoEvent"
+  /photos/map:
+    get:
+      operationId: listMap
+      summary: The photos in a box, grouped into clusters for a zoom level
+      description: |
+        The same photos as the memories: the user's own and those shared with them, without the user's archived
+        photos. A cluster is a cell of a grid that follows the zoom, at the centre of its photos, with the newest
+        photo as its cover and the box that holds them, which opens them through `bbox` of listPhotos. Answers 403
+        where an administrator hides locations.
+      parameters:
+        - name: bbox
+          in: query
+          required: true
+          description: The box as `west,south,east,north`; west may be greater than east, for a box across the date line
+          schema:
+            type: string
+        - name: zoom
+          in: query
+          required: true
+          description: The zoom level of the map, 0 to 22
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 22
+      responses:
+        "200":
+          description: The clusters
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clusters]
+                properties:
+                  clusters:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MapCluster"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
   /photos/memories:
     get:
       operationId: listMemories
@@ -2127,6 +2178,33 @@ components:
           items:
             type: integer
             format: int64
+    MapCluster:
+      type: object
+      required: [latitude, longitude, count, box, coverId, coverVersion]
+      properties:
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        count:
+          type: integer
+          format: int64
+        box:
+          description: West, south, east and north of the cluster's photos
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            type: number
+            format: double
+        coverId:
+          type: integer
+          format: int64
+        coverVersion:
+          type: integer
+          description: The preview version of the cover, for its URL
     MemoryYear:
       type: object
       required: [year, yearsAgo, date, exact, photos]

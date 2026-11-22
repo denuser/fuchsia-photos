@@ -37,6 +37,7 @@ const ja: typeof en = {
     tags: 'タグ',
     archive: 'アーカイブ',
     favorites: 'お気に入り',
+    map: 'マップ',
     memories: '思い出',
     trash: 'ゴミ箱',
     upload: 'アップロード',
@@ -133,6 +134,7 @@ const ja: typeof en = {
     trashed: '{n} 枚の写真をゴミ箱に移動しました',
   },
   viewer: {
+    showOnMap: 'マップで表示',
     download: 'オリジナルをダウンロード',
     equivalent: '{focal} (35mm 換算 {value} mm)',
     flash: 'フラッシュ',
@@ -309,6 +311,16 @@ const ja: typeof en = {
     description: '自分の写真とほかの人から共有された写真のうち、お気に入りにしたもの。お気に入りの印はあなただけに表示されます。',
     empty: 'お気に入りはまだありません',
     emptyText: 'ビューアで星を付けた写真がここに表示されます。',
+  },
+  map: {
+    back: 'マップに戻る',
+    description: '撮影場所ごとの写真を、共有されたものも含めて表示します。グループをクリックするとズームインし、最大ズームではその写真を一覧にします。',
+    empty: '場所のある写真はありません',
+    emptyText: 'ファイルに GPS データがある写真や、インポートで場所が分かる写真がここに表示されます。',
+    failed: 'マップを読み込めませんでした',
+    hidden: '場所は非表示です',
+    hiddenText: '管理者が撮影場所の表示をオフにしているため、マップに表示するものがありません。',
+    photosHere: 'ここに {n} 枚の写真',
   },
   memories: {
     around: '{date}ごろ',

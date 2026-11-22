@@ -37,6 +37,7 @@ const zh: typeof en = {
     tags: '标签',
     archive: '归档',
     favorites: '收藏',
+    map: '地图',
     memories: '回忆',
     trash: '回收站',
     upload: '上传',
@@ -133,6 +134,7 @@ const zh: typeof en = {
     trashed: '已将 {n} 张照片移到回收站',
   },
   viewer: {
+    showOnMap: '在地图上显示',
     download: '下载原图',
     equivalent: '{focal}（等效 {value} mm）',
     flash: '闪光灯',
@@ -309,6 +311,16 @@ const zh: typeof en = {
     description: '你收藏的照片，包括你自己的和别人与你共享的。只有你能看到你的收藏标记。',
     empty: '还没有收藏',
     emptyText: '在查看器中用星标标记照片，即可在这里找到它。',
+  },
+  map: {
+    back: '返回地图',
+    description: '按拍摄地点显示你的照片，包括别人与你共享的照片。点击一组会放大地图，放到最大时列出其中的照片。',
+    empty: '没有带位置的照片',
+    emptyText: '文件中含 GPS 数据或导入时带有位置的照片会显示在这里。',
+    failed: '无法加载地图',
+    hidden: '拍摄地点已隐藏',
+    hiddenText: '管理员关闭了拍摄地点的显示，因此地图上没有内容。',
+    photosHere: '此处 {n} 张照片',
   },
   memories: {
     around: '约 {date}',

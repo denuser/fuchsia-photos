@@ -37,6 +37,7 @@ const ko: typeof en = {
     tags: '태그',
     archive: '보관함',
     favorites: '즐겨찾기',
+    map: '지도',
     memories: '추억',
     trash: '휴지통',
     upload: '업로드',
@@ -133,6 +134,7 @@ const ko: typeof en = {
     trashed: '사진 {n}장을 휴지통으로 이동함',
   },
   viewer: {
+    showOnMap: '지도에서 보기',
     download: '원본 다운로드',
     equivalent: '{focal} (35mm 환산 {value} mm)',
     flash: '플래시',
@@ -309,6 +311,16 @@ const ko: typeof en = {
     description: '내 사진과 다른 사람이 공유한 사진 중 즐겨찾기한 사진. 즐겨찾기 표시는 나만 볼 수 있습니다.',
     empty: '아직 즐겨찾기가 없습니다',
     emptyText: '뷰어에서 별표를 누른 사진이 여기에 표시됩니다.',
+  },
+  map: {
+    back: '지도로 돌아가기',
+    description: '촬영 장소별로 내 사진과 공유받은 사진을 보여 줍니다. 그룹을 클릭하면 확대되고, 최대 확대에서는 그 사진 목록을 보여 줍니다.',
+    empty: '위치가 있는 사진이 없습니다',
+    emptyText: '파일에 GPS 데이터가 있거나 가져오기에서 위치를 알게 된 사진이 여기에 표시됩니다.',
+    failed: '지도를 불러오지 못했습니다',
+    hidden: '위치가 숨겨져 있습니다',
+    hiddenText: '관리자가 촬영 장소 표시를 꺼서 지도에 보여 줄 것이 없습니다.',
+    photosHere: '여기 사진 {n}장',
   },
   memories: {
     around: '{date} 무렵',

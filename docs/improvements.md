@@ -24,7 +24,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 18 | [Lightroom XMP sidecars](#18-lightroom-xmp-sidecars) | Draft plan | Open questions 2 to 4; builds on 19 |
 | 19 | [Library folders indexed in place](#19-library-folders-indexed-in-place) | Planned | Everything |
 | 20 | [Safer RAW decoding](#20-safer-raw-decoding) | Done, not released | |
-| 21 | [Map](#21-map) | Draft plan | Open questions, then the build |
+| 21 | [Map](#21-map) | Done, not released | Check the map on a phone and with a larger library |
 
 ## 1. Administration page
 
@@ -545,13 +545,13 @@ A timed NAS run on 2026-11-21 imported all 20 difficult RAW samples in 102.1 s o
 
 ## 21. Map
 
-**Status:** draft plan on 2026-11-22; the questions below are open.
+**Status:** done on 2026-11-22, not released. The Map page, the clusters API, the `bbox` filter and the viewer's link work, with a backend test (`map_test.go`) and a step in the browser test. Not yet checked on a phone or with a large library.
 
 A page with the user's photos on a map, by the GPS location of each, as Immich, Nextcloud Memories and Google Photos have. The viewer today links a photo's coordinates to openstreetmap.org in a new tab (`PhotoViewer.vue`); nothing shows many photos at once. Place names ([improvement 8](#8-place-names-in-the-viewer)) are a separate piece and do not block this one.
 
 What the code gives: a location is read out of the EXIF JSON when a photo is sent (`metadata.Details`), or comes from an import (`imported_latitude`, `imported_longitude`, which apply only when the EXIF has none). The API returns it only when an administrator allows locations. There is no column to query by, so the first step is a place for the numbers.
 
-Open questions:
+Decided on 2026-11-22 (the options considered follow):
 
 - **Where the map tiles come from.** This is the privacy decision: whoever serves the tiles learns what area the user looks at, though never which photos are there. The [place names](architecture.md#decisions) set the bar as "coordinates never leave the NAS, and no internet is needed".
   - OpenStreetMap's public tile servers from the browser: no setup, but the user's IP and viewed areas go to a third party, and its tile policy discourages heavy use.
@@ -561,9 +561,11 @@ Open questions:
 - **What a click on a cluster does:** zooms in, or opens the photos of the cluster under the map at any zoom.
 - **How it is entered.** A "Map" page in the menu, and a "Show on map" link in the viewer, replacing the external link or next to it.
 
+The choices: tiles from OpenStreetMap's public servers, straight from the browser (OpenStreetMap sees the user's own IP, the viewed areas and the address of the site as Referer; the VPS in front of the NAS is not involved); a click on a cluster zooms in, and at the closest zoom or on a single photo lists the cluster's photos under the map; the viewer's link opens the Map page centred on the photo and replaces the link to openstreetmap.org, which sent the coordinates there. The library started as Leaflet and was replaced by MapLibre GL JS the same day, as Leaflet 1.9 prints a flag before its name in the credit line and the user did not want it; MapLibre also reads vector tiles, so PMTiles from the NAS can come later without another library. The map's chunk is loaded only on its page (about 300 kB gzipped).
+
 Decided on 2026-11-22: whose photos are on the map, as on the memories page and the timeline with shared photos: the user's own and those shared with them, without the user's archive, the trash and hidden versions.
 
-Plan, with the open questions to answer first:
+Plan, as built, with these differences: the `bbox` filter is on `/photos` and `/photos/months` only (the facet lists of `/photos/cameras` ignore it, and the box still answers 403 there where locations are hidden); the menu item is always shown, and the page says that locations are hidden when the API answers 403, as the setting is the administrator's and the API gives other users no way to read it; MapLibre's zoom counts 512 pixel tiles, so the API gets its zoom plus one; the browser test uploads the located `rotated.jpg` for the administrator and purges it at the end of its step, as the other users' photos are not on the administrator's map.
 
 1. **Coordinates in the database.** Generated columns `latitude` and `longitude` on `photos`, as `camera` and `lens` are: `COALESCE` of the EXIF value and `imported_latitude`/`imported_longitude`, so a location an import records later is on the map with no job. The SQL expression is immutable and accepts what `location()` in `metadata.go` accepts: numbers (checked with `jsonb_typeof`), the range of 90 and 180, the sign from the reference letter, and 0,0 as no fix; the two are kept in step as `is_raw_mime` and `storage.IsRAW` are, with a test that runs both on the same tags. An index on them for bounding boxes.
 2. **API.** `GET /photos/map` takes the bounding box and the zoom and returns clusters (the centroid of its photos, their number, a cover photo) computed by grouping into a grid whose cell follows the zoom, on the Mercator y rather than the latitude so that cells do not stretch near the poles. A `bbox` filter joins the timeline filters (`ListTimeline`, `CountTimelineMonths`, `ListCameras`, `ListLenses` and `timelineFilter`), so that the photos of a cluster open in `PhotoBrowser` with the viewer, selection and bulk actions. On the frontend it also goes into `listFilters`, `withoutFilters` in `stores/photos.ts` and `filtered` in `TimelineView.vue`. Both endpoints answer only when an administrator allows locations, and so does `bbox` on `/photos`, `/photos/months` and `/photos/cameras`: otherwise anyone could find the coordinates of shared photos by narrowing the box.

@@ -59,6 +59,7 @@ const navItems = computed(() => [
   { to: '/search', icon: 'fa-magnifying-glass', title: t('nav.search') },
   { to: '/albums', icon: 'fa-book-open', title: t('nav.albums') },
   { to: '/memories', icon: 'fa-clock-rotate-left', title: t('nav.memories') },
+  { to: '/map', icon: 'fa-map-location-dot', title: t('nav.map') },
   { to: '/favorites', icon: 'fa-star', title: t('nav.favorites') },
   { to: '/shared', icon: 'fa-users', title: t('nav.shared') },
   { to: '/tags', icon: 'fa-tags', title: t('nav.tags') },
