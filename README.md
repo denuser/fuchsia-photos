@@ -53,16 +53,16 @@ Supported formats: JPEG, PNG, WebP and HEIC photos, MP4 and MOV videos, and the 
 
 ## Quick start
 
-This runs release `0.1.0` with PostgreSQL, the nightly backup and Caddy for HTTPS. Run the commands on the NAS:
+This runs release `0.1.1` with PostgreSQL, the nightly backup and Caddy for HTTPS. Run the commands on the NAS:
 
 ```sh
 mkdir fuchsia-photos && cd fuchsia-photos
 curl -fsSL -o docker-compose.yml \
-  https://raw.githubusercontent.com/denuser/fuchsia-photos/v0.1.0/deploy/compose.image.yaml
+  https://raw.githubusercontent.com/denuser/fuchsia-photos/v0.1.1/deploy/compose.image.yaml
 cat > .env <<'ENV'
 POSTGRES_PASSWORD=change-me
 SITE_ADDRESS=192.168.0.10
-IMAGE_TAG=0.1.0
+IMAGE_TAG=0.1.1
 ENV
 mkdir -p data/library data/cache data/import
 sudo chown 1000:1000 data/library data/cache
@@ -70,7 +70,7 @@ docker compose up -d
 docker compose exec app fuchsia-photos create-admin admin
 ```
 
-Set a long password with URL-safe characters only, and the address of the NAS. The last command waits for the administrator's password. Then open `https://<address>:10304/`; to use another port, set `HTTPS_PORT` in `.env`. The certificate comes from Caddy's local CA, so the browser warns about it until that CA is trusted.
+Set a long password with URL-safe characters only, and the address of the NAS. The last command waits for the administrator's password. Then open `https://<address>:10304/`; to use another port, set `HTTPS_PORT` in `.env`. The certificate comes from Caddy's local CA, so the browser warns about it until that CA is trusted, which [takes a minute](docs/deployment.md#trusting-the-certificate) on each device.
 
 The [deployment guide](docs/deployment.md) covers the settings, TrueNAS, WebDAV, folder imports, backups and updates.
 

@@ -51,7 +51,30 @@ docker compose -f deploy/compose.yaml exec app fuchsia-photos create-admin admin
 
 The last command waits for a password. Type it and press Enter. The password is visible while you type.
 
-Without a public domain, Caddy issues a certificate from its local CA, and browsers show a warning until that CA is trusted. To use a public certificate for a real domain, remove the `tls internal` line from `deploy/Caddyfile`.
+Without a public domain, Caddy issues a certificate from its local CA, and browsers show a warning until that CA is trusted. [Trusting the certificate](#trusting-the-certificate) removes the warning. To use a public certificate for a real domain, remove the `tls internal` line from `deploy/Caddyfile`.
+
+### Trusting the certificate
+
+The warning appears because the certificate is signed by a CA that Caddy created on the NAS, and your devices do not know it. The traffic is encrypted either way; trusting the CA once on each device makes the warning go away for good, and lets sync apps that refuse self-signed certificates connect.
+
+Copy the CA's certificate out of the Caddy container. Run this next to the `docker-compose.yml` of [a release image](#running-from-an-image), or add `-f deploy/compose.yaml` when running from the source:
+
+```sh
+docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./fuchsia-photos-ca.crt
+```
+
+The file is public and holds no secret, so it is fine to send it by e-mail or a messenger. Never share the `root.key` next to it. Then install it on each device:
+
+- **macOS:** `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain fuchsia-photos-ca.crt`, or open the file in Keychain Access, then open the certificate and set **Trust** to **Always Trust**. Restart the browser.
+- **Windows:** in an administrator terminal, `certutil -addstore -f Root fuchsia-photos-ca.crt`, or open the file and choose **Install Certificate**, **Local Machine**, then **Trusted Root Certification Authorities**.
+- **Linux:** on Debian and Ubuntu, copy the file to `/usr/local/share/ca-certificates/fuchsia-photos-ca.crt` and run `sudo update-ca-certificates`. Chrome and Firefox keep their own list: import the file under **Settings**, **Certificates**, **Authorities**.
+- **Firefox on any system** may ignore the system store. Import the file under **Settings**, **Privacy & Security**, **Certificates**, **View Certificates**, **Authorities**, and tick "Trust this CA to identify websites".
+- **iPhone and iPad:** send the file to the device and open it, allow the profile in **Settings**, **Profile Downloaded**, and install it. Then turn on full trust in **Settings**, **General**, **About**, **Certificate Trust Settings**. Without that last step Safari still warns.
+- **Android:** **Settings**, **Security**, **Encryption & credentials**, **Install a certificate**, **CA certificate**, and choose the file. The menu differs between makers. Chrome then trusts it, but many apps ignore CAs added by the user, so FolderSync still needs "Allow self-signed certificate", as described under [WebDAV](#uploading-from-a-phone-over-webdav).
+
+The CA lives in Caddy's data folder, which `CADDY_DIR` sets when running from an image. Keep that folder, or Caddy creates a new CA and every device has to trust it again. A new address in `SITE_ADDRESS` needs nothing on the devices: the same CA signs its certificate.
+
+To skip the manual step altogether, use a real domain name. Point a name such as `photos.example.com` at the NAS in your router's DNS, and have Caddy get a public certificate with the DNS challenge, which needs no open ports but a Caddy build with the plugin for your DNS provider. Then remove `tls internal` from the Caddyfile.
 
 ## Operations
 
