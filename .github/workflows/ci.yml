@@ -113,7 +113,7 @@ jobs:
   # Builds the transcoder's images, one for each maker of graphics, amd64
   # only, when started by hand: `gh workflow run ci.yml` or "Run workflow" in
   # the Actions tab. From master it moves `latest-intel` and `latest-amd` of
-  # fuchsia-photos-transcoder; from a tag vX.Y.Z (`--ref vX.Y.Z`) it adds
+  # magellanica-photos-transcoder; from a tag vX.Y.Z (`--ref vX.Y.Z`) it adds
   # `X.Y.Z-intel` and `X.Y.Z-amd`. Pushes and tags never build them, so each
   # image is made on purpose.
   transcoder:

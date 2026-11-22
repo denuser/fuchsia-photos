@@ -6,9 +6,9 @@ import (
 	"math"
 	"time"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/metadata"
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/metadata"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 // ApplyImportedMetadata works out the date and the location of processed

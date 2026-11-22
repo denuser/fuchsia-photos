@@ -7,8 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
-	"github.com/denuser/fuchsia-photos/backend/internal/webdav"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/webdav"
 )
 
 const maxWebDAVAlbums = 100

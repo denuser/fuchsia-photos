@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
-	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
-	"github.com/denuser/fuchsia-photos/backend/internal/testdb"
+	"github.com/denuser/magellanica-photos/backend/internal/ingest"
+	"github.com/denuser/magellanica-photos/backend/internal/jobs"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/testdb"
 )
 
 const fixtures = "../media/testdata"

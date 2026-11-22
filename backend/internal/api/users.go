@@ -10,8 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/auth"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 const pgUniqueViolation = "23505"

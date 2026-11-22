@@ -8,7 +8,7 @@ import (
 
 	"github.com/davidbyttow/govips/v2/vips"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
 )
 
 // Limits of the settings. A grid preview is made from the viewer preview and

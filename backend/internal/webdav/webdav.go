@@ -28,10 +28,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	dav "golang.org/x/net/webdav"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
-	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/auth"
+	"github.com/denuser/magellanica-photos/backend/internal/ingest"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 // Prefix is where the WebDAV tree is served.
@@ -96,7 +96,7 @@ func (h *Handler) authenticate(w http.ResponseWriter, r *http.Request) (store.Us
 }
 
 func unauthorized(w http.ResponseWriter) {
-	w.Header().Set("WWW-Authenticate", `Basic realm="Fuchsia Photos", charset="UTF-8"`)
+	w.Header().Set("WWW-Authenticate", `Basic realm="Magellanica Photos", charset="UTF-8"`)
 	http.Error(w, "log in with your login and an app password", http.StatusUnauthorized)
 }
 

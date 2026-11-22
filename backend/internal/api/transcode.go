@@ -3,9 +3,9 @@ package api
 import (
 	"net/http"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
-	"github.com/denuser/fuchsia-photos/backend/internal/transcode"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/transcode"
 )
 
 // playsVideo tells whether an item plays something that may get a copy: a

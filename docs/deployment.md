@@ -46,7 +46,7 @@ Then start everything and create the first administrator. Other users are manage
 
 ```sh
 docker compose -f deploy/compose.yaml up -d --build
-docker compose -f deploy/compose.yaml exec app fuchsia-photos create-admin admin
+docker compose -f deploy/compose.yaml exec app magellanica-photos create-admin admin
 ```
 
 The last command waits for a password. Type it and press Enter. The password is visible while you type.
@@ -60,14 +60,14 @@ The warning appears because the certificate is signed by a CA that Caddy created
 Copy the CA's certificate out of the Caddy container. Run this next to the `docker-compose.yml` of [a release image](#running-from-an-image), or add `-f deploy/compose.yaml` when running from the source:
 
 ```sh
-docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./fuchsia-photos-ca.crt
+docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./magellanica-photos-ca.crt
 ```
 
 The file is public and holds no secret, so it is fine to send it by e-mail or a messenger. Never share the `root.key` next to it. Then install it on each device:
 
-- **macOS:** `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain fuchsia-photos-ca.crt`, or open the file in Keychain Access, then open the certificate and set **Trust** to **Always Trust**. Restart the browser.
-- **Windows:** in an administrator terminal, `certutil -addstore -f Root fuchsia-photos-ca.crt`, or open the file and choose **Install Certificate**, **Local Machine**, then **Trusted Root Certification Authorities**.
-- **Linux:** on Debian and Ubuntu, copy the file to `/usr/local/share/ca-certificates/fuchsia-photos-ca.crt` and run `sudo update-ca-certificates`. Chrome and Firefox keep their own list: import the file under **Settings**, **Certificates**, **Authorities**.
+- **macOS:** `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain magellanica-photos-ca.crt`, or open the file in Keychain Access, then open the certificate and set **Trust** to **Always Trust**. Restart the browser.
+- **Windows:** in an administrator terminal, `certutil -addstore -f Root magellanica-photos-ca.crt`, or open the file and choose **Install Certificate**, **Local Machine**, then **Trusted Root Certification Authorities**.
+- **Linux:** on Debian and Ubuntu, copy the file to `/usr/local/share/ca-certificates/magellanica-photos-ca.crt` and run `sudo update-ca-certificates`. Chrome and Firefox keep their own list: import the file under **Settings**, **Certificates**, **Authorities**.
 - **Firefox on any system** may ignore the system store. Import the file under **Settings**, **Privacy & Security**, **Certificates**, **View Certificates**, **Authorities**, and tick "Trust this CA to identify websites".
 - **iPhone and iPad:** send the file to the device and open it, allow the profile in **Settings**, **Profile Downloaded**, and install it. Then turn on full trust in **Settings**, **General**, **About**, **Certificate Trust Settings**. Without that last step Safari still warns.
 - **Android:** **Settings**, **Security**, **Encryption & credentials**, **Install a certificate**, **CA certificate**, and choose the file. The menu differs between makers. Chrome then trusts it, but many apps ignore CAs added by the user, so FolderSync still needs "Allow self-signed certificate", as described under [WebDAV](#uploading-from-a-phone-over-webdav).
@@ -84,10 +84,10 @@ To skip the manual step altogether, use a real domain name. Point a name such as
 | Follow application logs | `docker compose -f deploy/compose.yaml logs -f app` |
 | Stop | `docker compose -f deploy/compose.yaml down` |
 | Update after pulling new code | `docker compose -f deploy/compose.yaml up -d --build` |
-| Apply migrations by hand | `docker compose -f deploy/compose.yaml exec app fuchsia-photos migrate` |
+| Apply migrations by hand | `docker compose -f deploy/compose.yaml exec app magellanica-photos migrate` |
 | Open psql | `docker compose -f deploy/compose.yaml exec postgres psql -U photos photos` |
 | Dump the database now | `docker compose -f deploy/compose.yaml exec backup pg_dump --format=custom --file=/backups/manual.dump` |
-| Make all previews again | `docker compose -f deploy/compose.yaml exec app fuchsia-photos render-previews` |
+| Make all previews again | `docker compose -f deploy/compose.yaml exec app magellanica-photos render-previews` |
 
 Migrations are also applied automatically each time the application starts.
 
@@ -108,7 +108,7 @@ The **Queue** section of the administration page shows the background jobs by ki
 Preview settings apply to new photos. After changing the grid preview size, or after an update that changes how grid previews are made, queue new grid previews of all photos:
 
 ```sh
-docker compose -f deploy/compose.yaml exec app fuchsia-photos render-grid
+docker compose -f deploy/compose.yaml exec app magellanica-photos render-grid
 ```
 
 The running server makes them in the background, from the viewer previews, after any new photos waiting for processing. Each photo keeps its preview format. Running the command again while jobs are waiting does not queue a photo twice. An open timeline picks up the new previews without reloading.
@@ -229,7 +229,7 @@ This works on the same installation or on a new one. Use the same version of the
 
    ```sh
    docker compose -f deploy/compose.yaml up -d
-   docker compose -f deploy/compose.yaml exec app fuchsia-photos render-previews
+   docker compose -f deploy/compose.yaml exec app magellanica-photos render-previews
    ```
 
 Logins and passwords are those of the dump. The previews are made in the background, after any new photos, and the **Queue** section of the administration page shows how far they are. Until a photo has them, its tile stays empty. A photo whose original is missing shows as failed.
@@ -242,7 +242,7 @@ Instead of building on the NAS, you can build the image elsewhere and copy it ov
 
 ```sh
 make image
-docker save fuchsia-photos:latest | ssh <nas> docker load
+docker save magellanica-photos:latest | ssh <nas> docker load
 ```
 
 On the NAS, start it without `--build`:
@@ -261,14 +261,14 @@ Caddy runs on the host network, and the application listens only on `127.0.0.1:1
 
 This file uses Compose `configs` with `content`, which needs Docker Compose 2.23 or later.
 
-It uses the image that CI publishes to `ghcr.io/denuser/fuchsia-photos`, for `linux/amd64` and `linux/arm64`; Docker picks the one for the NAS. The `arm64` image has not been tried on an ARM NAS yet. The tags are:
+It uses the image that CI publishes to `ghcr.io/denuser/magellanica-photos`, for `linux/amd64` and `linux/arm64`; Docker picks the one for the NAS. The `arm64` image has not been tried on an ARM NAS yet. The tags are:
 
 - `latest`, the newest build of `master`;
 - `sha-<commit>`, for example `sha-6593702`, which never changes;
 - `X.Y.Z`, for example `0.1.0`, a release, which never changes;
 - `X.Y`, the newest release of that minor version.
 
-The transcoder, which makes H.264 copies of videos on the graphics as described in [Video copies](#video-copies), has an image of its own for each maker of graphics, `ghcr.io/denuser/fuchsia-photos-transcoder`, built by hand for `linux/amd64` only. The tags are `latest-intel` and `latest-amd`, moved when they are built from `master`, and `X.Y.Z-intel` and `X.Y.Z-amd` for a release.
+The transcoder, which makes H.264 copies of videos on the graphics as described in [Video copies](#video-copies), has an image of its own for each maker of graphics, `ghcr.io/denuser/magellanica-photos-transcoder`, built by hand for `linux/amd64` only. The tags are `latest-intel` and `latest-amd`, moved when they are built from `master`, and `X.Y.Z-intel` and `X.Y.Z-amd` for a release.
 
 Release notes are on the GitHub releases page and in `CHANGELOG.md`.
 
@@ -286,7 +286,7 @@ Run these commands from that folder:
 
 ```sh
 docker compose up -d
-docker compose exec app fuchsia-photos create-admin admin
+docker compose exec app magellanica-photos create-admin admin
 ```
 
 To update:
@@ -306,8 +306,8 @@ The copies are made by the transcoder, a service next to the application whose i
 
 | Image | Graphics |
 |---|---|
-| `ghcr.io/denuser/fuchsia-photos-transcoder:latest-intel` | Intel, with Intel's iHD driver and OpenCL runtime |
-| `ghcr.io/denuser/fuchsia-photos-transcoder:latest-amd` | AMD, with Mesa's radeonsi driver. It makes no copies of HDR videos yet: they keep the poster and the download |
+| `ghcr.io/denuser/magellanica-photos-transcoder:latest-intel` | Intel, with Intel's iHD driver and OpenCL runtime |
+| `ghcr.io/denuser/magellanica-photos-transcoder:latest-amd` | AMD, with Mesa's radeonsi driver. It makes no copies of HDR videos yet: they keep the poster and the download |
 
 The transcoder reads the videos from the library and the cache, and writes the copies into the cache, at the same paths as the application. It runs as the same user, as it writes into files the application made, and it needs the render node of the graphics and the group that may open it:
 
@@ -323,7 +323,7 @@ The transcoder reads the videos from the library and the cache, and writes the c
          TRANSCODER_TOKEN: change-me
 
      transcoder:
-       image: ghcr.io/denuser/fuchsia-photos-transcoder:latest-intel
+       image: ghcr.io/denuser/magellanica-photos-transcoder:latest-intel
        restart: unless-stopped
        environment:
          TRANSCODER_TOKEN: change-me
@@ -373,7 +373,7 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     command: [postgres, -c, shared_buffers=1GB, -c, effective_cache_size=4GB]
     volumes:
-      - /mnt/pool/fuchsia/postgres:/var/lib/postgresql/data
+      - /mnt/pool/magellanica/postgres:/var/lib/postgresql/data
     healthcheck:
       test: [CMD-SHELL, pg_isready -U photos -d photos]
       interval: 15s
@@ -382,7 +382,7 @@ services:
       start_period: 60s
 
   app:
-    image: ghcr.io/denuser/fuchsia-photos:latest
+    image: ghcr.io/denuser/magellanica-photos:latest
     restart: unless-stopped
     user: '568:568'
     depends_on:
@@ -401,9 +401,9 @@ services:
         max-size: 10m
         max-file: '5'
     volumes:
-      - /mnt/pool/fuchsia/library:/data/library
-      - /mnt/pool/fuchsia/cache:/data/cache
-      - /mnt/pool/fuchsia/import:/data/import:ro
+      - /mnt/pool/magellanica/library:/data/library
+      - /mnt/pool/magellanica/cache:/data/cache
+      - /mnt/pool/magellanica/import:/data/import:ro
     deploy:
       resources:
         limits:
@@ -425,7 +425,7 @@ services:
       BACKUP_KEEP: 14
       TZ: Europe/Moscow
     volumes:
-      - /mnt/pool/fuchsia/backups:/backups
+      - /mnt/pool/magellanica/backups:/backups
     entrypoint: [sh, -c]
     command:
       - |
@@ -458,7 +458,7 @@ services:
       - source: caddyfile
         target: /etc/caddy/Caddyfile
     volumes:
-      - /mnt/pool/fuchsia/caddy:/data
+      - /mnt/pool/magellanica/caddy:/data
 
 configs:
   caddyfile:
@@ -496,7 +496,7 @@ and the transcoder under `services`, with the image for your graphics, the group
 
 ```yaml
   transcoder:
-    image: ghcr.io/denuser/fuchsia-photos-transcoder:latest-intel
+    image: ghcr.io/denuser/magellanica-photos-transcoder:latest-intel
     restart: unless-stopped
     user: '568:568'
     group_add:
@@ -506,8 +506,8 @@ and the transcoder under `services`, with the image for your graphics, the group
     environment:
       TRANSCODER_TOKEN: change-me-too
     volumes:
-      - /mnt/pool/fuchsia/library:/data/library:ro
-      - /mnt/pool/fuchsia/cache:/data/cache
+      - /mnt/pool/magellanica/library:/data/library:ro
+      - /mnt/pool/magellanica/cache:/data/cache
 ```
 
 If the transcoder cannot open the files, because a path differs from the application's or it runs as another user, no copies are made and none fail: the administration page shows the reason under **Videos**.
@@ -516,7 +516,7 @@ Create the first administrator from the TrueNAS shell. Docker names the containe
 
 ```sh
 sudo docker ps --format '{{.Names}}' | grep app
-sudo docker exec -it <container> fuchsia-photos create-admin admin
+sudo docker exec -it <container> magellanica-photos create-admin admin
 ```
 
 ### Updates

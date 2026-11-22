@@ -114,7 +114,7 @@ This is a monorepo. The target layout is:
 ```
 api/openapi.yaml        REST contract, the source of truth for both sides
 backend/                Go module
-  cmd/fuchsia-photos/   entry point (server + workers, admin creation command)
+  cmd/magellanica-photos/   entry point (server + workers, admin creation command)
   cmd/imgbench/         performance benchmark
   internal/             auth, users, photos, ingest, media, albums, tags, sharing, scan, webdav, jobs, api
   db/migrations, db/queries   goose + sqlc

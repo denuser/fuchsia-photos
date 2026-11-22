@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
 )
 
 func TestEmbeddedRAWPreviewOrientation(t *testing.T) {

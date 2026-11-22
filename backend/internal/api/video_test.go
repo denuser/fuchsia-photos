@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/auth"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 // A video plays from /video, as an MP4 whatever its container, and seeks with

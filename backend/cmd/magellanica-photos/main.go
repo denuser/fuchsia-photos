@@ -1,4 +1,4 @@
-// Command fuchsia-photos runs the Fuchsia Photos server.
+// Command magellanica-photos runs the Magellanica Photos server.
 package main
 
 import (
@@ -18,25 +18,25 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
-	"github.com/denuser/fuchsia-photos/backend/db"
-	"github.com/denuser/fuchsia-photos/backend/internal/api"
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
-	"github.com/denuser/fuchsia-photos/backend/internal/config"
-	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
-	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
-	"github.com/denuser/fuchsia-photos/backend/internal/media"
-	"github.com/denuser/fuchsia-photos/backend/internal/metadata"
-	"github.com/denuser/fuchsia-photos/backend/internal/ml"
-	"github.com/denuser/fuchsia-photos/backend/internal/scan"
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
-	"github.com/denuser/fuchsia-photos/backend/internal/transcode"
-	"github.com/denuser/fuchsia-photos/backend/internal/transcoder"
-	"github.com/denuser/fuchsia-photos/backend/internal/web"
-	"github.com/denuser/fuchsia-photos/backend/internal/webdav"
+	"github.com/denuser/magellanica-photos/backend/db"
+	"github.com/denuser/magellanica-photos/backend/internal/api"
+	"github.com/denuser/magellanica-photos/backend/internal/auth"
+	"github.com/denuser/magellanica-photos/backend/internal/config"
+	"github.com/denuser/magellanica-photos/backend/internal/ingest"
+	"github.com/denuser/magellanica-photos/backend/internal/jobs"
+	"github.com/denuser/magellanica-photos/backend/internal/media"
+	"github.com/denuser/magellanica-photos/backend/internal/metadata"
+	"github.com/denuser/magellanica-photos/backend/internal/ml"
+	"github.com/denuser/magellanica-photos/backend/internal/scan"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/transcode"
+	"github.com/denuser/magellanica-photos/backend/internal/transcoder"
+	"github.com/denuser/magellanica-photos/backend/internal/web"
+	"github.com/denuser/magellanica-photos/backend/internal/webdav"
 )
 
-const usage = `usage: fuchsia-photos <command>
+const usage = `usage: magellanica-photos <command>
 
 commands:
   serve                 apply pending migrations and start the server

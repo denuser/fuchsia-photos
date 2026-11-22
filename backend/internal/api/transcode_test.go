@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
-	"github.com/denuser/fuchsia-photos/backend/internal/transcode"
-	"github.com/denuser/fuchsia-photos/backend/internal/vaapi"
+	"github.com/denuser/magellanica-photos/backend/internal/auth"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/transcode"
+	"github.com/denuser/magellanica-photos/backend/internal/vaapi"
 )
 
 // graphics is a transcoder that only reports its graphics.

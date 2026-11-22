@@ -19,13 +19,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
-	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
-	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
-	"github.com/denuser/fuchsia-photos/backend/internal/scan"
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
-	"github.com/denuser/fuchsia-photos/backend/internal/testdb"
+	"github.com/denuser/magellanica-photos/backend/internal/auth"
+	"github.com/denuser/magellanica-photos/backend/internal/ingest"
+	"github.com/denuser/magellanica-photos/backend/internal/jobs"
+	"github.com/denuser/magellanica-photos/backend/internal/scan"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/testdb"
 )
 
 type fakeDB struct{ err error }

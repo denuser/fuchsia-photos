@@ -297,7 +297,7 @@ const steps = {
     await page.getByText('3 photos').waitFor()
   },
   'upload a folder with its subfolders, skipping files that are not photos and ignoring hidden ones': async () => {
-    const folder = mkdtempSync(join(tmpdir(), 'fuchsia-folder-'))
+    const folder = mkdtempSync(join(tmpdir(), 'magellanica-folder-'))
     mkdirSync(join(folder, 'nested'))
     copyFileSync(PHOTOS[0], join(folder, 'one.jpg'))
     copyFileSync(PHOTOS[1], join(folder, 'nested', 'TWO.PNG'))

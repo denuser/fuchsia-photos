@@ -59,7 +59,7 @@ The development database lives in a Docker volume and the photos in `deploy/data
 | Task | Command |
 |---|---|
 | Run the server | `make dev-backend` |
-| Build the server | `cd backend && go build ./cmd/fuchsia-photos` |
+| Build the server | `cd backend && go build ./cmd/magellanica-photos` |
 | Format the code | `cd backend && gofmt -w .` |
 | Add a Go dependency | `cd backend && go get <module>@<version> && go mod tidy` |
 
@@ -167,9 +167,9 @@ Every string the interface shows lives in `frontend/src/i18n/en.ts`, the source,
 To run everything on the host, use a scratch database rather than the development one:
 
 ```sh
-docker run -d --rm --name fuchsia-photos-test-db -p 127.0.0.1:5433:5432 -e POSTGRES_PASSWORD=test pgvector/pgvector:pg18-trixie
+docker run -d --rm --name magellanica-photos-test-db -p 127.0.0.1:5433:5432 -e POSTGRES_PASSWORD=test pgvector/pgvector:pg18-trixie
 cd backend && TEST_DATABASE_URL=postgres://postgres:test@localhost:5433/postgres go test ./...
-docker stop fuchsia-photos-test-db
+docker stop magellanica-photos-test-db
 ```
 
 To run selected tests in a container:
@@ -196,12 +196,12 @@ On failure it prints the failed step and saves a screenshot to `frontend/e2e/res
 
 ## CI
 
-`.github/workflows/ci.yml` builds the production image, which includes the frontend type checks and build and the backend build. On pull requests it only builds it for `linux/amd64`. On pushes to `master` and of version tags it builds `linux/amd64` and `linux/arm64`, each on a runner of its own architecture, and publishes both to `ghcr.io/denuser/fuchsia-photos` as one image:
+`.github/workflows/ci.yml` builds the production image, which includes the frontend type checks and build and the backend build. On pull requests it only builds it for `linux/amd64`. On pushes to `master` and of version tags it builds `linux/amd64` and `linux/arm64`, each on a runner of its own architecture, and publishes both to `ghcr.io/denuser/magellanica-photos` as one image:
 
 - a push to `master` tags it `latest` and `sha-<commit>`;
 - a tag `vX.Y.Z` tags it `X.Y.Z`, `X.Y` and `sha-<commit>`, leaves `latest` alone and creates a GitHub release.
 
-The transcoder's images, the `transcoder-intel` and `transcoder-amd` targets of `deploy/Dockerfile`, are built only by hand, so that pushes do not make large images each time, and published to `ghcr.io/denuser/fuchsia-photos-transcoder`. They are `linux/amd64` only. Start them with `gh workflow run ci.yml` or "Run workflow" in the Actions tab: from `master` they move `latest-intel` and `latest-amd`, and from a tag (`gh workflow run ci.yml --ref v0.1.0`) they add `0.1.0-intel` and `0.1.0-amd`. Started from any other branch, they fail before building. To build one locally, run `docker build --platform linux/amd64 --target transcoder-intel -f deploy/Dockerfile .`. The transcoder is `backend/cmd/fuchsia-photos-transcoder`, built without cgo, and what differs between makers of graphics lives in a file per vendor in `backend/internal/vaapi`.
+The transcoder's images, the `transcoder-intel` and `transcoder-amd` targets of `deploy/Dockerfile`, are built only by hand, so that pushes do not make large images each time, and published to `ghcr.io/denuser/magellanica-photos-transcoder`. They are `linux/amd64` only. Start them with `gh workflow run ci.yml` or "Run workflow" in the Actions tab: from `master` they move `latest-intel` and `latest-amd`, and from a tag (`gh workflow run ci.yml --ref v0.1.0`) they add `0.1.0-intel` and `0.1.0-amd`. Started from any other branch, they fail before building. To build one locally, run `docker build --platform linux/amd64 --target transcoder-intel -f deploy/Dockerfile .`. The transcoder is `backend/cmd/magellanica-photos-transcoder`, built without cgo, and what differs between makers of graphics lives in a file per vendor in `backend/internal/vaapi`.
 
 Only the publishing jobs can write packages, and only the release job can write to the repository.
 

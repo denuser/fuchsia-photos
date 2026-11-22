@@ -10,12 +10,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/auth"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 const (
-	sessionCookie   = "fuchsia_session"
+	sessionCookie   = "magellanica_session"
 	sessionLifetime = 30 * 24 * time.Hour
 )
 

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
+	"github.com/denuser/magellanica-photos/backend/internal/auth"
 )
 
 type sharingEnv struct {

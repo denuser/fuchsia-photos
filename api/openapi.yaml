@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Fuchsia Photos API
+  title: Magellanica Photos API
   version: 0.4.0
 servers:
   - url: /api/v1
@@ -1783,7 +1783,7 @@ components:
     session:
       type: apiKey
       in: cookie
-      name: fuchsia_session
+      name: magellanica_session
   parameters:
     Id:
       name: id

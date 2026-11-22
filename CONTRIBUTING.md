@@ -1,11 +1,11 @@
 # Contributing
 
-Thanks for looking at Fuchsia Photos. Bug reports, ideas and pull requests are welcome.
+Thanks for looking at Magellanica Photos. Bug reports, ideas and pull requests are welcome.
 
 ## Before you start
 
 - For a bug, open an issue with the version, how you installed it and what you did. Logs from `docker compose logs app` help a lot.
-- For a new feature, open an issue or a [Discussion](https://github.com/denuser/fuchsia-photos/discussions) first, so we can agree on it before you spend time on code. The [roadmap](docs/roadmap.md) and the [improvements](docs/improvements.md) list what is planned, and [architecture](docs/architecture.md) records the decisions already made.
+- For a new feature, open an issue or a [Discussion](https://github.com/denuser/magellanica-photos/discussions) first, so we can agree on it before you spend time on code. The [roadmap](docs/roadmap.md) and the [improvements](docs/improvements.md) list what is planned, and [architecture](docs/architecture.md) records the decisions already made.
 - The project is aimed at a modest home NAS. A change that needs another service or much more memory is unlikely to fit.
 
 ## Setting up

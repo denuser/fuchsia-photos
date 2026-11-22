@@ -1,4 +1,4 @@
-name: fuchsia-photos-test
+name: magellanica-photos-test
 
 services:
   postgres:

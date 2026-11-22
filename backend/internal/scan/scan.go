@@ -19,9 +19,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/riverqueue/river"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
-	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/ingest"
+	"github.com/denuser/magellanica-photos/backend/internal/jobs"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 const (

@@ -1,4 +1,4 @@
-name: fuchsia-photos
+name: magellanica-photos
 
 services:
   postgres:
@@ -18,7 +18,7 @@ services:
       retries: 20
 
   app:
-    image: fuchsia-photos:latest
+    image: magellanica-photos:latest
     build:
       context: ..
       dockerfile: deploy/Dockerfile

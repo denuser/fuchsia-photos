@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 // The names follow a real export of an account in Russian: year folders, the

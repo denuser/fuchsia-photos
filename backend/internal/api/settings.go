@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/media"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/media"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 type previewSettingsJSON struct {

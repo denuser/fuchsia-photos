@@ -541,7 +541,7 @@ Local checks on 2026-11-21 used LibRaw 0.22.3 and host libvips, measuring peak p
 
 On 2026-11-21 the problematic RAW samples were uploaded to the NAS (Intel N150). All uploads succeeded, with no memory issues seen. No peak memory or timing figures were reported for this run.
 
-A timed NAS run on 2026-11-21 imported all 20 difficult RAW samples in 102.1 s on the Intel N150 at 800 MHz with Turbo disabled. Fuchsia Photos and PostgreSQL together peaked at 1,392 MiB of cgroup working set sampled every 250 ms. The test used three workers and the default 2048 px WebP viewer preview. The 177 MP Panasonic used its 1920×1280 embedded preview. See the [NAS comparison](benchmark.md#comparison-with-immich-and-photoprism) for the full results.
+A timed NAS run on 2026-11-21 imported all 20 difficult RAW samples in 102.1 s on the Intel N150 at 800 MHz with Turbo disabled. Magellanica Photos and PostgreSQL together peaked at 1,392 MiB of cgroup working set sampled every 250 ms. The test used three workers and the default 2048 px WebP viewer preview. The 177 MP Panasonic used its 1920×1280 embedded preview. See the [NAS comparison](benchmark.md#comparison-with-immich-and-photoprism) for the full results.
 
 ## 21. Map
 

@@ -25,8 +25,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/media"
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/media"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
 )
 
 var extensions = map[string]bool{

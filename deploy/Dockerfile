@@ -132,7 +132,7 @@ CMD ["sh", "generate.sh"]
 
 FROM backend AS build
 COPY --from=frontend /src/frontend/dist/ internal/web/dist/
-RUN mkdir /out && go build -trimpath -ldflags='-s -w' -o /out/ ./cmd/fuchsia-photos ./cmd/imgbench
+RUN mkdir /out && go build -trimpath -ldflags='-s -w' -o /out/ ./cmd/magellanica-photos ./cmd/imgbench
 
 # The transcoder needs no cgo, and so neither libvips nor the frontend.
 FROM golang:1.27-trixie AS transcoder-build
@@ -140,7 +140,7 @@ WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
-RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/fuchsia-photos-transcoder ./cmd/fuchsia-photos-transcoder
+RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/magellanica-photos-transcoder ./cmd/magellanica-photos-transcoder
 
 FROM debian:trixie-slim AS runtime
 RUN --mount=type=bind,from=libraw,source=/out,target=/tmp/libraw \
@@ -151,7 +151,7 @@ RUN --mount=type=bind,from=libraw,source=/out,target=/tmp/libraw \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/ /usr/local/bin/
 EXPOSE 8080
-CMD ["fuchsia-photos", "serve"]
+CMD ["magellanica-photos", "serve"]
 
 # The base of the transcoder's images: the service, and ffmpeg's libraries
 # from Debian, without libvips. It runs as the application does, so that it
@@ -160,12 +160,12 @@ FROM debian:trixie-slim AS transcoder
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends libdav1d7 libzimg2 libva2 libva-drm2 vainfo \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=transcoder-build /out/fuchsia-photos-transcoder /usr/local/bin/
+COPY --from=transcoder-build /out/magellanica-photos-transcoder /usr/local/bin/
 EXPOSE 8091
-CMD ["fuchsia-photos-transcoder"]
+CMD ["magellanica-photos-transcoder"]
 
 # The transcoder for Intel graphics, amd64 only, published as
-# fuchsia-photos-transcoder:latest-intel: Debian's non-free iHD driver, whose
+# magellanica-photos-transcoder:latest-intel: Debian's non-free iHD driver, whose
 # prebuilt GPU kernels encode faster than the free build, and Intel's OpenCL
 # runtime, which Debian trixie does not package, from Intel's releases.
 FROM transcoder AS transcoder-intel
@@ -197,7 +197,7 @@ ENV LIBVA_DRIVER_NAME=iHD
 USER 1000:1000
 
 # The transcoder for AMD graphics, amd64 only, published as
-# fuchsia-photos-transcoder:latest-amd: Mesa's radeonsi driver. It makes no
+# magellanica-photos-transcoder:latest-amd: Mesa's radeonsi driver. It makes no
 # copies of HDR videos yet.
 FROM transcoder AS transcoder-amd
 RUN apt-get update \

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
+	"github.com/denuser/magellanica-photos/backend/internal/auth"
 )
 
 func archive(t *testing.T, b *browser, value bool, photos ...int64) {

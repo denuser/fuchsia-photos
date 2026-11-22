@@ -13,7 +13,7 @@ Options (environment):
   BENCH_DOCKER_SUDO    set to 1 for noninteractive sudo (default: 0)
   BENCH_ROUNDS         number of rounds, 1 to 3 (default: 3)
   BENCH_REPEAT_RAW     set to 1 to run RAW in every round (default: 0)
-  FUCHSIA_IMAGE        Fuchsia image name, tag, or digest
+  MAGELLANICA_IMAGE    Magellanica image name, tag, or digest
   IMMICH_VERSION       Immich release tag (default: v3.4.2)
   PHOTOPRISM_IMAGE     PhotoPrism image name, tag, or digest
 HELP
@@ -49,9 +49,9 @@ lscpu > "$results/host.txt"
 failed=0
 for round in $(seq "$rounds"); do
   case $round in
-    1) apps=(fuchsia immich photoprism); jpeg=jpeg;;
-    2) apps=(immich photoprism fuchsia); jpeg=jpeg-4x3;;
-    3) apps=(photoprism fuchsia immich); jpeg=jpeg-4x3;;
+    1) apps=(magellanica immich photoprism); jpeg=jpeg;;
+    2) apps=(immich photoprism magellanica); jpeg=jpeg-4x3;;
+    3) apps=(photoprism magellanica immich); jpeg=jpeg-4x3;;
   esac
   scenarios=("$jpeg")
   if [[ $round == 1 || ${BENCH_REPEAT_RAW:-0} == 1 ]]; then

@@ -1,6 +1,6 @@
 # The production image on a throwaway database, for `make e2e`. Nothing outlives
 # the run, and nothing touches the development data.
-name: fuchsia-photos-e2e
+name: magellanica-photos-e2e
 
 services:
   postgres:
@@ -18,7 +18,7 @@ services:
       retries: 30
 
   app:
-    image: fuchsia-photos:e2e
+    image: magellanica-photos:e2e
     build:
       context: ..
       dockerfile: deploy/Dockerfile

@@ -1,4 +1,4 @@
-// Command fuchsia-photos-transcoder is the service that makes H.264 copies of
+// Command magellanica-photos-transcoder is the service that makes H.264 copies of
 // videos on the graphics for the application. It runs in the image for one
 // maker of graphics, next to the application, with the library and the cache
 // at the same paths. See "Video copies" in docs/deployment.md.
@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/transcoder"
+	"github.com/denuser/magellanica-photos/backend/internal/transcoder"
 )
 
 func main() {

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 // requireLocations answers 403 and returns false when an administrator does

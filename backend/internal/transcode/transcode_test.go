@@ -15,16 +15,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/ingest"
-	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
-	"github.com/denuser/fuchsia-photos/backend/internal/media"
-	"github.com/denuser/fuchsia-photos/backend/internal/metadata"
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
-	"github.com/denuser/fuchsia-photos/backend/internal/testdb"
-	"github.com/denuser/fuchsia-photos/backend/internal/transcode"
-	"github.com/denuser/fuchsia-photos/backend/internal/transcoder"
-	"github.com/denuser/fuchsia-photos/backend/internal/vaapi"
+	"github.com/denuser/magellanica-photos/backend/internal/ingest"
+	"github.com/denuser/magellanica-photos/backend/internal/jobs"
+	"github.com/denuser/magellanica-photos/backend/internal/media"
+	"github.com/denuser/magellanica-photos/backend/internal/metadata"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/testdb"
+	"github.com/denuser/magellanica-photos/backend/internal/transcode"
+	"github.com/denuser/magellanica-photos/backend/internal/transcoder"
+	"github.com/denuser/magellanica-photos/backend/internal/vaapi"
 )
 
 func TestMain(m *testing.M) {

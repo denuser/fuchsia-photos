@@ -1,4 +1,4 @@
-"""Stateless ML service of Fuchsia Photos.
+"""Stateless ML service of Magellanica Photos.
 
 It turns photos and search texts into vectors and keeps nothing: the
 application stores the vectors and checks permissions. See the "Machine
@@ -55,7 +55,7 @@ processor = AutoProcessor.from_pretrained(MODEL_NAME)
 # One model on one device: run one request at a time.
 lock = threading.Lock()
 
-app = FastAPI(title="Fuchsia Photos ML")
+app = FastAPI(title="Magellanica Photos ML")
 
 
 def check_token(authorization: str = Header(default="")) -> None:

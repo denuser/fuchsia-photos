@@ -1,12 +1,12 @@
-<p align="center"><img src="docs/images/banner.png" alt="Fuchsia Photos: a self-hosted photo library for a home NAS" width="100%"></p>
+<p align="center"><img src="docs/images/banner.png" alt="Magellanica Photos: a self-hosted photo library for a home NAS" width="100%"></p>
 
-A self-hosted photo library for a home NAS. Photos come in from the browser, from phones over WebDAV or from a folder on the NAS, and are organized into albums and tags and shared between the people who use the server.
+A self-hosted photo library for a home NAS. Formerly Fuchsia Photos. Photos come in from the browser, from phones over WebDAV or from a folder on the NAS, and are organized into albums and tags and shared between the people who use the server.
 
 It is built for modest hardware. It is developed and measured on an Intel N150 with 4 cores and 16 GB of memory, and runs as one Go binary next to PostgreSQL, with no Redis or other services. Search by description is optional and can run on another machine.
 
-**Status:** in active development. See [releases](https://github.com/denuser/fuchsia-photos/releases) and the [roadmap](docs/roadmap.md).
+**Status:** in active development. See [releases](https://github.com/denuser/magellanica-photos/releases) and the [roadmap](docs/roadmap.md).
 
-<img src="docs/images/tour.gif" alt="A tour of Fuchsia Photos: the timeline, the viewer, search by description and albums" width="100%">
+<img src="docs/images/tour.gif" alt="A tour of Magellanica Photos: the timeline, the viewer, search by description and albums" width="100%">
 
 <table>
   <tr>
@@ -58,9 +58,9 @@ Supported formats: JPEG, PNG, WebP and HEIC photos, MP4 and MOV videos, and the 
 This runs release `0.2.0` with PostgreSQL, the nightly backup and Caddy for HTTPS. Run the commands on the NAS:
 
 ```sh
-mkdir fuchsia-photos && cd fuchsia-photos
+mkdir magellanica-photos && cd magellanica-photos
 curl -fsSL -o docker-compose.yml \
-  https://raw.githubusercontent.com/denuser/fuchsia-photos/v0.2.0/deploy/compose.image.yaml
+  https://raw.githubusercontent.com/denuser/magellanica-photos/v0.2.0/deploy/compose.image.yaml
 cat > .env <<'ENV'
 POSTGRES_PASSWORD=change-me
 SITE_ADDRESS=192.168.0.10
@@ -69,7 +69,7 @@ ENV
 mkdir -p data/library data/cache data/import
 sudo chown 1000:1000 data/library data/cache
 docker compose up -d
-docker compose exec app fuchsia-photos create-admin admin
+docker compose exec app magellanica-photos create-admin admin
 ```
 
 Set a long password with URL-safe characters only, and the address of the NAS. The last command waits for the administrator's password. Then open `https://<address>:10304/`; to use another port, set `HTTPS_PORT` in `.env`. The certificate comes from Caddy's local CA, so the browser warns about it until that CA is trusted, which [takes a minute](docs/deployment.md#trusting-the-certificate) on each device.

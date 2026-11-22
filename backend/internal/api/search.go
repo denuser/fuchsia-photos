@@ -8,8 +8,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/ml"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/ml"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 const (

@@ -25,11 +25,11 @@ make bench BENCH_OUT=/path/on/disk/under/test
 Without `make`:
 
 ```sh
-docker build -f deploy/Dockerfile -t fuchsia-photos:latest .
+docker build -f deploy/Dockerfile -t magellanica-photos:latest .
 docker run --rm --user "$(id -u):$(id -g)" \
   -v "$PWD/samples:/in:ro" \
   -v /path/on/disk/under/test:/out \
-  fuchsia-photos:latest imgbench -in /in -out /out
+  magellanica-photos:latest imgbench -in /in -out /out
 ```
 
 A handful of photos makes a quick check that is easy to repeat. For the final decision, also run it on your own library, as described below.
@@ -41,14 +41,14 @@ A handful of photos makes a quick check that is easy to repeat. For the final de
 Build it on the NAS:
 
 ```sh
-docker build -f deploy/Dockerfile -t fuchsia-photos:latest .
+docker build -f deploy/Dockerfile -t magellanica-photos:latest .
 ```
 
 Or build it on another machine and copy it over:
 
 ```sh
 make image
-docker save fuchsia-photos:latest | ssh <nas> docker load
+docker save magellanica-photos:latest | ssh <nas> docker load
 ```
 
 ### Running
@@ -57,7 +57,7 @@ docker save fuchsia-photos:latest | ssh <nas> docker load
 docker run --rm --user "$(id -u):$(id -g)" \
   -v /path/to/photos:/in:ro \
   -v /path/on/disk/under/test:/out \
-  fuchsia-photos:latest imgbench -in /in -out /out -limit 500
+  magellanica-photos:latest imgbench -in /in -out /out -limit 500
 ```
 
 Use a mix of JPEG and HEIC photos from real cameras and phones, since small or synthetic images say little about real speed. The user running the command needs write access to the `/out` folder.
@@ -93,7 +93,7 @@ for f in webp jpeg; do for w in 2 3; do
   docker run --rm --user "$(id -u):$(id -g)" \
     -v /path/to/photos:/in:ro \
     -v /path/on/disk/under/test:/out \
-    fuchsia-photos:latest imgbench -in /in -out /out -limit 500 -formats "$f" -workers "$w"
+    magellanica-photos:latest imgbench -in /in -out /out -limit 500 -formats "$f" -workers "$w"
 done; done
 ```
 
@@ -145,37 +145,37 @@ HEIC photos were left out, because they are not currently relevant, and original
 
 ## Comparison with Immich and PhotoPrism
 
-Measured on 2026-11-21 on one TrueNAS SCALE NAS with a four-core Intel N150 capped at 800 MHz, Turbo disabled, 15.4 GiB of RAM available to Linux, no swap and an NVMe SSD. Tested versions were Fuchsia Photos `9982507`, Immich 3.4.2 and PhotoPrism `261029-963b58c50`. The applications ran separately in fresh test stacks. Other NAS services stayed online. Input copies were on the same SSD and mounted read-only. Each input set was read once before its run to warm the filesystem cache.
+Measured on 2026-11-21 on one TrueNAS SCALE NAS with a four-core Intel N150 capped at 800 MHz, Turbo disabled, 15.4 GiB of RAM available to Linux, no swap and an NVMe SSD. Tested versions were Magellanica Photos `9982507`, Immich 3.4.2 and PhotoPrism `261029-963b58c50`. The applications ran separately in fresh test stacks. Other NAS services stayed online. Input copies were on the same SSD and mounted read-only. Each input set was read once before its run to warm the filesystem cache.
 
-The timer covers folder import or indexing through completed preview work. Fuchsia copies originals into its library. Immich and PhotoPrism index the shared input folder in place. Fuchsia and PhotoPrism used three workers. Immich was set to three concurrent thumbnail jobs and three concurrent metadata jobs. ML and face processing were disabled. Memory is the sum of the stack's cgroup working sets, including the database and, for Immich, Valkey. Each working set is `memory.current` minus `inactive_file`. The sampler runs every 250 ms before and during the workload. Idle is the pre-run median and peak is the highest simultaneous sum.
+The timer covers folder import or indexing through completed preview work. Magellanica copies originals into its library. Immich and PhotoPrism index the shared input folder in place. Magellanica and PhotoPrism used three workers. Immich was set to three concurrent thumbnail jobs and three concurrent metadata jobs. ML and face processing were disabled. Memory is the sum of the stack's cgroup working sets, including the database and, for Immich, Valkey. Each working set is `memory.current` minus `inactive_file`. The sampler runs every 250 ms before and during the workload. Idle is the pre-run median and peak is the highest simultaneous sum.
 
 ### Matched viewer previews
 
-Two runs in different app orders used the same 96 unique landscape 4:3 JPEGs. All 96 viewer files per app and per run were verified at 1600×1200. All three used JPEG at a configured quality of 80. Fuchsia used a 1600 px viewer long edge, Immich a 1200 px short edge, and PhotoPrism a 1920×1200 fit. PhotoPrism also generated more thumbnail sizes. The files counted below exclude Immich's stored blur hashes.
+Two runs in different app orders used the same 96 unique landscape 4:3 JPEGs. All 96 viewer files per app and per run were verified at 1600×1200. All three used JPEG at a configured quality of 80. Magellanica used a 1600 px viewer long edge, Immich a 1200 px short edge, and PhotoPrism a 1920×1200 fit. PhotoPrism also generated more thumbnail sizes. The files counted below exclude Immich's stored blur hashes.
 
 | App | Elapsed (s) | Photos/s | Idle (MiB) | Peak (MiB) | Preview files per input |
 |---|---:|---:|---:|---:|---:|
-| Fuchsia Photos | 31.1–31.4 | 3.06–3.08 | 153–163 | 616–621 | 2 |
+| Magellanica Photos | 31.1–31.4 | 3.06–3.08 | 153–163 | 616–621 | 2 |
 | PhotoPrism | 82.4–82.7 | 1.16 | 320–412 | 866–975 | 8 |
 | Immich | 157.5–157.9 | 0.61 | 1,786–1,873 | 2,881–3,168 | 2 |
 
 ### Larger JPEG import with default viewer settings
 
-One run used 475 JPEG files from a private library. Fuchsia and PhotoPrism produced 464 gallery items after handling 11 exact duplicates. Immich produced 475 gallery items. Fuchsia used WebP with a 2048 px long edge, Immich used JPEG with a 1440 px short edge, and PhotoPrism generated its standard sizes up to the 1920×1200 fit.
+One run used 475 JPEG files from a private library. Magellanica and PhotoPrism produced 464 gallery items after handling 11 exact duplicates. Immich produced 475 gallery items. Magellanica used WebP with a 2048 px long edge, Immich used JPEG with a 1440 px short edge, and PhotoPrism generated its standard sizes up to the 1920×1200 fit.
 
 | App | Ready | Elapsed (s) | Ready photos/s | Idle (MiB) | Peak (MiB) |
 |---|---:|---:|---:|---:|---:|
-| Fuchsia Photos | 464 | 248.9 | 1.86 | 147 | 2,069 |
+| Magellanica Photos | 464 | 248.9 | 1.86 | 147 | 2,069 |
 | PhotoPrism | 464 | 464.7 | 1.00 | 347 | 1,267 |
 | Immich | 475 | 873.3 | 0.54 | 1,738 | 4,095 |
 
 ### Difficult RAW files with default viewer settings
 
-One run used 20 difficult files from [raw.pixls.us](https://raw.pixls.us/). Immich indexed all 20 but did not generate a viewer file for the Panasonic S1R II 177 MP RW2 or Nikon Z6 III High Efficiency NEF. Fuchsia used the Panasonic's embedded 1920×1280 preview. RAW preview sizes and decode paths varied by app. These timings include any attempts that did not yield a preview.
+One run used 20 difficult files from [raw.pixls.us](https://raw.pixls.us/). Immich indexed all 20 but did not generate a viewer file for the Panasonic S1R II 177 MP RW2 or Nikon Z6 III High Efficiency NEF. Magellanica used the Panasonic's embedded 1920×1280 preview. RAW preview sizes and decode paths varied by app. These timings include any attempts that did not yield a preview.
 
 | App | Viewer previews | Elapsed (s) | Idle (MiB) | Peak (MiB) |
 |---|---:|---:|---:|---:|
-| Fuchsia Photos | 20/20 | 102.1 | 151 | 1,392 |
+| Magellanica Photos | 20/20 | 102.1 | 151 | 1,392 |
 | PhotoPrism | 19/20 | 558.0 | 463 | 6,308 |
 | Immich | 18/20 | 281.7 | 1,747 | 5,882 |
 
@@ -244,7 +244,7 @@ DRIVER=radeonsi HDR_TONEMAP="vaapi vulkan cpu" \
 The transcoder's images, described in [Video copies](deployment.md#video-copies), run the VAAPI modes too, which checks their own ffmpeg build and drivers:
 
 ```sh
-IMAGE=ghcr.io/denuser/fuchsia-photos-transcoder:latest-intel TOOLS=/usr/local/bin \
+IMAGE=ghcr.io/denuser/magellanica-photos-transcoder:latest-intel TOOLS=/usr/local/bin \
   scripts/video-bench.sh /path/to/videos /path/on/ssd/video-bench > video-results.md
 ```
 

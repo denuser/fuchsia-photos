@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/auth"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 // withExif makes a photo ready with the given tags, as exiftool gives them

@@ -4,6 +4,8 @@ Changes in each release. Add changes under "Unreleased" as they are made; `make 
 
 ## Unreleased
 
+- The project is renamed from Fuchsia Photos to Magellanica Photos. The command is now `magellanica-photos`, the images are `ghcr.io/denuser/magellanica-photos` and `magellanica-photos-transcoder` (the old images stay but are no longer updated), and the session cookie is `magellanica_session`, so everyone signs in once more. To move an existing installation, change the `image:` lines of your Compose file or TrueNAS app and use `magellanica-photos` in `docker compose exec`; the data and settings are unchanged. Old GitHub links redirect to the new repository.
+
 ## 0.2.0 - 2026-11-22
 
 - A Map page with the photos that have a location, in clusters that zoom in and open their photos, drawn with MapLibre GL JS on OpenStreetMap tiles loaded by the browser. The viewer's coordinates link to it. It follows the administrator's setting that hides locations.

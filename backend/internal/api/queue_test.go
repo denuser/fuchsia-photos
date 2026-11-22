@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
-	"github.com/denuser/fuchsia-photos/backend/internal/jobs"
+	"github.com/denuser/magellanica-photos/backend/internal/auth"
+	"github.com/denuser/magellanica-photos/backend/internal/jobs"
 )
 
 func TestQueue(t *testing.T) {

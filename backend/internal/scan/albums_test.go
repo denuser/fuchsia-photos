@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 func TestAlbumDir(t *testing.T) {

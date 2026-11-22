@@ -1,4 +1,4 @@
-module github.com/denuser/fuchsia-photos/backend
+module github.com/denuser/magellanica-photos/backend
 
 go 1.27.3
 

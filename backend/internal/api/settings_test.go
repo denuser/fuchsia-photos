@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/auth"
+	"github.com/denuser/magellanica-photos/backend/internal/auth"
 )
 
 func TestPreviewSettings(t *testing.T) {

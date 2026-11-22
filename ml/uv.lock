@@ -163,7 +163,7 @@ wheels = [
 ]
 
 [[package]]
-name = "fuchsia-photos-ml"
+name = "magellanica-photos-ml"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

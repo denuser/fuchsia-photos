@@ -1,7 +1,7 @@
 # Runs a ready image behind Caddy, without the source code. Copy this file to the
 # NAS as docker-compose.yml. Relative paths are relative to its folder. See
 # "Running from an image" in docs/deployment.md.
-name: fuchsia-photos
+name: magellanica-photos
 
 services:
   postgres:
@@ -22,7 +22,7 @@ services:
 
   app:
     # Published by CI on every push to master. IMAGE_TAG selects a sha-<commit> tag instead.
-    image: ghcr.io/denuser/fuchsia-photos:${IMAGE_TAG:-latest}
+    image: ghcr.io/denuser/magellanica-photos:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       postgres:

@@ -17,11 +17,11 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/media"
-	"github.com/denuser/fuchsia-photos/backend/internal/storage"
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
-	"github.com/denuser/fuchsia-photos/backend/internal/transcoder"
-	"github.com/denuser/fuchsia-photos/backend/internal/vaapi"
+	"github.com/denuser/magellanica-photos/backend/internal/media"
+	"github.com/denuser/magellanica-photos/backend/internal/storage"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/transcoder"
+	"github.com/denuser/magellanica-photos/backend/internal/vaapi"
 )
 
 // Queue runs the transcoding. It has one worker, as the graphics make one

@@ -6,6 +6,9 @@ E2E_PASSWORD = e2e-password
 DEV_DATABASE_URL = postgres://photos:photos@localhost:5432/photos
 BENCH_OUT ?= .bench
 ML_PORT ?= 8090
+# The volume keeps its old name so that existing development databases survive the
+# rename to Magellanica Photos.
+DEV_DB_VOLUME = fuchsia-photos-dev-db
 DEV_DATA = $(CURDIR)/deploy/data/dev
 # Outside DEV_DATA, so that dev-clean keeps the certificate phones accepted.
 DEV_TLS = $(CURDIR)/deploy/data/dev-tls
@@ -38,18 +41,18 @@ help:
 	@echo "sqlc          regenerate backend/internal/store from db/queries"
 
 dev-db:
-	docker run --rm --name fuchsia-photos-dev-db -p 127.0.0.1:5432:5432 -v fuchsia-photos-dev-db:/var/lib/postgresql \
+	docker run --rm --name magellanica-photos-dev-db -p 127.0.0.1:5432:5432 -v $(DEV_DB_VOLUME):/var/lib/postgresql \
 		-e POSTGRES_USER=photos -e POSTGRES_PASSWORD=photos -e POSTGRES_DB=photos pgvector/pgvector:pg18-trixie
 
 dev-clean:
-	docker volume rm fuchsia-photos-dev-db
+	docker volume rm $(DEV_DB_VOLUME)
 	rm -rf "$(DEV_DATA)"
 
 dev-admin:
-	cd backend && $(DEV_ENV) go run ./cmd/fuchsia-photos create-admin $(LOGIN)
+	cd backend && $(DEV_ENV) go run ./cmd/magellanica-photos create-admin $(LOGIN)
 
 dev-migrate:
-	cd backend && $(DEV_ENV) go run ./cmd/fuchsia-photos migrate
+	cd backend && $(DEV_ENV) go run ./cmd/magellanica-photos migrate
 
 dev-goose:
 	$(GOOSE) postgres $(DEV_DATABASE_URL) $(ARGS)
@@ -58,7 +61,7 @@ migration:
 	$(GOOSE) -s create $(NAME) sql
 
 dev-psql:
-	docker exec -it fuchsia-photos-dev-db psql -U photos photos
+	docker exec -it magellanica-photos-dev-db psql -U photos photos
 
 # The libraw.pc of Homebrew asks for -Xpreprocessor -fopenmp, which cgo refuses
 # unless it is allowed.
@@ -66,7 +69,7 @@ HOST_CGO = CGO_LDFLAGS_ALLOW='-Xpreprocessor|-fopenmp'
 
 dev-backend:
 	mkdir -p "$(DEV_DATA)/import"
-	cd backend && $(DEV_ENV) $(HOST_CGO) go run ./cmd/fuchsia-photos serve
+	cd backend && $(DEV_ENV) $(HOST_CGO) go run ./cmd/magellanica-photos serve
 
 # Sync apps such as FolderSync connect only over HTTPS, so the dev server
 # serves it on the standard port with a self-signed certificate, made once.
@@ -84,7 +87,7 @@ $(DEV_TLS)/cert.pem:
 	mkdir -p "$(DEV_TLS)"
 	san="DNS:localhost,IP:127.0.0.1"; \
 	for ip in $$(ifconfig 2>/dev/null | awk '/inet / && $$2 != "127.0.0.1" {print $$2}'); do san="$$san,IP:$$ip"; done; \
-	openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=Fuchsia Photos dev" \
+	openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=Magellanica Photos dev" \
 		-addext "subjectAltName=$$san" -keyout "$(DEV_TLS)/key.pem" -out "$(DEV_TLS)/cert.pem"
 
 test:
@@ -96,7 +99,7 @@ e2e:
 	status=$$?; \
 	if [ $$status -eq 0 ]; then \
 		for i in $$(seq 60); do curl -sf http://127.0.0.1:18080/api/v1/health >/dev/null && break; sleep 1; done; \
-		printf '%s\n' "$(E2E_PASSWORD)" | $(COMPOSE_E2E) exec -T app fuchsia-photos create-admin admin && \
+		printf '%s\n' "$(E2E_PASSWORD)" | $(COMPOSE_E2E) exec -T app magellanica-photos create-admin admin && \
 		(cd frontend && E2E_PASSWORD="$(E2E_PASSWORD)" pnpm e2e); \
 		status=$$?; \
 	fi; \
@@ -106,21 +109,21 @@ e2e:
 PLATFORM ?= linux/amd64
 
 image:
-	docker buildx build --platform $(PLATFORM) --load -f deploy/Dockerfile -t fuchsia-photos:latest .
+	docker buildx build --platform $(PLATFORM) --load -f deploy/Dockerfile -t magellanica-photos:latest .
 
 release:
 	scripts/release.sh "$(VERSION)"
 
 bench:
-	docker build -f deploy/Dockerfile -t fuchsia-photos:latest .
+	docker build -f deploy/Dockerfile -t magellanica-photos:latest .
 	mkdir -p "$(BENCH_OUT)"
 	docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR)/samples:/in:ro" -v "$(abspath $(BENCH_OUT)):/out" \
-		fuchsia-photos:latest imgbench -in /in -out /out
+		magellanica-photos:latest imgbench -in /in -out /out
 
 fixtures:
-	docker build --target fixtures -f deploy/Dockerfile -t fuchsia-photos-fixtures .
+	docker build --target fixtures -f deploy/Dockerfile -t magellanica-photos-fixtures .
 	docker run --rm -v "$(CURDIR)/backend/internal/media/testdata:/src/backend/internal/media/testdata" \
-		-u "$$(id -u):$$(id -g)" fuchsia-photos-fixtures
+		-u "$$(id -u):$$(id -g)" magellanica-photos-fixtures
 
 api-types:
 	cd frontend && pnpm gen:api

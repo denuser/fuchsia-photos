@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/denuser/fuchsia-photos/backend/internal/store"
+	"github.com/denuser/magellanica-photos/backend/internal/store"
 )
 
 func TestImportedDetails(t *testing.T) {

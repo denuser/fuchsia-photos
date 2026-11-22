@@ -28,7 +28,7 @@ async function submit() {
 
 <template>
   <v-container class="fill-height justify-center loginForm">
-    <v-card class="loginForm__card" title="Fuchsia Photos" :subtitle="t('login.subtitle')">
+    <v-card class="loginForm__card" title="Magellanica Photos" :subtitle="t('login.subtitle')">
       <template #prepend>
         <v-avatar :image="logo" size="48" />
       </template>

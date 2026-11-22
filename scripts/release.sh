@@ -43,7 +43,7 @@ rm "$tmp"
 if echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
 	sed -E -i.bak \
 		-e "s|(runs release \`)[0-9.]+(\`)|\1$version\2|" \
-		-e "s|(fuchsia-photos/)v[0-9.]+(/deploy/compose.image.yaml)|\1$tag\2|" \
+		-e "s|(magellanica-photos/)v[0-9.]+(/deploy/compose.image.yaml)|\1$tag\2|" \
 		-e "s|^(IMAGE_TAG=)[0-9.]+\$|\1$version|" README.md
 	rm -f README.md.bak
 fi

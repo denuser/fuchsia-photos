@@ -134,7 +134,7 @@ window.addEventListener('beforeunload', (event) => {
       <v-app-bar-title>
         <router-link to="/" class="brand">
           <img :src="logo" alt="" class="brand-logo" />
-          Fuchsia Photos
+          Magellanica Photos
         </router-link>
       </v-app-bar-title>
 

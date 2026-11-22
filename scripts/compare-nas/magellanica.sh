@@ -13,7 +13,7 @@ count=$(find "$input" -maxdepth 1 -type f | wc -l)
 ((count > 0))
 set -- "$count" "$input"
 mkdir -p "$root"
-work=$(mktemp -d "$root/fuchsia.XXXXXXXX")
+work=$(mktemp -d "$root/magellanica.XXXXXXXX")
 cd "$work"
 project="bench-$(basename "$work" | tr '[:upper:].' '[:lower:]-')"
 docker() {
@@ -35,7 +35,7 @@ ln -s "$2" inputs
 find -L inputs -maxdepth 1 -type f -print0 | sort -z | xargs -0 -r cat > /dev/null
 mkdir library cache
 chmod 777 library cache
-image=${FUCHSIA_IMAGE:-ghcr.io/denuser/fuchsia-photos:latest}
+image=${MAGELLANICA_IMAGE:-ghcr.io/denuser/magellanica-photos:latest}
 export BENCH_IMAGE="$image"
 export BENCH_PASSWORD="$(openssl rand -hex 24)"
 printf "BENCH_IMAGE=%s\nBENCH_PASSWORD=%s\n" "$BENCH_IMAGE" "$BENCH_PASSWORD" > .env
@@ -75,7 +75,7 @@ for i in {1..30}; do
   if curl --max-time 2 -fsS "$base/health" >/dev/null 2>&1; then break; fi
   sleep 1
 done
-printf '%s\n' "$BENCH_PASSWORD" | compose exec -T app fuchsia-photos create-admin benchmark
+printf '%s\n' "$BENCH_PASSWORD" | compose exec -T app magellanica-photos create-admin benchmark
 curl -fsS -c cookies -H 'Content-Type: application/json' -d "{\"login\":\"benchmark\",\"password\":\"$BENCH_PASSWORD\"}" "$base/login" >/dev/null
 owner=$(curl -fsS -b cookies "$base/me" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
 
