@@ -5,6 +5,7 @@ Changes in each release. Add changes under "Unreleased" as they are made; `make 
 ## Unreleased
 
 - RAW previews tolerate warnings in the camera JPEG, use LibRaw 0.22.3 for sensor decoding and reduce memory use on very large mosaic sensors.
+- Very large RAW files no longer go over the default 4 GB memory limit: sensors above 120 MP are decoded at half size, and larger files fall back to the camera's embedded JPEG. This lifts the first known limitation of 0.1.0. All 20 difficult RAW samples of the [NAS comparison](https://github.com/denuser/fuchsia-photos/blob/master/docs/benchmark.md#difficult-raw-files-with-default-viewer-settings) got a preview on the NAS, with the application and PostgreSQL together at a peak of 1.4 GB.
 
 ## 0.1.0 - 2026-11-21
 

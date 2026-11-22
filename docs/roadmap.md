@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** stage 6, with the stage 7 spike in progress: search by description and similar photos, with the ML service on a Mac. Stage 8 has started: videos, motion photos and Live Photos upload and play. Login, user management, upload, processing, the timeline, albums, tags, search, bulk actions, the trash, sharing, folder scans and the preview settings work, with nightly database dumps, a tested restore, request logs and the job queue on the administration page. Phones upload over WebDAV, checked with PhotoSync and FolderSync on the NAS. The stage 0 benchmark set the preview format and worker count for JPEG photos.
+**Status:** stages 0 to 6 are done, and version 0.1.0 was released on 2026-11-21. Stage 7 works: search by description and similar photos, with the ML service on a Mac; the speed on the NAS is still to be measured. Stage 8 works on the NAS: videos, motion photos and Live Photos upload and play, and the Intel transcoder makes H.264 copies of videos that browsers cannot play. Left in stage 8: an iPhone library uploaded over WebDAV, and HDR tone mapping on AMD graphics. Work beyond the stages, such as the Google Takeout import, RAW photos and the ten interface languages, is tracked in [improvements](improvements.md).
 
 Decisions are in the [architecture](architecture.md).
 
