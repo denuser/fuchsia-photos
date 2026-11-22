@@ -475,6 +475,14 @@ const steps = {
     await page.getByTestId('map-photos').getByTestId('tile-open').first().waitFor()
     await page.getByRole('button', { name: 'Back to the map' }).click()
     await page.getByTestId('map-photos').waitFor({ state: 'detached' })
+    // A photo opened from the list under the map goes back to the map by its coordinates, though
+    // the address is the same page.
+    await marker.click()
+    await page.getByTestId('map-photos').getByTestId('tile-open').first().click()
+    await page.getByTestId('viewer').getByRole('link', { name: '59.93000, 30.33000' }).click()
+    await page.getByTestId('map-photos').waitFor({ state: 'detached' })
+    await page.getByTestId('viewer').waitFor({ state: 'detached' })
+    await page.locator('.fp-marker').first().waitFor()
     // The photo was uploaded for this step only: the steps after it count the library's photos.
     await page.evaluate(async (name) => {
       const list = await (await fetch('/api/v1/photos?limit=200')).json()

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { api, previewUrl } from '../api/client'
 import type { components } from '../api/schema'
@@ -22,6 +22,7 @@ type Cluster = components['schemas']['MapCluster']
 // name in the credit line), and can read vector tiles from a file on the NAS
 // later without another library.
 const route = useRoute()
+const router = useRouter()
 const photos = usePhotosStore()
 
 const element = ref<HTMLElement | null>(null)
@@ -167,18 +168,44 @@ function number(value: unknown) {
   return value === undefined || value === null || value === '' || Number.isNaN(n) ? null : n
 }
 
+// The viewer's coordinates link to this page with the place in the address.
+// The page is already open when it was left for the viewer from the list under
+// the map, so the address is read again when it changes, closing the list and
+// the viewer in it. The address is cleared once read, so that the same link
+// works again.
+function place() {
+  const lat = number(route.query.lat)
+  const lon = number(route.query.lon)
+  return lat !== null && lon !== null ? { lat, lon, zoom: number(route.query.zoom) ?? 15 } : null
+}
+
+watch(
+  () => route.query,
+  async () => {
+    const target = place()
+    if (!target || !map) {
+      return
+    }
+    opened.value = null
+    await nextTick()
+    // The map has the page's height again once the list is gone.
+    map.resize()
+    map.easeTo({ center: [target.lon, target.lat], zoom: Math.min(MAX_ZOOM, target.zoom) })
+    void router.replace({ path: route.path, query: {} })
+  },
+)
+
 onMounted(() => {
   if (!element.value) {
     return
   }
-  const lat = number(route.query.lat)
-  const lon = number(route.query.lon)
-  const located = lat !== null && lon !== null
+  const target = place()
+  const located = target !== null
   map = new maplibregl.Map({
     container: element.value,
     style,
-    center: located ? [lon, lat] : [0, 30],
-    zoom: located ? (number(route.query.zoom) ?? 15) : 1,
+    center: located ? [target.lon, target.lat] : [0, 30],
+    zoom: located ? target.zoom : 1,
     minZoom: 1,
     maxZoom: MAX_ZOOM,
     maxBounds: [[-180, -85.05], [180, 85.05]],
@@ -190,6 +217,9 @@ onMounted(() => {
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left')
   map.on('moveend', later)
   void load(!located)
+  if (located) {
+    void router.replace({ path: route.path, query: {} })
+  }
 })
 
 onBeforeUnmount(() => {
