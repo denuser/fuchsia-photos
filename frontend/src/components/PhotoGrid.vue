@@ -86,7 +86,7 @@ const pending = computed(() =>
       section: s.section,
       // A month keeps the height of the rows it will have, left empty: grey rows
       // drawn there jumped when the photos replaced them with rows of their own
-      // shapes (removed at the user's request on 2026-11-18). A whole list shows
+      // shapes (removed on 2026-11-18). A whole list shows
       // its status.
       estimate: s.section.month !== null && s.section.photos.length < s.section.count,
       style: { transform: at(0, s.y + s.pendingY), width: `${inner.value}px`, height: `${s.pendingHeight}px` },
