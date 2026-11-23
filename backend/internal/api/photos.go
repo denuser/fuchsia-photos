@@ -628,6 +628,16 @@ func parseCursor(cursor string) (time.Time, int64, error) {
 }
 
 func (s *server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	var event store.RecordActivityParams
+	if s.ActivityLog {
+		event.Action = "upload"
+		event.AccountID = &user.ID
+		event.SessionID, _ = r.Context().Value(activitySessionKey{}).(*string)
+		rec := &responseRecorder{ResponseWriter: w}
+		w = rec
+		defer s.recordActivity(r, rec, &event)
+	}
 	// The album is a query parameter rather than a form field, as the file
 	// streams into ingest and a field after it would come too late.
 	var albumID int64
@@ -662,11 +672,21 @@ func (s *server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		res, err := s.Ingest.Ingest(r.Context(), currentUser(r).ID, part, part.FileName(), ingest.PriorityInteractive)
+		res, err := s.Ingest.Ingest(r.Context(), user.ID, part, part.FileName(), ingest.PriorityInteractive)
+		if res.MIME != "" {
+			event.MediaType, event.SizeBytes = &res.MIME, &res.Size
+		}
 		if err != nil {
 			uploadError(w, r, err)
 			return
 		}
+		event.Outcome = "accepted"
+		if res.Restored {
+			event.Outcome = "restored"
+		} else if res.Duplicate {
+			event.Outcome = "duplicate"
+		}
+		event.MediaID = &res.Photo.ID
 		// A duplicate is added too, as a WebDAV album does. A duplicate of a
 		// hidden file answers with the photo shown at the top of its chain.
 		if albumID != 0 {

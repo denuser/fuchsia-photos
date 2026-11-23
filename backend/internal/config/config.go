@@ -11,15 +11,17 @@ import (
 
 // Config holds the application settings.
 type Config struct {
-	HTTPAddr     string
-	DatabaseURL  string
-	LibraryDir   string
-	CacheDir     string
-	ImportDir    string
-	ImportStable time.Duration
-	Workers      int
-	CookieSecure bool
-	LogLevel     slog.Level
+	ActivityLog              bool
+	ActivityMaintenanceToken string
+	HTTPAddr                 string
+	DatabaseURL              string
+	LibraryDir               string
+	CacheDir                 string
+	ImportDir                string
+	ImportStable             time.Duration
+	Workers                  int
+	CookieSecure             bool
+	LogLevel                 slog.Level
 	// LogFormat is "text" or "json".
 	LogFormat string
 	// MLURL is the address of the ML service. Without it ML is off.
@@ -37,17 +39,19 @@ type Config struct {
 // Load reads the settings from the environment.
 func Load() (Config, error) {
 	cfg := Config{
-		HTTPAddr:        getenv("HTTP_ADDR", ":8080"),
-		DatabaseURL:     os.Getenv("DATABASE_URL"),
-		LibraryDir:      getenv("LIBRARY_DIR", "/data/library"),
-		CacheDir:        getenv("CACHE_DIR", "/data/cache"),
-		ImportDir:       getenv("IMPORT_DIR", "/data/import"),
-		CookieSecure:    os.Getenv("COOKIE_INSECURE") != "true",
-		MLURL:           os.Getenv("ML_URL"),
-		MLToken:         os.Getenv("ML_TOKEN"),
-		MLModel:         getenv("ML_MODEL", "google/siglip2-base-patch16-384@1"),
-		TranscoderURL:   os.Getenv("TRANSCODER_URL"),
-		TranscoderToken: os.Getenv("TRANSCODER_TOKEN"),
+		ActivityLog:              os.Getenv("ACTIVITY_LOG") == "true",
+		ActivityMaintenanceToken: os.Getenv("ACTIVITY_MAINTENANCE_TOKEN"),
+		HTTPAddr:                 getenv("HTTP_ADDR", ":8080"),
+		DatabaseURL:              os.Getenv("DATABASE_URL"),
+		LibraryDir:               getenv("LIBRARY_DIR", "/data/library"),
+		CacheDir:                 getenv("CACHE_DIR", "/data/cache"),
+		ImportDir:                getenv("IMPORT_DIR", "/data/import"),
+		CookieSecure:             os.Getenv("COOKIE_INSECURE") != "true",
+		MLURL:                    os.Getenv("ML_URL"),
+		MLToken:                  os.Getenv("ML_TOKEN"),
+		MLModel:                  getenv("ML_MODEL", "google/siglip2-base-patch16-384@1"),
+		TranscoderURL:            os.Getenv("TRANSCODER_URL"),
+		TranscoderToken:          os.Getenv("TRANSCODER_TOKEN"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")

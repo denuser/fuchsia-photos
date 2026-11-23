@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"net/http"
 	"slices"
@@ -29,6 +30,7 @@ var dummyHash = sync.OnceValue(func() string {
 })
 
 type userKey struct{}
+type activitySessionKey struct{}
 
 func currentUser(r *http.Request) store.User {
 	return r.Context().Value(userKey{}).(store.User)
@@ -41,7 +43,7 @@ func (s *server) authenticated(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "not logged in")
 			return
 		}
-		user, err := s.Queries.GetSessionUser(r.Context(), auth.HashSessionToken(cookie.Value))
+		session, err := s.Queries.GetSessionUser(r.Context(), auth.HashSessionToken(cookie.Value))
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, http.StatusUnauthorized, "not logged in")
 			return
@@ -50,7 +52,11 @@ func (s *server) authenticated(next http.HandlerFunc) http.HandlerFunc {
 			internalError(w, r, err)
 			return
 		}
-		next(w, r.WithContext(context.WithValue(r.Context(), userKey{}, user)))
+		ctx := context.WithValue(r.Context(), userKey{}, session.User)
+		if session.ActivityID != nil {
+			ctx = context.WithValue(ctx, activitySessionKey{}, session.ActivityID)
+		}
+		next(w, r.WithContext(ctx))
 	}
 }
 
@@ -65,6 +71,13 @@ func (s *server) admin(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *server) login(w http.ResponseWriter, r *http.Request) {
+	var event store.RecordActivityParams
+	if s.ActivityLog && !s.maintenanceLogin(r) {
+		event.Action = "login"
+		rec := &responseRecorder{ResponseWriter: w}
+		w = rec
+		defer s.recordActivity(r, rec, &event)
+	}
 	var req struct {
 		Login    string `json:"login"`
 		Password string `json:"password"`
@@ -77,6 +90,9 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		internalError(w, r, err)
 		return
+	}
+	if user.ID != 0 {
+		event.AccountID = &user.ID
 	}
 	hash := user.PasswordHash
 	if err != nil {
@@ -93,11 +109,19 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	expires := time.Now().Add(sessionLifetime)
-	err = s.Queries.CreateSession(r.Context(), store.CreateSessionParams{TokenHash: tokenHash, UserID: user.ID, ExpiresAt: expires})
+	if event.Action != "" {
+		id := rand.Text()
+		event.SessionID = &id
+	}
+	err = s.Queries.CreateSession(r.Context(), store.CreateSessionParams{
+		TokenHash: tokenHash, UserID: user.ID, ExpiresAt: expires, ActivityID: event.SessionID,
+	})
 	if err != nil {
+		event.SessionID = nil
 		internalError(w, r, err)
 		return
 	}
+	event.Outcome = "succeeded"
 	s.setSessionCookie(w, token, expires)
 	writeJSON(w, http.StatusOK, toUserJSON(user))
 }

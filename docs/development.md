@@ -219,3 +219,36 @@ git push --follow-tags
 `make release` turns "Unreleased" into `## 0.1.0 - <today>`, starts a new empty "Unreleased" above it, pins the version in the README's quick start, commits both as "Release 0.1.0" and tags the commit `v0.1.0`. It pushes nothing, so the commit and the tag can still be dropped with `git tag -d v0.1.0` and `git reset --hard HEAD~1`. It stops if the "Unreleased" section is empty or the tag exists.
 
 On the tag, CI publishes the image with the version tags and creates the release with that section of `CHANGELOG.md` as its notes. Do not create the release on GitHub or with `gh release create`: the release job would then fail, as the release would exist already. A version with a hyphen, such as `0.2.0-rc.1`, becomes a pre-release and gets no `X.Y` tag.
+
+## Demo activity journal
+
+Set `ACTIVITY_LOG=true` to record web logins and authenticated web uploads in
+PostgreSQL. A deployment can set `ACTIVITY_MAINTENANCE_TOKEN` to a random
+secret. A login carrying the matching `X-Activity-Maintenance` header is
+excluded from the journal and still authenticates normally. Keep the secret
+private.
+
+Run this query as an operator to summarize the last 30 days by Berlin
+calendar day. An upload accepted by ingest can have an error HTTP status
+if a later step failed. The session count covers sessions with a correlation
+ID and at least one new or restored upload.
+
+```sql
+SELECT (occurred_at AT TIME ZONE 'Europe/Berlin')::date AS day,
+       count(*) FILTER (WHERE action = 'login' AND outcome = 'succeeded') AS logins,
+       count(*) FILTER (WHERE action = 'login' AND outcome = 'rejected') AS rejected_logins,
+       count(*) FILTER (WHERE action = 'login' AND outcome = 'invalid_request') AS invalid_logins,
+       count(*) FILTER (WHERE action = 'login' AND outcome = 'error') AS login_errors,
+       count(*) FILTER (WHERE action = 'upload' AND outcome = 'accepted') AS new_files,
+       count(*) FILTER (WHERE action = 'upload' AND outcome = 'duplicate') AS duplicates,
+       count(*) FILTER (WHERE action = 'upload' AND outcome = 'restored') AS restored,
+       count(*) FILTER (WHERE action = 'upload' AND outcome = 'rejected') AS rejected_uploads,
+       count(*) FILTER (WHERE action = 'upload' AND http_status >= 500) AS upload_errors,
+       count(DISTINCT session_id) FILTER (
+           WHERE action = 'upload' AND outcome IN ('accepted', 'restored')
+       ) AS sessions_with_uploads
+FROM activity.events
+WHERE occurred_at >= now() - interval '30 days'
+GROUP BY 1
+ORDER BY 1 DESC;
+```

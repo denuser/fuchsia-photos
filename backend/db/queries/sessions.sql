@@ -1,8 +1,8 @@
 -- name: CreateSession :exec
-INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (@token_hash, @user_id, @expires_at);
+INSERT INTO sessions (token_hash, user_id, expires_at, activity_id) VALUES (@token_hash, @user_id, @expires_at, sqlc.narg(activity_id));
 
 -- name: GetSessionUser :one
-SELECT u.*
+SELECT sqlc.embed(u), s.activity_id
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = @token_hash AND s.expires_at > now() AND NOT u.disabled;

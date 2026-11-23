@@ -32,7 +32,9 @@ type Pinger interface {
 
 // Deps are the handler's dependencies.
 type Deps struct {
-	DB Pinger
+	ActivityLog              bool
+	ActivityMaintenanceToken string
+	DB                       Pinger
 	// Pool reads the job queue, which the generated queries do not cover.
 	Pool    *pgxpool.Pool
 	Queries *store.Queries

@@ -8,6 +8,27 @@ import (
 	"time"
 )
 
+type ActivityEvent struct {
+	ID         int64
+	OccurredAt time.Time
+	Action     string
+	Outcome    string
+	HttpStatus int32
+	AccountID  *int64
+	SessionID  *string
+	Browser    string
+	Os         string
+	MediaType  *string
+	SizeBytes  *int64
+	MediaID    *int64
+	Generation *int64
+}
+
+type ActivityResetState struct {
+	Singleton  bool
+	Generation int64
+}
+
 type Album struct {
 	ID           int64
 	OwnerID      int64
@@ -186,10 +207,11 @@ type PreviewSetting struct {
 }
 
 type Session struct {
-	TokenHash []byte
-	UserID    int64
-	CreatedAt time.Time
-	ExpiresAt time.Time
+	TokenHash  []byte
+	UserID     int64
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	ActivityID *string
 }
 
 type Tag struct {

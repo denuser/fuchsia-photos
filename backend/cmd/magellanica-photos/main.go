@@ -222,17 +222,19 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		return err
 	}
 	handler := api.NewHandler(api.Deps{
-		DB:           pool,
-		Pool:         pool,
-		Queries:      store.New(pool),
-		Ingest:       ingester,
-		Scan:         scanner,
-		Layout:       layout,
-		ML:           embedder,
-		Transcode:    copies,
-		CookieSecure: cfg.CookieSecure,
-		WebDAV:       &webdav.Handler{Queries: store.New(pool), Ingest: ingester, Layout: layout},
-		Static:       static,
+		ActivityLog:              cfg.ActivityLog,
+		ActivityMaintenanceToken: cfg.ActivityMaintenanceToken,
+		DB:                       pool,
+		Pool:                     pool,
+		Queries:                  store.New(pool),
+		Ingest:                   ingester,
+		Scan:                     scanner,
+		Layout:                   layout,
+		ML:                       embedder,
+		Transcode:                copies,
+		CookieSecure:             cfg.CookieSecure,
+		WebDAV:                   &webdav.Handler{Queries: store.New(pool), Ingest: ingester, Layout: layout},
+		Static:                   static,
 	})
 	return listen(ctx, cfg.HTTPAddr, handler)
 }
