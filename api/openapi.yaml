@@ -1294,6 +1294,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SearchStatus"
+  /activity:
+    get:
+      operationId: getActivity
+      summary: The activity journal of web sign-ins and uploads (administrators only)
+      description: The summary of the last 30 days by calendar day in Europe/Berlin and one page of events, newest first. The journal is kept only while ACTIVITY_LOG is on, and holds no IP addresses or credentials.
+      parameters:
+        - name: before
+          in: query
+          description: Return events older than this event ID, from `next` of the previous page
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: The journal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Activity"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
   /ml:
     get:
       operationId: getMLStatus
@@ -2437,6 +2460,98 @@ components:
           type: boolean
         state:
           $ref: "#/components/schemas/MLState"
+    Activity:
+      type: object
+      required: [enabled, days, events, next]
+      properties:
+        enabled:
+          description: Whether new events are being recorded
+          type: boolean
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityDay"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityEvent"
+        next:
+          type: [integer, "null"]
+          format: int64
+    ActivityDay:
+      type: object
+      required: [day, logins, rejectedLogins, invalidLogins, loginErrors, newFiles, duplicates, restored, rejectedUploads, uploadErrors, sessionsWithUploads]
+      properties:
+        day:
+          description: Calendar day in Europe/Berlin
+          type: string
+          format: date
+        logins:
+          type: integer
+          format: int64
+        rejectedLogins:
+          type: integer
+          format: int64
+        invalidLogins:
+          type: integer
+          format: int64
+        loginErrors:
+          type: integer
+          format: int64
+        newFiles:
+          type: integer
+          format: int64
+        duplicates:
+          type: integer
+          format: int64
+        restored:
+          type: integer
+          format: int64
+        rejectedUploads:
+          type: integer
+          format: int64
+        uploadErrors:
+          type: integer
+          format: int64
+        sessionsWithUploads:
+          type: integer
+          format: int64
+    ActivityEvent:
+      type: object
+      required: [id, occurredAt, action, outcome, httpStatus, accountId, sessionId, browser, os, mediaType, sizeBytes, mediaId]
+      properties:
+        id:
+          type: integer
+          format: int64
+        occurredAt:
+          type: string
+          format: date-time
+        action:
+          type: string
+          enum: [login, upload]
+        outcome:
+          description: A login is succeeded, rejected, invalid_request or error; an upload is accepted, duplicate, restored, rejected or error
+          type: string
+        httpStatus:
+          type: integer
+        accountId:
+          type: [integer, "null"]
+          format: int64
+        sessionId:
+          description: Random identifier that groups the events of one web session
+          type: [string, "null"]
+        browser:
+          type: string
+        os:
+          type: string
+        mediaType:
+          type: [string, "null"]
+        sizeBytes:
+          type: [integer, "null"]
+          format: int64
+        mediaId:
+          type: [integer, "null"]
+          format: int64
     MLStatus:
       type: object
       required: [state, model, checkedAt, photos, embedded, failed, failures]

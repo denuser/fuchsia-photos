@@ -228,7 +228,7 @@ secret. A login carrying the matching `X-Activity-Maintenance` header is
 excluded from the journal and still authenticates normally. Keep the secret
 private.
 
-Run this query as an operator to summarize the last 30 days by Berlin
+Administrators see the same summary and the newest events on the Activity journal page, from the account menu. Run this query as an operator to summarize the last 30 days by Berlin
 calendar day. An upload accepted by ingest can have an error HTTP status
 if a later step failed. The session count covers sessions with a correlation
 ID and at least one new or restored upload.

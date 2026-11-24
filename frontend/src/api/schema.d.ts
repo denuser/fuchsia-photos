@@ -827,6 +827,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The activity journal of web sign-ins and uploads (administrators only)
+         * @description The summary of the last 30 days by calendar day in Europe/Berlin and one page of events, newest first. The journal is kept only while ACTIVITY_LOG is on, and holds no IP addresses or credentials.
+         */
+        get: operations["getActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ml": {
         parameters: {
             query?: never;
@@ -1607,6 +1627,63 @@ export interface components {
         SearchStatus: {
             available: boolean;
             state: components["schemas"]["MLState"];
+        };
+        Activity: {
+            /** @description Whether new events are being recorded */
+            enabled: boolean;
+            days: components["schemas"]["ActivityDay"][];
+            events: components["schemas"]["ActivityEvent"][];
+            /** Format: int64 */
+            next: number | null;
+        };
+        ActivityDay: {
+            /**
+             * Format: date
+             * @description Calendar day in Europe/Berlin
+             */
+            day: string;
+            /** Format: int64 */
+            logins: number;
+            /** Format: int64 */
+            rejectedLogins: number;
+            /** Format: int64 */
+            invalidLogins: number;
+            /** Format: int64 */
+            loginErrors: number;
+            /** Format: int64 */
+            newFiles: number;
+            /** Format: int64 */
+            duplicates: number;
+            /** Format: int64 */
+            restored: number;
+            /** Format: int64 */
+            rejectedUploads: number;
+            /** Format: int64 */
+            uploadErrors: number;
+            /** Format: int64 */
+            sessionsWithUploads: number;
+        };
+        ActivityEvent: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            occurredAt: string;
+            /** @enum {string} */
+            action: "login" | "upload";
+            /** @description A login is succeeded, rejected, invalid_request or error; an upload is accepted, duplicate, restored, rejected or error */
+            outcome: string;
+            httpStatus: number;
+            /** Format: int64 */
+            accountId: number | null;
+            /** @description Random identifier that groups the events of one web session */
+            sessionId: string | null;
+            browser: string;
+            os: string;
+            mediaType: string | null;
+            /** Format: int64 */
+            sizeBytes: number | null;
+            /** Format: int64 */
+            mediaId: number | null;
         };
         MLStatus: {
             state: components["schemas"]["MLState"];
@@ -3064,6 +3141,31 @@ export interface operations {
                     "application/json": components["schemas"]["SearchStatus"];
                 };
             };
+        };
+    };
+    getActivity: {
+        parameters: {
+            query?: {
+                /** @description Return events older than this event ID, from `next` of the previous page */
+                before?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The journal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Activity"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
         };
     };
     getMLStatus: {

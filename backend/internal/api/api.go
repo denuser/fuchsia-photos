@@ -87,6 +87,8 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/users/directory", s.authenticated(s.listUserDirectory))
 	mux.HandleFunc("PATCH /api/v1/users/{id}", s.admin(s.updateUser))
 
+	mux.HandleFunc("GET /api/v1/activity", s.admin(s.getActivity))
+
 	mux.HandleFunc("GET /api/v1/photos", s.authenticated(s.listPhotos))
 	mux.HandleFunc("POST /api/v1/photos", s.authenticated(s.uploadPhoto))
 	mux.HandleFunc("GET /api/v1/photos/events", s.authenticated(s.photoEvents))

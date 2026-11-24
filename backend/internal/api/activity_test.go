@@ -162,3 +162,36 @@ func TestActivityJournalDisabled(t *testing.T) {
 		t.Fatalf("got %d events with recording disabled", count)
 	}
 }
+
+func TestActivityPage(t *testing.T) {
+	e := setupWith(t, func(d *Deps) { d.ActivityLog = true })
+	e.addUser("demo", auth.RoleUser)
+	e.addUser("boss", auth.RoleAdmin)
+	wantStatus(t, e.loggedIn("demo").get("/api/v1/activity"), http.StatusForbidden)
+	wantStatus(t, e.browser().get("/api/v1/activity"), http.StatusUnauthorized)
+
+	// A page of the journal holds 100 events, so the second page needs more.
+	if _, err := e.pool.Exec(context.Background(), `
+		INSERT INTO activity.events (action, outcome, http_status, browser, os)
+		SELECT 'login', 'rejected', 401, 'Firefox', 'Linux' FROM generate_series(1, 120)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	admin := e.loggedIn("boss")
+	wantStatus(t, admin.get("/api/v1/activity?before=x"), http.StatusBadRequest)
+	first := decode[activityJSON](t, admin.get("/api/v1/activity"))
+	if !first.Enabled || len(first.Events) != activityPageSize || first.Next == nil || *first.Next != first.Events[99].ID {
+		t.Fatalf("first page: enabled %v, %d events, next %v", first.Enabled, len(first.Events), first.Next)
+	}
+	if first.Events[0].ID < first.Events[1].ID {
+		t.Errorf("events are not newest first: %+v", first.Events[:2])
+	}
+	if len(first.Days) != 1 || first.Days[0].RejectedLogins != 120 || first.Days[0].Logins != 2 {
+		t.Errorf("days = %+v", first.Days)
+	}
+	second := decode[activityJSON](t, admin.get("/api/v1/activity?before="+itoa(*first.Next)))
+	// 120 rejected logins and the two successful ones make 122 events.
+	if len(second.Events) != 22 || second.Next != nil || second.Events[0].ID >= *first.Next {
+		t.Errorf("second page: %d events, next %v", len(second.Events), second.Next)
+	}
+}
