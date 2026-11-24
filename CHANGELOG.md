@@ -4,6 +4,8 @@ Changes in each release. Add changes under "Unreleased" as they are made; `make 
 
 ## Unreleased
 
+- An optional activity journal for the public demo: with `ACTIVITY_LOG=true`, web sign-ins and uploads are recorded in the `activity` schema of PostgreSQL, with the outcome, the browser and system family and a random session ID, and without IP addresses or credentials. It is off by default. See [Demo activity journal](docs/development.md#demo-activity-journal).
+
 ## 0.3.0 - 2026-11-22
 
 - The project is renamed from Fuchsia Photos to Magellanica Photos. The command is now `magellanica-photos`, the images are `ghcr.io/magellanica-app/magellanica-photos` and `magellanica-photos-transcoder` (the old images stay but are no longer updated), and the session cookie is `magellanica_session`, so everyone signs in once more. To move an existing installation, change the `image:` lines of your Compose file or TrueNAS app and use `magellanica-photos` in `docker compose exec`; the data and settings are unchanged. Old GitHub links redirect to the new repository.

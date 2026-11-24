@@ -631,6 +631,8 @@ func (s *server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	var event store.RecordActivityParams
 	if s.ActivityLog {
+		// One event per request: the browser sends one file in each, so a
+		// request with several files keeps the outcome of the last one.
 		event.Action = "upload"
 		event.AccountID = &user.ID
 		event.SessionID, _ = r.Context().Value(activitySessionKey{}).(*string)
