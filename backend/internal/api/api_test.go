@@ -265,6 +265,31 @@ func TestLogin(t *testing.T) {
 	wantStatus(t, anna.get("/api/v1/me"), http.StatusUnauthorized)
 }
 
+func TestLoginSlowsDownWrongPasswords(t *testing.T) {
+	e := setup(t)
+	e.addUser("anna", auth.RoleUser)
+	anonymous := e.browser()
+	attempt := func(login, password string) *http.Response {
+		return anonymous.json(http.MethodPost, "/api/v1/login", map[string]string{"login": login, "password": password})
+	}
+
+	for range 5 {
+		wantStatus(t, attempt("anna", "wrong"), http.StatusUnauthorized)
+	}
+	res := attempt("anna", "password anna")
+	wantStatus(t, res, http.StatusTooManyRequests)
+	if res.Header.Get("Retry-After") == "" {
+		t.Error("no Retry-After header")
+	}
+	// Another login is not affected, and an unknown one is slowed down in the same way.
+	e.addUser("boris", auth.RoleUser)
+	wantStatus(t, attempt("boris", "password boris"), http.StatusOK)
+	for range 5 {
+		wantStatus(t, attempt("nobody", "wrong"), http.StatusUnauthorized)
+	}
+	wantStatus(t, attempt("nobody", "wrong"), http.StatusTooManyRequests)
+}
+
 func TestSessionTokenIsNotStored(t *testing.T) {
 	e := setup(t)
 	e.addUser("anna", auth.RoleUser)

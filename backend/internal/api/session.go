@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -86,6 +87,14 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The limit is per login, whether or not the account exists, so it does not tell them apart.
+	// It is not per address: behind the proxy the application does not see one.
+	if ok, wait := s.logins.Allow(req.Login); !ok {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		writeError(w, http.StatusTooManyRequests, "too many attempts, try again later")
+		return
+	}
+
 	user, err := s.Queries.GetUserByLogin(r.Context(), req.Login)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		internalError(w, r, err)
@@ -99,9 +108,11 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		hash = dummyHash()
 	}
 	if !auth.CheckPassword(hash, req.Password) || err != nil || user.Disabled {
+		s.logins.Fail(req.Login)
 		writeError(w, http.StatusUnauthorized, "wrong login or password")
 		return
 	}
+	s.logins.Reset(req.Login)
 
 	token, tokenHash, err := auth.NewSessionToken()
 	if err != nil {

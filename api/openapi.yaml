@@ -49,6 +49,16 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           $ref: "#/components/responses/Error"
+        "429":
+          description: Too many wrong passwords for this login. Retry-After says how many seconds to wait
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /logout:
     post:
       operationId: logout

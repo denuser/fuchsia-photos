@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/magellanica-app/magellanica-photos/backend/internal/auth"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/ingest"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/jobs"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/ml"
@@ -54,6 +55,8 @@ type Deps struct {
 
 type server struct {
 	Deps
+	// logins slows down repeated wrong passwords for one login.
+	logins *auth.Limiter
 }
 
 // NewHandler returns the application handler.
@@ -64,7 +67,7 @@ func NewHandler(deps Deps) http.Handler {
 	if deps.Transcode == nil {
 		deps.Transcode = &transcode.Service{Queries: deps.Queries, Layout: deps.Layout}
 	}
-	s := &server{deps}
+	s := &server{Deps: deps, logins: auth.NewLimiter()}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/v1/health", s.health)
