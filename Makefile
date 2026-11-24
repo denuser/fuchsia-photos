@@ -12,7 +12,7 @@ DEV_DB_VOLUME = fuchsia-photos-dev-db
 DEV_DATA = $(CURDIR)/deploy/data/dev
 # Outside DEV_DATA, so that dev-clean keeps the certificate phones accepted.
 DEV_TLS = $(CURDIR)/deploy/data/dev-tls
-DEV_ENV = DATABASE_URL=$(DEV_DATABASE_URL) LIBRARY_DIR=$(DEV_DATA)/library CACHE_DIR=$(DEV_DATA)/cache IMPORT_DIR=$(DEV_DATA)/import COOKIE_INSECURE=true ML_URL=http://127.0.0.1:$(ML_PORT)
+DEV_ENV = DATABASE_URL=$(DEV_DATABASE_URL) LIBRARY_DIR=$(DEV_DATA)/library CACHE_DIR=$(DEV_DATA)/cache IMPORT_DIR=$(DEV_DATA)/import COOKIE_INSECURE=true ACTIVITY_LOG=true ML_URL=http://127.0.0.1:$(ML_PORT)
 
 # Keep the version in step with backend/go.mod. Without cgo and the other
 # database drivers, the CLI builds on macOS and needs no C toolchain.
