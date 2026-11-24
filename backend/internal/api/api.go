@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/magellanica-app/magellanica-photos/backend/internal/auth"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/config"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/ingest"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/jobs"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/ml"
@@ -47,6 +48,10 @@ type Deps struct {
 	// Transcode makes H.264 copies of videos, where the graphics allow.
 	Transcode    *transcode.Service
 	CookieSecure bool
+	// PublicURL, SessionSecret and OIDCProviders set up sign-in through providers.
+	PublicURL     string
+	SessionSecret string
+	OIDCProviders []config.OIDCProvider
 	// WebDAV serves the WebDAV tree under /webdav, if set.
 	WebDAV http.Handler
 	// Static serves everything outside /api/.
@@ -57,6 +62,7 @@ type server struct {
 	Deps
 	// logins slows down repeated wrong passwords for one login.
 	logins *auth.Limiter
+	oidc   []*oidcProvider
 }
 
 // NewHandler returns the application handler.
@@ -68,15 +74,23 @@ func NewHandler(deps Deps) http.Handler {
 		deps.Transcode = &transcode.Service{Queries: deps.Queries, Layout: deps.Layout}
 	}
 	s := &server{Deps: deps, logins: auth.NewLimiter()}
+	for _, p := range deps.OIDCProviders {
+		s.oidc = append(s.oidc, &oidcProvider{OIDCProvider: p})
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/v1/health", s.health)
 	mux.HandleFunc("POST /api/v1/login", s.login)
 	mux.HandleFunc("POST /api/v1/logout", s.logout)
+	mux.HandleFunc("GET /api/v1/auth/options", s.listSignInOptions)
+	mux.HandleFunc("GET /api/v1/auth/oidc/{id}/login", s.oidcLogin)
+	mux.HandleFunc("GET /api/v1/auth/oidc/{id}/callback", s.oidcCallback)
 
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.getMe))
 	mux.HandleFunc("PATCH /api/v1/me", s.authenticated(s.updateMe))
 	mux.HandleFunc("POST /api/v1/me/password", s.authenticated(s.changePassword))
+	mux.HandleFunc("GET /api/v1/me/identities", s.authenticated(s.listIdentities))
+	mux.HandleFunc("DELETE /api/v1/me/identities/{id}", s.authenticated(s.deleteIdentity))
 	mux.HandleFunc("GET /api/v1/me/app-passwords", s.authenticated(s.listAppPasswords))
 	mux.HandleFunc("POST /api/v1/me/app-passwords", s.authenticated(s.createAppPassword))
 	mux.HandleFunc("DELETE /api/v1/me/app-passwords/{id}", s.authenticated(s.deleteAppPassword))
@@ -155,6 +169,8 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("PUT /api/v1/settings/previews", s.admin(s.updatePreviewSettings))
 	mux.HandleFunc("GET /api/v1/settings/metadata", s.admin(s.getMetadataSettings))
 	mux.HandleFunc("PUT /api/v1/settings/metadata", s.admin(s.updateMetadataSettings))
+	mux.HandleFunc("GET /api/v1/settings/sign-in", s.admin(s.getSignInSettings))
+	mux.HandleFunc("PUT /api/v1/settings/sign-in", s.admin(s.updateSignInSettings))
 	mux.HandleFunc("GET /api/v1/settings/video", s.admin(s.getVideoSettings))
 	mux.HandleFunc("PUT /api/v1/settings/video", s.admin(s.updateVideoSettings))
 

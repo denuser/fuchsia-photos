@@ -178,6 +178,38 @@ A full decode holds memory in proportion to the sensor: about 1.4 GB for 61 MP a
 
 A RAW and JPEG from the same owner are paired if the base name, capture time including sub-seconds, and camera make and model match. The files can come from different directories or uploads. The JPEG stays in the library view. Its owner can switch to RAW in the viewer. Both files go into and out of the trash together.
 
+## Signing in with a provider
+
+Besides a login and a password, people can sign in through an OpenID Connect provider: Google, or one you run yourself, such as Authelia, Authentik or Keycloak. A button for each provider appears on the sign-in page. The password form stays, and it is the way in for an administrator when a provider is down.
+
+Register the application with the provider as a web application, with this redirect address, built from the address you open the application at:
+
+```
+https://photos.example.org/api/v1/auth/oidc/1/callback
+```
+
+The number is the provider's own: `1` for `OIDC_1_*`, `2` for `OIDC_2_*`. Then set these in `.env` next to the Compose file:
+
+| Variable | Purpose |
+|---|---|
+| `PUBLIC_URL` | The address people open the application at, without a path. The redirect address is built from it, so it must match what the provider has registered, character for character |
+| `SESSION_SECRET` | At least 32 random characters, such as the output of `openssl rand -hex 32`. It signs the cookie that carries a sign-in between the application and the provider. Changing it only cancels the sign-ins in progress |
+| `OIDC_1_ISSUER` | The provider's issuer address. For Google it is `https://accounts.google.com`; for the others, the address its documentation gives, where `/.well-known/openid-configuration` answers |
+| `OIDC_1_CLIENT_ID`, `OIDC_1_CLIENT_SECRET` | From the provider's registration of the application |
+| `OIDC_1_NAME` | The label of the button. Defaults to "Single sign-on" |
+
+`OIDC_2_*` sets a second provider in the same way. The application refuses to start when a provider is set without `PUBLIC_URL` and a long enough `SESSION_SECRET`, and says which is missing.
+
+Google accepts only redirect addresses on a public domain over HTTPS, apart from `localhost` for trying it out, so an installation reached by an IP address or `truenas.local` cannot use it. A provider you run yourself has no such limit, but the application must trust its certificate: a provider with a certificate from a private authority is not accepted yet.
+
+On the administration page, **Sign-in** decides who may use a provider:
+
+- **A first sign-in creates an account** is off by default. Without it only people whose accounts already exist can sign in, after an administrator or they themselves linked the provider to the account in the profile. With it on, anyone the provider admits gets an account with the role user, which makes the installation open to everyone who has a Google account unless the list below narrows it. It is meant for a public demo.
+- **Addresses and domains** narrow account creation to people whose provider-verified email is on the list, such as `family.example` or `anna@gmail.com`.
+- **Passwords only for administrators** closes the password form to everyone else.
+
+An account made through a provider has no password; its login comes from the provider's username, else from the part of its email before the at sign, else from its name, with a number added when the login is taken. Linking a provider to an account that exists is done by the account's own user, signed in with the password, in the profile, so that a provider which lets anyone claim an address cannot take an account over.
+
 ## Backups
 
 | What | Where | How |

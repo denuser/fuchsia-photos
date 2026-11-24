@@ -71,14 +71,46 @@ func (s *server) admin(next http.HandlerFunc) http.HandlerFunc {
 	})
 }
 
-func (s *server) login(w http.ResponseWriter, r *http.Request) {
-	var event store.RecordActivityParams
-	if s.ActivityLog && !s.maintenanceLogin(r) {
-		event.Action = "login"
-		rec := &responseRecorder{ResponseWriter: w}
-		w = rec
-		defer s.recordActivity(r, rec, &event)
+// trackLogin starts the activity event of a sign-in, when the journal is on. The caller defers
+// the returned function, which records it once the response is written.
+func (s *server) trackLogin(w http.ResponseWriter, r *http.Request, track bool) (http.ResponseWriter, *store.RecordActivityParams, func()) {
+	event := &store.RecordActivityParams{}
+	if !track || !s.ActivityLog {
+		return w, event, func() {}
 	}
+	event.Action = "login"
+	rec := &responseRecorder{ResponseWriter: w}
+	return rec, event, func() { s.recordActivity(r, rec, event) }
+}
+
+// startSession gives the user a session and its cookie, and notes it in the activity event.
+// Every way of signing in ends here.
+func (s *server) startSession(w http.ResponseWriter, r *http.Request, userID int64, event *store.RecordActivityParams) error {
+	token, tokenHash, err := auth.NewSessionToken()
+	if err != nil {
+		return err
+	}
+	expires := time.Now().Add(sessionLifetime)
+	if event.Action != "" {
+		id := rand.Text()
+		event.SessionID = &id
+	}
+	err = s.Queries.CreateSession(r.Context(), store.CreateSessionParams{
+		TokenHash: tokenHash, UserID: userID, ExpiresAt: expires, ActivityID: event.SessionID,
+	})
+	if err != nil {
+		event.SessionID = nil
+		return err
+	}
+	event.AccountID = &userID
+	event.Outcome = "succeeded"
+	s.setSessionCookie(w, token, expires)
+	return nil
+}
+
+func (s *server) login(w http.ResponseWriter, r *http.Request) {
+	w, event, record := s.trackLogin(w, r, !s.maintenanceLogin(r))
+	defer record()
 	var req struct {
 		Login    string `json:"login"`
 		Password string `json:"password"`
@@ -112,28 +144,22 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "wrong login or password")
 		return
 	}
+	settings, err := s.Queries.GetSignInSettings(r.Context())
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	if settings.PasswordAdminsOnly && user.Role != auth.RoleAdmin {
+		s.logins.Fail(req.Login)
+		writeError(w, http.StatusUnauthorized, "wrong login or password")
+		return
+	}
 	s.logins.Reset(req.Login)
 
-	token, tokenHash, err := auth.NewSessionToken()
-	if err != nil {
+	if err := s.startSession(w, r, user.ID, event); err != nil {
 		internalError(w, r, err)
 		return
 	}
-	expires := time.Now().Add(sessionLifetime)
-	if event.Action != "" {
-		id := rand.Text()
-		event.SessionID = &id
-	}
-	err = s.Queries.CreateSession(r.Context(), store.CreateSessionParams{
-		TokenHash: tokenHash, UserID: user.ID, ExpiresAt: expires, ActivityID: event.SessionID,
-	})
-	if err != nil {
-		event.SessionID = nil
-		internalError(w, r, err)
-		return
-	}
-	event.Outcome = "succeeded"
-	s.setSessionCookie(w, token, expires)
 	writeJSON(w, http.StatusOK, toUserJSON(user))
 }
 

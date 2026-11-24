@@ -59,6 +59,69 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /auth/options:
+    get:
+      operationId: getSignInOptions
+      summary: The ways to sign in, for the sign-in page
+      security: []
+      responses:
+        "200":
+          description: The providers to offer next to the password form
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignInOptions"
+  /auth/oidc/{id}/login:
+    get:
+      operationId: startOIDCSignIn
+      summary: Send the browser to a provider to sign in, or with link=1 to link it to the signed-in account
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: link
+          in: query
+          description: With 1, links the provider's identity to the account of the current session
+          schema:
+            type: string
+            enum: ["1"]
+      responses:
+        "303":
+          description: Redirect to the provider, or to the sign-in page with an error
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /auth/oidc/{id}/callback:
+    get:
+      operationId: finishOIDCSignIn
+      summary: Where the provider sends the browser back. Starts the session
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+      responses:
+        "303":
+          description: >-
+            Redirect to the application with the session cookie set, or to
+            /login?error=oidc_<reason> with the reason expired, denied,
+            unavailable, no_account, not_allowed, disabled, taken or failed
+        "404":
+          $ref: "#/components/responses/Error"
   /logout:
     post:
       operationId: logout
@@ -139,6 +202,37 @@ paths:
         "400":
           $ref: "#/components/responses/Error"
         "403":
+          $ref: "#/components/responses/Error"
+  /me/identities:
+    get:
+      operationId: listIdentities
+      summary: List the providers linked to the current user's account
+      responses:
+        "200":
+          description: The linked identities, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Identity"
+  /me/identities/{id}:
+    delete:
+      operationId: deleteIdentity
+      summary: Unlink a provider. The last way to sign in to an account without a password stays
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Unlinked
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
           $ref: "#/components/responses/Error"
   /me/app-passwords:
     get:
@@ -1711,6 +1805,39 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /settings/sign-in:
+    get:
+      operationId: getSignInSettings
+      summary: How people may sign in (administrators only)
+      responses:
+        "200":
+          description: The current settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignInSettings"
+        "403":
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: updateSignInSettings
+      summary: Change how people may sign in (administrators only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignInSettings"
+      responses:
+        "200":
+          description: The saved settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignInSettings"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
   /settings/metadata:
     get:
       operationId: getMetadataSettings
@@ -1930,6 +2057,53 @@ components:
         at:
           type: string
           format: date-time
+    SignInOptions:
+      type: object
+      required: [providers, passwordAdminsOnly]
+      properties:
+        providers:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id:
+                type: string
+              name:
+                description: The label of the sign-in button
+                type: string
+        passwordAdminsOnly:
+          description: Whether only administrators may sign in with a password
+          type: boolean
+    SignInSettings:
+      type: object
+      required: [createUsers, allowed, passwordAdminsOnly]
+      properties:
+        createUsers:
+          description: Whether a first sign-in through a provider creates an account
+          type: boolean
+        allowed:
+          description: Email addresses and domains that may create an account. With none listed, anyone the provider admits may, which is open registration
+          type: array
+          items:
+            type: string
+        passwordAdminsOnly:
+          description: Whether the password form accepts only administrators
+          type: boolean
+    Identity:
+      type: object
+      required: [id, issuer, email, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        issuer:
+          type: string
+        email:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
     MetadataSettings:
       type: object
       required: [showLocation]
@@ -2120,7 +2294,7 @@ components:
       enum: [admin, user]
     User:
       type: object
-      required: [id, login, role, disabled, createdAt, sharedIncludesAlbums, viewerShowsOriginals, viewerHiddenFields, navigationHiddenOnPhones, gridSquares, gridSize, timelineIncludesShared, language]
+      required: [id, login, role, disabled, hasPassword, createdAt, sharedIncludesAlbums, viewerShowsOriginals, viewerHiddenFields, navigationHiddenOnPhones, gridSquares, gridSize, timelineIncludesShared, language]
       properties:
         id:
           type: integer
@@ -2130,6 +2304,9 @@ components:
         role:
           $ref: "#/components/schemas/Role"
         disabled:
+          type: boolean
+        hasPassword:
+          description: False for an account made by a sign-in through a provider, until it sets a password
           type: boolean
         createdAt:
           type: string

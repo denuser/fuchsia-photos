@@ -38,6 +38,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The ways to sign in, for the sign-in page */
+        get: operations["getSignInOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/oidc/{id}/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Send the browser to a provider to sign in, or with link=1 to link it to the signed-in account */
+        get: operations["startOIDCSignIn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/oidc/{id}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where the provider sends the browser back. Starts the session */
+        get: operations["finishOIDCSignIn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/logout": {
         parameters: {
             query?: never;
@@ -85,6 +136,40 @@ export interface paths {
         /** Change the current user's password and end their other sessions */
         post: operations["changePassword"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the providers linked to the current user's account */
+        get: operations["listIdentities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/identities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink a provider. The last way to sign in to an account without a password stays */
+        delete: operations["deleteIdentity"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1136,6 +1221,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How people may sign in (administrators only) */
+        get: operations["getSignInSettings"];
+        /** Change how people may sign in (administrators only) */
+        put: operations["updateSignInSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/metadata": {
         parameters: {
             query?: never;
@@ -1263,6 +1366,31 @@ export interface components {
             error: string;
             /** Format: date-time */
             at: string;
+        };
+        SignInOptions: {
+            providers: {
+                id: string;
+                /** @description The label of the sign-in button */
+                name: string;
+            }[];
+            /** @description Whether only administrators may sign in with a password */
+            passwordAdminsOnly: boolean;
+        };
+        SignInSettings: {
+            /** @description Whether a first sign-in through a provider creates an account */
+            createUsers: boolean;
+            /** @description Email addresses and domains that may create an account. With none listed, anyone the provider admits may, which is open registration */
+            allowed: string[];
+            /** @description Whether the password form accepts only administrators */
+            passwordAdminsOnly: boolean;
+        };
+        Identity: {
+            /** Format: int64 */
+            id: number;
+            issuer: string;
+            email: string;
+            /** Format: date-time */
+            createdAt: string;
         };
         MetadataSettings: {
             /** @description Whether photos include where they were taken, for everyone who may see them */
@@ -1423,6 +1551,8 @@ export interface components {
             login: string;
             role: components["schemas"]["Role"];
             disabled: boolean;
+            /** @description False for an account made by a sign-in through a provider, until it sets a password */
+            hasPassword: boolean;
             /** Format: date-time */
             createdAt: string;
             /** @description Whether the user's list of shared photos includes the photos of shared albums */
@@ -1889,6 +2019,85 @@ export interface operations {
                 };
             };
             401: components["responses"]["Error"];
+            /** @description Too many wrong passwords for this login. Retry-After says how many seconds to wait */
+            429: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getSignInOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The providers to offer next to the password form */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInOptions"];
+                };
+            };
+        };
+    };
+    startOIDCSignIn: {
+        parameters: {
+            query?: {
+                /** @description With 1, links the provider's identity to the account of the current session */
+                link?: "1";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the provider, or to the sign-in page with an error */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    finishOIDCSignIn: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the application with the session cookie set, or to /login?error=oidc_<reason> with the reason expired, denied, unavailable, no_account, not_allowed, disabled, taken or failed */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
         };
     };
     logout: {
@@ -1989,6 +2198,48 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             403: components["responses"]["Error"];
+        };
+    };
+    listIdentities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The linked identities, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Identity"][];
+                };
+            };
+        };
+    };
+    deleteIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unlinked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     listAppPasswords: {
@@ -3703,6 +3954,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PreviewSettings"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    getSignInSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInSettings"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    updateSignInSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignInSettings"];
+            };
+        };
+        responses: {
+            /** @description The saved settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInSettings"];
                 };
             };
             400: components["responses"]["Error"];

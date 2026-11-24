@@ -186,7 +186,7 @@ func (q *Queries) FindWebDAVAlbum(ctx context.Context, arg FindWebDAVAlbumParams
 }
 
 const getAppPasswordUser = `-- name: GetAppPasswordUser :one
-SELECT u.id, u.login, u.password_hash, u.role, u.disabled, u.created_at, u.shared_includes_albums, u.viewer_shows_originals, u.viewer_hidden_fields, u.navigation_hidden_on_phones, u.grid_squares, u.timeline_includes_shared, u.language, u.grid_size, p.id AS app_password_id, p.last_used_at
+SELECT u.id, u.login, u.password_hash, u.role, u.disabled, u.created_at, u.shared_includes_albums, u.viewer_shows_originals, u.viewer_hidden_fields, u.navigation_hidden_on_phones, u.grid_squares, u.timeline_includes_shared, u.language, u.grid_size, u.email, p.id AS app_password_id, p.last_used_at
 FROM app_passwords p
 JOIN users u ON u.id = p.user_id
 WHERE p.token_hash = $1 AND NOT u.disabled
@@ -216,6 +216,7 @@ func (q *Queries) GetAppPasswordUser(ctx context.Context, tokenHash []byte) (Get
 		&i.User.TimelineIncludesShared,
 		&i.User.Language,
 		&i.User.GridSize,
+		&i.User.Email,
 		&i.AppPasswordID,
 		&i.LastUsedAt,
 	)

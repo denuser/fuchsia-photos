@@ -27,7 +27,8 @@ func (s *server) maintenanceLogin(r *http.Request) bool {
 }
 
 func (s *server) recordActivity(r *http.Request, response *responseRecorder, event *store.RecordActivityParams) {
-	if response.status == 0 {
+	// A link of a provider to an account starts from a session and has no event to record.
+	if response.status == 0 || event.Action == "" {
 		return
 	}
 	event.HttpStatus = int32(response.status)

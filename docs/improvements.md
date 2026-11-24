@@ -26,6 +26,8 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 20 | [Safer RAW decoding](#20-safer-raw-decoding) | Done, released in 0.1.1 | |
 | 21 | [Map](#21-map) | Done, released in 0.2.0 | Check the map on a phone and with a larger library |
 | 22 | [Demo activity log](#22-demo-activity-log) | Implemented | Deploy and enable on the public demo |
+| 23 | [Sign in with OIDC](#23-sign-in-with-oidc) | Built; not yet checked with a real provider | A check with Google; setting a first password for an account made by a provider; Apple and Yandex after it |
+| 24 | [Two-factor sign-in (TOTP)](#24-two-factor-sign-in-totp) | Draft plan, reviewed | The build, after the shared sign-in function of 23 |
 
 ## 1. Administration page
 
@@ -587,3 +589,66 @@ Decided on 2026-11-23: keep web login and upload events in PostgreSQL across dem
 5. **Reset and retention.** Explicitly exclude the activity schema when creating the demo baseline. Verify the real `pg_restore --clean` command against both a pre-migration baseline and a regenerated baseline in a disposable database. Keep the reset generation in the activity schema and advance it before accepting traffic after a restore. Prune old rows in batches under the maintenance lock before checking disk pressure. Start with a proposed target of 100,000 retained rows alongside the 30-day cutoff, and check table and index size before deployment. Periodic pruning makes this a retention target. Verify PostgreSQL can reuse space after pruning and account for the journal in the disk budget. Check whether ordinary backup jobs include it and apply the retention policy to any retained copies.
 6. **Reports.** The administrator page (`/activity`, `GET /api/v1/activity`) shows the same daily summary and the newest events, 100 at a time, with the journal's browser, system and short session ID, and says when recording is off. Provide read-only SQL examples grouped by day in Europe/Berlin for successful and rejected logins, upload outcomes, and distinct sessions with newly accepted or restored uploads. Count uploads from older sessions with no activity ID in upload totals. Treat the session count as an activity measure for a shared account.
 7. **Verification and rollout.** Cover recording disabled, login outcomes, maintenance logins, session correlation, new files, duplicates, restores, media rejection, album failures, and write failures in backend tests. Verify age and row pruning, the reset generation, and continued recording after both reset triggers using a disposable demo database. Deploy the migration with recording disabled, verify the baseline and maintenance configuration, then enable recording and check a smoke-test login and upload in the SQL report.
+
+## 23. Sign in with OIDC
+
+**Status:** built on 2026-11-24: configuration, the flow, linking, account creation, the settings and the identities API, with tests on a fake provider, and the interface: provider buttons on the sign-in page, linked providers in the profile, the sign-in settings on the administration page, in all ten languages. The browser test does not cover it, as it would need a provider. Not done: a check with Google, a way for an account made by a provider to set its first password, Apple and Yandex ID.
+
+Single sign-on through OpenID Connect providers: Google, and self-hosted ones (Authelia, Authentik, Keycloak), as Immich and PhotoPrism have; then Apple and Yandex ID as later steps. Today only a login and an argon2id password exist (`internal/auth`, `internal/api/session.go`), with sessions in HttpOnly `SameSite=Lax` cookies.
+
+Decided on 2026-11-24:
+- The full authorization code flow with PKCE, with `github.com/coreos/go-oidc/v3` and `golang.org/x/oauth2`.
+- Several providers at once, each with its own client. There is no shared client for the project, as the redirect address belongs to each installation: the administrator registers the application with each provider.
+- The order: generic OIDC (which covers Google) first, then Apple, then Yandex ID.
+- Creating a user on first sign-in is an administrator setting, off by default. When it is on, anyone the provider lets in is created, with the role user; the public demo uses this. An optional list of emails and domains narrows it to those, and the administration page says plainly that with no list the setting is open registration.
+- The password form stays visible to everyone. With password sign-in turned off for ordinary users, the form accepts only administrators, which is the way in when a provider is unavailable.
+- A proxy header (`Remote-User`) is left for later.
+
+Checked against the code on 2026-11-24:
+- The session cookie is `SameSite=Lax` (`session.go`), so the redirect back from a provider carries it. Apple answers with a cross-site POST (`form_post`), so the state cookie for Apple must be `SameSite=None; Secure`.
+- Creating a WebDAV app password asks for no account password, so users without a password can make them. Changing the password asks for the current one: a user without a password needs a "set a password" path with no current password, and signing in again at the provider as the proof.
+- The sign-in handler creates the session inline, with the activity event of [improvement 22](#22-demo-activity-log). It becomes one function that password, OIDC and TOTP sign-ins all call, so each one starts a session with an activity session ID and records its own outcome (callback rejected, user disabled, code wrong).
+- The configuration (`internal/config`) has no public base URL and no signing secret.
+
+Built on 2026-11-24, with these differences from the plan below:
+- The routes are under `/api/v1/auth/oidc/{id}/login` and `/callback`, as the rest of the API is, and the provider's id is its number in `OIDC_<n>_*`. `GET /api/v1/auth/options` lists the buttons for the sign-in page, `GET`/`PUT /api/v1/settings/sign-in` hold the settings, and `GET /api/v1/me/identities` and `DELETE /api/v1/me/identities/{id}` the linked providers.
+- A first sign-in never takes over an existing account by its email, even a verified one. An existing user links a provider from the profile, signed in with the password (`login?link=1`, which carries the user in the signed cookie and checks it again on return), as the take-over by a claimed address was the risk the review raised. A link that fails ends on the profile page with the reason, a sign-in on the sign-in page. A first sign-in with an unknown identity creates an account when the settings allow, and otherwise ends with `no_account`. `users.email` is kept for display and filled for created accounts.
+- The state cookie is `SameSite=Lax`, which the redirect back from Google needs; Apple's `form_post` will need `None`.
+- All sign-ins start their session in `startSession` and record a `login` event in the journal of improvement 22 with the outcome (a rejected return records `rejected`, a failure `error`); a link to an account records none.
+- A user created by a provider has an empty password hash, which no password matches. Such a user cannot yet set a password: changing it asks for the current one. The profile hides the password button for such an account (`hasPassword` on the user).
+- A provider with a private certificate authority is not accepted yet.
+
+The plan:
+
+1. **Configuration.** One block of environment variables per provider (`OIDC_1_ISSUER`, `OIDC_1_CLIENT_ID`, `OIDC_1_CLIENT_SECRET`, `OIDC_1_NAME`, and so on), because the secret belongs in the environment and a wrong value must not be changeable from the page it would lock. A public base URL (`PUBLIC_URL`), required once any provider is set, and a secret (`SESSION_SECRET`) that signs the state cookie. When either is missing the application refuses to start with OIDC configured and says which. The administration page shows each provider as on or off, the redirect address to register, and the settings of the plan above. The compose files, the README quick start and `docs/deployment.md` get the new variables.
+2. **Flow.** `GET /auth/oidc/{provider}/login` stores state, nonce and the PKCE verifier in a signed cookie that lives ten minutes and redirects; `/callback` checks them, exchanges the code, verifies the ID token (signature, issuer, audience, nonce, expiry) and starts the session through the shared function. The redirect address is built from `PUBLIC_URL`, never from request headers, as the application sits behind Caddy and may sit behind a VPS.
+3. **Linking.** A table `user_identities` (user, issuer, subject, email at the last sign-in, created), unique on issuer and subject, so one user can have several providers. The key is never the email. A first sign-in finds the user by identity; otherwise by a verified email that matches an existing user, then asks to confirm with the account password when the user has one, as a provider that lets anyone claim an address could take over an account. Otherwise it creates a user if the setting allows and the list admits the address. An address with `email_verified` false is never matched or admitted.
+4. **Login for a created user.** From `preferred_username`, else the part of the email before `@`, else `name`; reduced to what `ValidateLogin` allows and given a numeric suffix until unique. Apple may give only a relay address and no name, so the fallback ends in `user-` and a short random string.
+5. **Disabled users and sessions.** A disabled user is refused with the same message as for a password. Signing out ends only the application's session. A user with no password and one identity cannot unlink it.
+6. **Interface.** A button per provider on the sign-in page, a list of linked identities in the profile, strings in all ten language files.
+7. **Deployment note.** Google accepts only HTTPS redirect addresses on a public domain, so an installation reached by an IP or `truenas.local` cannot use it; Authelia, Authentik and Keycloak have no such limit. `docs/deployment.md` says so.
+   Checking by hand (written on 2026-11-24; the provider-side limits come from memory and are not verified):
+   - The application's own certificate may be self-signed: the browser, not the provider, returns to `/api/v1/auth/oidc/{id}/callback`, so accepting the warning once is enough, and the application's requests to Google use Google's certificate. The development stack at `https://127.0.0.1` can be used.
+   - `PUBLIC_URL` must give exactly the redirect address registered with the provider, port included.
+   - Google is said to accept `http://localhost` and `http://127.0.0.1` for development, so `PUBLIC_URL=http://localhost:8080` with `COOKIE_INSECURE=true` also works. A LAN address or `truenas.local` is refused.
+   - Apple accepts neither localhost nor an IP address: checking it needs a real domain with HTTPS, through a tunnel or the VPS.
+   - A self-hosted provider with a self-signed certificate does not work yet: discovery uses Go's default HTTP client, which rejects it. Either its CA goes into the system store of the container, or the code takes a CA file (`oidc.ClientContext`); left for when someone needs it.
+   - The backend tests use a fake provider on `httptest` and need no network.
+8. **Tests.** A fake provider in the backend tests (discovery, keys, token endpoint): a first sign-in with and without creation, with and without a list, an existing user matched by identity and by a verified email, a wrong state, nonce, audience and expiry, an unverified email, a disabled user, the password form closed to ordinary users, and the activity events. No browser test: it would need a provider container.
+9. **Apple (later step).** The user has a paid developer account (2026-11-24). The client secret is a JWT signed with the application's own ES256 key and renewed at least every six months, the answer comes as `form_post`, the name arrives only on the first sign-in, and the address may be a relay. Written when the first step is done.
+10. **Yandex ID (later step).** Not described until its documentation has been read: whether it publishes a discovery document and an ID token is not checked.
+
+## 24. Two-factor sign-in (TOTP)
+
+**Status:** draft plan, reviewed on 2026-11-24.
+
+A second step after the password: a time-based code from an authenticator app, with one-time recovery codes. Decided on 2026-11-24: TOTP and recovery codes only, no WebAuthn; `github.com/pquerna/otp` for the codes and the QR picture, made on the server. It does not apply to an OIDC sign-in, where the provider answers for the second factor, nor to WebDAV app passwords, which are random and revocable per device.
+
+Checked against the code on 2026-11-24: password sign-in has no rate limit today, so limiting attempts is new work here and is not assumed; without it a six-digit code can be guessed.
+
+1. **Limiting attempts.** Done on 2026-11-24 for the password form (`auth.Limiter`, used by `login`): after 5 wrong passwords for one login the login waits 30 seconds, then 1, 2, 4 minutes and so on up to 15, answers 429 with `Retry-After`, and is forgotten an hour after its last failure or after a correct password. The key is the login, whether or not the account exists, so the answer does not tell them apart. It is not per address, as the application behind Caddy sees only the proxy, and a VPS in front would add a second hop; the cost is that someone can keep a known login waiting, while sessions, OIDC and the administrator's other logins are not affected. The state is in memory. The code step of sign-in uses the same limiter under its own key.
+2. **Secret storage.** The secret has to be readable by the server, so it is encrypted with AES-GCM under a key from the environment (`TOTP_KEY`); 2FA cannot be enabled while it is missing. The key is needed to restore a database on another machine, so `docs/deployment.md` says to keep it with the backups, and a restore without it turns 2FA off for those users and tells the administrator.
+3. **Enrolment.** The profile shows the QR code and the secret, and turns 2FA on only after a correct code. Ten recovery codes are shown once and stored as SHA-256 hashes, as app passwords are.
+4. **Sign-in.** A correct password returns a pending token valid for five minutes instead of a session; `POST /auth/totp` with that token and a code starts the session through the shared function of improvement 23. A code is accepted once per time step, with one step of clock drift.
+5. **Turning off and loss.** Turning it off asks for the password and a code. An administrator can reset a user's 2FA on the users page, which is the recovery when the codes are lost. Changing the password keeps 2FA.
+6. **Interface and tests.** A step on the sign-in page, a section in the profile, strings in all ten languages. Backend tests for the pending token's expiry, a reused code, a recovery code used twice, the rate limit, the administrator's reset, and a sign-in by OIDC that skips the step.

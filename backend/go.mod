@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	github.com/barasher/go-exiftool v1.10.0
+	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/davidbyttow/govips/v2 v2.20.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/pressly/goose/v3 v3.29.0
@@ -12,9 +13,11 @@ require (
 	github.com/riverqueue/river/rivertype v0.50.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/net v0.61.0
+	golang.org/x/oauth2 v0.38.0
 )
 
 require (
+	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.3 // indirect

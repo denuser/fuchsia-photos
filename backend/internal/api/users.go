@@ -17,11 +17,13 @@ import (
 const pgUniqueViolation = "23505"
 
 type userJSON struct {
-	ID        int64     `json:"id"`
-	Login     string    `json:"login"`
-	Role      string    `json:"role"`
-	Disabled  bool      `json:"disabled"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID       int64  `json:"id"`
+	Login    string `json:"login"`
+	Role     string `json:"role"`
+	Disabled bool   `json:"disabled"`
+	// HasPassword is false for an account made by a sign-in through a provider, until it sets one.
+	HasPassword bool      `json:"hasPassword"`
+	CreatedAt   time.Time `json:"createdAt"`
 	// SharedIncludesAlbums adds photos of shared albums to the user's list of shared photos.
 	SharedIncludesAlbums bool `json:"sharedIncludesAlbums"`
 	// ViewerShowsOriginals makes the viewer show original files instead of viewer previews.
@@ -53,6 +55,7 @@ func toUserJSON(u store.User) userJSON {
 	return userJSON{
 		ID:                   u.ID,
 		Login:                u.Login,
+		HasPassword:          u.PasswordHash != "",
 		Role:                 u.Role,
 		Disabled:             u.Disabled,
 		CreatedAt:            u.CreatedAt,

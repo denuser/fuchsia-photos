@@ -233,6 +233,9 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		ML:                       embedder,
 		Transcode:                copies,
 		CookieSecure:             cfg.CookieSecure,
+		PublicURL:                cfg.PublicURL,
+		SessionSecret:            cfg.SessionSecret,
+		OIDCProviders:            cfg.OIDC,
 		WebDAV:                   &webdav.Handler{Queries: store.New(pool), Ingest: ingester, Layout: layout},
 		Static:                   static,
 	})

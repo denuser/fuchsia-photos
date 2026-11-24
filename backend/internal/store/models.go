@@ -214,6 +214,13 @@ type Session struct {
 	ActivityID *string
 }
 
+type SignInSetting struct {
+	ID                 int16
+	CreateUsers        bool
+	Allowed            []string
+	PasswordAdminsOnly bool
+}
+
 type Tag struct {
 	ID        int64
 	OwnerID   int64
@@ -249,6 +256,16 @@ type User struct {
 	TimelineIncludesShared   bool
 	Language                 string
 	GridSize                 string
+	Email                    string
+}
+
+type UserIdentity struct {
+	ID        int64
+	UserID    int64
+	Issuer    string
+	Subject   string
+	Email     string
+	CreatedAt time.Time
 }
 
 type VideoSetting struct {

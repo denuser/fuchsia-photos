@@ -4,8 +4,10 @@ package config
 import (
 	"errors"
 	"log/slog"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -34,7 +36,26 @@ type Config struct {
 	// copies of videos on the graphics. Without it no copies are made.
 	TranscoderURL   string
 	TranscoderToken string
+	// PublicURL is the address people open the application at, such as https://photos.example.org.
+	// Redirect addresses for sign-in through a provider are built from it, never from request headers.
+	PublicURL string
+	// SessionSecret signs the short-lived cookie that carries a sign-in through a provider.
+	SessionSecret string
+	// OIDC lists the providers people may sign in with.
+	OIDC []OIDCProvider
 }
+
+// OIDCProvider is one OpenID Connect provider, set by OIDC_<n>_* variables with n from 1.
+type OIDCProvider struct {
+	// ID is n, the provider's number, which appears in the redirect address.
+	ID           string
+	Name         string
+	Issuer       string
+	ClientID     string
+	ClientSecret string
+}
+
+const maxOIDCProviders = 9
 
 // Load reads the settings from the environment.
 func Load() (Config, error) {
@@ -58,6 +79,37 @@ func Load() (Config, error) {
 	}
 	if cfg.TranscoderURL != "" && cfg.TranscoderToken == "" {
 		return Config{}, errors.New("TRANSCODER_TOKEN is required with TRANSCODER_URL")
+	}
+	cfg.PublicURL = strings.TrimRight(os.Getenv("PUBLIC_URL"), "/")
+	cfg.SessionSecret = os.Getenv("SESSION_SECRET")
+	for n := 1; n <= maxOIDCProviders; n++ {
+		prefix := "OIDC_" + strconv.Itoa(n) + "_"
+		issuer := os.Getenv(prefix + "ISSUER")
+		if issuer == "" {
+			if os.Getenv(prefix+"CLIENT_ID") != "" {
+				return Config{}, errors.New(prefix + "ISSUER is required with " + prefix + "CLIENT_ID")
+			}
+			continue
+		}
+		p := OIDCProvider{
+			ID:           strconv.Itoa(n),
+			Name:         getenv(prefix+"NAME", "Single sign-on"),
+			Issuer:       issuer,
+			ClientID:     os.Getenv(prefix + "CLIENT_ID"),
+			ClientSecret: os.Getenv(prefix + "CLIENT_SECRET"),
+		}
+		if p.ClientID == "" || p.ClientSecret == "" {
+			return Config{}, errors.New(prefix + "CLIENT_ID and " + prefix + "CLIENT_SECRET are required with " + prefix + "ISSUER")
+		}
+		cfg.OIDC = append(cfg.OIDC, p)
+	}
+	if len(cfg.OIDC) > 0 {
+		if u, err := url.Parse(cfg.PublicURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.Path != "" {
+			return Config{}, errors.New("PUBLIC_URL is required with OIDC_1_ISSUER and must look like https://photos.example.org")
+		}
+		if len(cfg.SessionSecret) < 32 {
+			return Config{}, errors.New("SESSION_SECRET of at least 32 characters is required with OIDC_1_ISSUER")
+		}
 	}
 	workers, err := strconv.Atoi(getenv("WORKERS", "3"))
 	if err != nil || workers < 1 {
