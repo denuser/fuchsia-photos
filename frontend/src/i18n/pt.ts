@@ -54,6 +54,8 @@ const pt: typeof en = {
     schemes: { system: 'Sistema', light: 'Claro', dark: 'Escuro' },
     contrast: 'Modo de contraste',
     contrasts: { system: 'Sistema', default: 'Padrão', high: 'Alto contraste', glass: 'Vidro' },
+    glassColor: 'Cor do vidro',
+    glassColors: { fuchsia: 'Fúcsia', orchid: 'Orquídea', raspberry: 'Framboesa', twilight: 'Crepúsculo', rose: 'Rosa', plum: 'Ameixa' },
   },
   pageHeader: {
     breadcrumb: 'Trilha de navegação',

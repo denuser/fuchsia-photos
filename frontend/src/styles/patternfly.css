@@ -486,11 +486,52 @@
   /* Glass: the page shows a soft gradient, and the surfaces above it let it
      through with a blur. */
 
+  /* The tint is one of six presets, chosen in the appearance menu and set as
+     data-glass-color on html. Each gives the three colors of the gradient as
+     RGB channels; the default is the theme's own fuchsia over violet. They are
+     set on .v-application, where the theme's colors are defined. */
+
+  .v-application {
+    --glass-a: var(--v-theme-primary);
+    --glass-b: 94, 64, 190;
+    --glass-c: var(--v-theme-primary);
+  }
+
+  html[data-glass-color='orchid'] .v-application {
+    --glass-a: 186, 104, 200;
+    --glass-b: 103, 80, 164;
+    --glass-c: 216, 150, 230;
+  }
+
+  html[data-glass-color='raspberry'] .v-application {
+    --glass-a: 219, 39, 119;
+    --glass-b: 136, 19, 55;
+    --glass-c: 244, 114, 182;
+  }
+
+  html[data-glass-color='twilight'] .v-application {
+    --glass-a: 192, 38, 211;
+    --glass-b: 49, 46, 129;
+    --glass-c: 99, 102, 241;
+  }
+
+  html[data-glass-color='rose'] .v-application {
+    --glass-a: 244, 114, 182;
+    --glass-b: 253, 164, 175;
+    --glass-c: 251, 207, 232;
+  }
+
+  html[data-glass-color='plum'] .v-application {
+    --glass-a: 134, 25, 143;
+    --glass-b: 59, 7, 100;
+    --glass-c: 162, 28, 175;
+  }
+
   html.glass .v-application {
     background:
-      radial-gradient(70% 60% at 0% 0%, rgba(var(--v-theme-primary), 0.6), transparent 70%),
-      radial-gradient(60% 70% at 100% 100%, rgba(94, 64, 190, 0.55), transparent 70%),
-      radial-gradient(40% 40% at 70% 20%, rgba(var(--v-theme-primary), 0.3), transparent 70%),
+      radial-gradient(70% 60% at 0% 0%, rgba(var(--glass-a), 0.6), transparent 70%),
+      radial-gradient(60% 70% at 100% 100%, rgba(var(--glass-b), 0.55), transparent 70%),
+      radial-gradient(40% 40% at 70% 20%, rgba(var(--glass-c), 0.3), transparent 70%),
       rgb(var(--v-theme-background));
   }
 

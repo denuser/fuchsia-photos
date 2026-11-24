@@ -54,6 +54,8 @@ const zh: typeof en = {
     schemes: { system: '跟随系统', light: '浅色', dark: '深色' },
     contrast: '对比度模式',
     contrasts: { system: '跟随系统', default: '默认', high: '高对比度', glass: '玻璃' },
+    glassColor: '玻璃颜色',
+    glassColors: { fuchsia: '紫红', orchid: '兰花紫', raspberry: '覆盆子红', twilight: '暮色', rose: '玫瑰', plum: '梅子紫' },
   },
   pageHeader: {
     breadcrumb: '面包屑导航',

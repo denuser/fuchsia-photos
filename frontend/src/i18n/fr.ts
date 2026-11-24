@@ -54,6 +54,8 @@ const fr: typeof en = {
     schemes: { system: 'Système', light: 'Clair', dark: 'Sombre' },
     contrast: 'Mode de contraste',
     contrasts: { system: 'Système', default: 'Par défaut', high: 'Contraste élevé', glass: 'Verre' },
+    glassColor: 'Couleur du verre',
+    glassColors: { fuchsia: 'Fuchsia', orchid: 'Orchidée', raspberry: 'Framboise', twilight: 'Crépuscule', rose: 'Rose', plum: 'Prune' },
   },
   pageHeader: {
     breadcrumb: 'Fil d’Ariane',

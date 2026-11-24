@@ -54,6 +54,8 @@ const ru: typeof en = {
     schemes: { system: 'Как в системе', light: 'Светлая', dark: 'Тёмная' },
     contrast: 'Контрастность',
     contrasts: { system: 'Как в системе', default: 'Обычная', high: 'Высокая', glass: 'Стекло' },
+    glassColor: 'Цвет стекла',
+    glassColors: { fuchsia: 'Фуксия', orchid: 'Орхидея', raspberry: 'Малина', twilight: 'Сумерки', rose: 'Роза', plum: 'Слива' },
   },
   pageHeader: {
     breadcrumb: 'Навигационная цепочка',

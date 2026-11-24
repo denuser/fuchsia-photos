@@ -54,6 +54,8 @@ const ko: typeof en = {
     schemes: { system: '시스템', light: '밝게', dark: '어둡게' },
     contrast: '대비 모드',
     contrasts: { system: '시스템', default: '기본', high: '고대비', glass: '유리' },
+    glassColor: '유리 색상',
+    glassColors: { fuchsia: '푸크시아', orchid: '오키드', raspberry: '라즈베리', twilight: '트와일라잇', rose: '로즈', plum: '플럼' },
   },
   pageHeader: {
     breadcrumb: '탐색 경로',

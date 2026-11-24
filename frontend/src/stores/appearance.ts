@@ -6,9 +6,12 @@ import { computed, ref, watch } from 'vue'
 
 export type Scheme = 'system' | 'light' | 'dark'
 export type Contrast = 'system' | 'default' | 'high' | 'glass'
+// The tint of the glass background, one of the presets in patternfly.css.
+export type GlassColor = 'fuchsia' | 'orchid' | 'raspberry' | 'twilight' | 'rose' | 'plum'
 
 const schemes: Scheme[] = ['system', 'light', 'dark']
 const contrasts: Contrast[] = ['system', 'default', 'high', 'glass']
+export const glassColors: GlassColor[] = ['fuchsia', 'orchid', 'raspberry', 'twilight', 'rose', 'plum']
 
 function stored<T extends string>(key: string, allowed: T[]): T {
   const value = localStorage.getItem(key) as T | null
@@ -28,17 +31,23 @@ function applyGlass(contrast: Contrast) {
   document.documentElement.classList.toggle('glass', contrast === 'glass')
 }
 
+function applyGlassColor(color: GlassColor) {
+  document.documentElement.dataset.glassColor = color
+}
+
 // The theme to start with, read before the app mounts so the page does not
 // flash in the wrong colors.
 export function initialThemeName() {
   const contrast = stored('contrast', contrasts)
   applyGlass(contrast)
+  applyGlassColor(stored('glassColor', glassColors))
   return themeName(stored('scheme', schemes), contrast, prefersDark.matches, prefersMoreContrast.matches)
 }
 
 export const useAppearanceStore = defineStore('appearance', () => {
   const scheme = ref(stored('scheme', schemes))
   const contrast = ref(stored('contrast', contrasts))
+  const glassColor = ref(stored('glassColor', glassColors))
   const systemDark = ref(prefersDark.matches)
   const systemMore = ref(prefersMoreContrast.matches)
 
@@ -51,7 +60,12 @@ export const useAppearanceStore = defineStore('appearance', () => {
     applyGlass(value)
   })
 
+  watch(glassColor, (value) => {
+    localStorage.setItem('glassColor', value)
+    applyGlassColor(value)
+  })
+
   const theme = computed(() => themeName(scheme.value, contrast.value, systemDark.value, systemMore.value))
 
-  return { scheme, contrast, theme }
+  return { scheme, contrast, glassColor, theme }
 })

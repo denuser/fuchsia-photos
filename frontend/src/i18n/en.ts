@@ -53,6 +53,8 @@ export default {
     schemes: { system: 'System', light: 'Light', dark: 'Dark' },
     contrast: 'Contrast mode',
     contrasts: { system: 'System', default: 'Default', high: 'High contrast', glass: 'Glass' },
+    glassColor: 'Glass color',
+    glassColors: { fuchsia: 'Fuchsia', orchid: 'Orchid', raspberry: 'Raspberry', twilight: 'Twilight', rose: 'Rose', plum: 'Plum' },
   },
   pageHeader: {
     breadcrumb: 'Breadcrumb',

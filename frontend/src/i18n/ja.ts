@@ -54,6 +54,8 @@ const ja: typeof en = {
     schemes: { system: 'システム', light: 'ライト', dark: 'ダーク' },
     contrast: 'コントラストモード',
     contrasts: { system: 'システム', default: '標準', high: 'ハイコントラスト', glass: 'ガラス' },
+    glassColor: 'ガラスの色',
+    glassColors: { fuchsia: 'フューシャ', orchid: 'オーキッド', raspberry: 'ラズベリー', twilight: 'トワイライト', rose: 'ローズ', plum: 'プラム' },
   },
   pageHeader: {
     breadcrumb: 'パンくずリスト',

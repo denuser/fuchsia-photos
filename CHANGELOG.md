@@ -4,6 +4,8 @@ Changes in each release. Add changes under "Unreleased" as they are made; `make 
 
 ## Unreleased
 
+- Six tints for the Glass background (Fuchsia, Orchid, Raspberry, Twilight, Rose, Plum), chosen in the appearance menu once Glass is on and kept per device. Tables no longer draw a solid sheet over the glass panel.
+
 ## 0.4.0 - 2026-11-24
 
 - An optional activity journal for the public demo: with `ACTIVITY_LOG=true`, web sign-ins and uploads are recorded in the `activity` schema of PostgreSQL, with the outcome, the browser and system family and a random session ID, and without IP addresses or credentials. Administrators read it on a new Activity journal page. It is off by default. See [Demo activity journal](docs/development.md#demo-activity-journal).

@@ -53,6 +53,8 @@ const de: typeof en = {
     schemes: { system: 'System', light: 'Hell', dark: 'Dunkel' },
     contrast: 'Kontrastmodus',
     contrasts: { system: 'System', default: 'Standard', high: 'Hoher Kontrast', glass: 'Glas' },
+    glassColor: 'Glasfarbe',
+    glassColors: { fuchsia: 'Fuchsia', orchid: 'Orchidee', raspberry: 'Himbeere', twilight: 'Dämmerung', rose: 'Rose', plum: 'Pflaume' },
   },
   pageHeader: {
     breadcrumb: 'Brotkrümelnavigation',
