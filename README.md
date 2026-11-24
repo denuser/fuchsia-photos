@@ -55,16 +55,16 @@ Supported formats: JPEG, PNG, WebP and HEIC photos, MP4 and MOV videos, and the 
 
 ## Quick start
 
-This runs release `0.3.0` with PostgreSQL, the nightly backup and Caddy for HTTPS. Run the commands on the NAS:
+This runs release `0.4.0` with PostgreSQL, the nightly backup and Caddy for HTTPS. Run the commands on the NAS:
 
 ```sh
 mkdir magellanica-photos && cd magellanica-photos
 curl -fsSL -o docker-compose.yml \
-  https://raw.githubusercontent.com/magellanica-app/magellanica-photos/v0.3.0/deploy/compose.image.yaml
+  https://raw.githubusercontent.com/magellanica-app/magellanica-photos/v0.4.0/deploy/compose.image.yaml
 cat > .env <<'ENV'
 POSTGRES_PASSWORD=change-me
 SITE_ADDRESS=192.168.0.10
-IMAGE_TAG=0.3.0
+IMAGE_TAG=0.4.0
 ENV
 mkdir -p data/library data/cache data/import
 sudo chown 1000:1000 data/library data/cache
