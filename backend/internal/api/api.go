@@ -32,7 +32,9 @@ type Pinger interface {
 
 // Deps are the handler's dependencies.
 type Deps struct {
-	DB Pinger
+	ActivityLog              bool
+	ActivityMaintenanceToken string
+	DB                       Pinger
 	// Pool reads the job queue, which the generated queries do not cover.
 	Pool    *pgxpool.Pool
 	Queries *store.Queries
@@ -84,6 +86,8 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("POST /api/v1/users", s.admin(s.createUser))
 	mux.HandleFunc("GET /api/v1/users/directory", s.authenticated(s.listUserDirectory))
 	mux.HandleFunc("PATCH /api/v1/users/{id}", s.admin(s.updateUser))
+
+	mux.HandleFunc("GET /api/v1/activity", s.admin(s.getActivity))
 
 	mux.HandleFunc("GET /api/v1/photos", s.authenticated(s.listPhotos))
 	mux.HandleFunc("POST /api/v1/photos", s.authenticated(s.uploadPhoto))

@@ -2,6 +2,7 @@ import createClient from 'openapi-fetch'
 
 import type { components, paths } from './schema'
 
+export type Activity = components['schemas']['Activity']
 export type Album = components['schemas']['Album']
 export type AppPassword = components['schemas']['AppPassword']
 export type WebDAVAlbum = components['schemas']['WebDAVAlbum']

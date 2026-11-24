@@ -71,6 +71,9 @@ func (s *Service) limit(mime string) int64 {
 // Result describes an ingested photo.
 type Result struct {
 	Photo store.Photo
+	// MIME and Size describe the input to Ingest, including a duplicate.
+	MIME string
+	Size int64
 	// Duplicate means the owner already had this photo and nothing was added.
 	Duplicate bool
 	// Restored means the duplicate was in the trash and has been taken out of it.
@@ -127,13 +130,15 @@ func (s *Service) ingest(ctx context.Context, ownerID int64, r io.Reader, name s
 		return Result{}, ErrTooLarge
 	}
 
-	return s.store(ctx, tmp, store.InsertPhotoParams{
+	result, err := s.store(ctx, tmp, store.InsertPhotoParams{
 		OwnerID:      ownerID,
 		Sha256:       sum,
 		Mime:         mime,
 		Size:         size,
 		OriginalName: cleanName(name),
 	}, priority, keepDeleted)
+	result.MIME, result.Size = mime, size
+	return result, err
 }
 
 // Import adds a photo found by a folder scan. Unlike an upload, it leaves photos

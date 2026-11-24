@@ -9,6 +9,7 @@ import ArchiveView from './views/ArchiveView.vue'
 import FavoritesView from './views/FavoritesView.vue'
 import MemoriesView from './views/MemoriesView.vue'
 import ImportView from './views/ImportView.vue'
+import ActivityView from './views/ActivityView.vue'
 import LoginView from './views/LoginView.vue'
 import ProfileView from './views/ProfileView.vue'
 import SearchView from './views/SearchView.vue'
@@ -38,6 +39,7 @@ export const router = createRouter({
     { path: '/all', component: AllPhotosView, meta: { admin: true } },
     { path: '/import', component: ImportView, meta: { admin: true } },
     { path: '/users', component: UsersView, meta: { admin: true } },
+    { path: '/activity', component: ActivityView, meta: { admin: true } },
     { path: '/admin', component: AdminView, meta: { admin: true } },
     { path: '/:rest(.*)*', redirect: '/' },
   ],

@@ -11,17 +11,23 @@ import (
 )
 
 const createSession = `-- name: CreateSession :exec
-INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)
+INSERT INTO sessions (token_hash, user_id, expires_at, activity_id) VALUES ($1, $2, $3, $4)
 `
 
 type CreateSessionParams struct {
-	TokenHash []byte
-	UserID    int64
-	ExpiresAt time.Time
+	TokenHash  []byte
+	UserID     int64
+	ExpiresAt  time.Time
+	ActivityID *string
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
-	_, err := q.db.Exec(ctx, createSession, arg.TokenHash, arg.UserID, arg.ExpiresAt)
+	_, err := q.db.Exec(ctx, createSession,
+		arg.TokenHash,
+		arg.UserID,
+		arg.ExpiresAt,
+		arg.ActivityID,
+	)
 	return err
 }
 
@@ -67,30 +73,36 @@ func (q *Queries) DeleteUserSessionsExcept(ctx context.Context, arg DeleteUserSe
 }
 
 const getSessionUser = `-- name: GetSessionUser :one
-SELECT u.id, u.login, u.password_hash, u.role, u.disabled, u.created_at, u.shared_includes_albums, u.viewer_shows_originals, u.viewer_hidden_fields, u.navigation_hidden_on_phones, u.grid_squares, u.timeline_includes_shared, u.language, u.grid_size
+SELECT u.id, u.login, u.password_hash, u.role, u.disabled, u.created_at, u.shared_includes_albums, u.viewer_shows_originals, u.viewer_hidden_fields, u.navigation_hidden_on_phones, u.grid_squares, u.timeline_includes_shared, u.language, u.grid_size, s.activity_id
 FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT u.disabled
 `
 
-func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (User, error) {
+type GetSessionUserRow struct {
+	User       User
+	ActivityID *string
+}
+
+func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (GetSessionUserRow, error) {
 	row := q.db.QueryRow(ctx, getSessionUser, tokenHash)
-	var i User
+	var i GetSessionUserRow
 	err := row.Scan(
-		&i.ID,
-		&i.Login,
-		&i.PasswordHash,
-		&i.Role,
-		&i.Disabled,
-		&i.CreatedAt,
-		&i.SharedIncludesAlbums,
-		&i.ViewerShowsOriginals,
-		&i.ViewerHiddenFields,
-		&i.NavigationHiddenOnPhones,
-		&i.GridSquares,
-		&i.TimelineIncludesShared,
-		&i.Language,
-		&i.GridSize,
+		&i.User.ID,
+		&i.User.Login,
+		&i.User.PasswordHash,
+		&i.User.Role,
+		&i.User.Disabled,
+		&i.User.CreatedAt,
+		&i.User.SharedIncludesAlbums,
+		&i.User.ViewerShowsOriginals,
+		&i.User.ViewerHiddenFields,
+		&i.User.NavigationHiddenOnPhones,
+		&i.User.GridSquares,
+		&i.User.TimelineIncludesShared,
+		&i.User.Language,
+		&i.User.GridSize,
+		&i.ActivityID,
 	)
 	return i, err
 }
