@@ -501,6 +501,11 @@
     backdrop-filter: blur(16px);
   }
 
+  /* A table keeps the panel's glass rather than drawing a solid sheet over it. */
+  html.glass .v-table {
+    background: transparent;
+  }
+
   html.glass .v-navigation-drawer .v-list-item--active {
     background: rgba(var(--v-theme-surface), 0.6);
   }
