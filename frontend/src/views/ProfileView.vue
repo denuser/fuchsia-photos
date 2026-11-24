@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
-import { api, type AppPassword, type GridSize, type Language, type ViewerField, type WebDAVAlbum } from '../api/client'
+import {
+  api,
+  type AppPassword,
+  type GridSize,
+  type Identity,
+  type Language,
+  type SignInOptions,
+  type ViewerField,
+  type WebDAVAlbum,
+} from '../api/client'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
 import AppPasswordDialog from '../components/AppPasswordDialog.vue'
@@ -127,9 +137,73 @@ function formatUsed(value: string | null) {
   return value ? formatDate(value) : t('profile.never')
 }
 
+const identities = ref<Identity[]>([])
+const identitiesLoaded = ref(false)
+const providers = ref<SignInOptions['providers']>([])
+const unlinkOpen = ref(false)
+const unlinking = ref<Identity>()
+
+async function loadIdentities() {
+  const [list, options] = await Promise.all([api.GET('/me/identities'), api.GET('/auth/options')])
+  if (!list.data || !options.data) {
+    error.value = t('profile.providersFailed')
+    return
+  }
+  identities.value = list.data
+  providers.value = options.data.providers
+  identitiesLoaded.value = true
+}
+
+// The issuer is an address, which says enough about who the provider is.
+function issuerName(issuer: string) {
+  try {
+    return new URL(issuer).host
+  } catch {
+    return issuer
+  }
+}
+
+function startUnlink(identity: Identity) {
+  unlinking.value = identity
+  unlinkOpen.value = true
+}
+
+async function unlinkIdentity() {
+  const identity = unlinking.value
+  if (!identity) {
+    return
+  }
+  const { error: failure } = await api.DELETE('/me/identities/{id}', { params: { path: { id: identity.id } } })
+  if (failure) {
+    error.value = apiError(failure)
+    return
+  }
+  identities.value = identities.value.filter((i) => i.id !== identity.id)
+  notices.notify(t('profile.providerUnlinked'))
+}
+
+// A link made at a provider comes back here with its outcome in the address.
+const route = useRoute()
+const router = useRouter()
+const linkErrors = ['expired', 'denied', 'unavailable', 'taken', 'failed'] as const
+function showLinkOutcome() {
+  if (route.query.linked) {
+    notices.notify(t('profile.providerLinked'))
+  }
+  const code = String(route.query.error ?? '').replace(/^oidc_/, '')
+  if ((linkErrors as readonly string[]).includes(code)) {
+    error.value = t(`login.oidcErrors.${code as (typeof linkErrors)[number]}`)
+  }
+  if (route.query.linked || route.query.error) {
+    void router.replace({ path: route.path })
+  }
+}
+
 onMounted(() => {
+  showLinkOutcome()
   void loadAppPasswords()
   void loadFolderAlbums()
+  void loadIdentities()
 })
 </script>
 
@@ -230,8 +304,56 @@ onMounted(() => {
       />
 
       <h2 class="mb-2">{{ t('profile.password') }}</h2>
-      <v-btn prepend-icon="fa-key" variant="tonal" :text="t('changePassword.title')" class="mb-6" @click="passwordDialog = true" />
-      <ChangePasswordDialog v-model="passwordDialog" />
+      <div v-if="!auth.user.hasPassword" class="text-medium-emphasis mb-6">{{ t('profile.noPassword') }}</div>
+      <template v-else>
+        <v-btn prepend-icon="fa-key" variant="tonal" :text="t('changePassword.title')" class="mb-6" @click="passwordDialog = true" />
+        <ChangePasswordDialog v-model="passwordDialog" />
+      </template>
+
+      <template v-if="providers.length > 0 || identities.length > 0">
+        <h2 class="mb-2">{{ t('profile.providers') }}</h2>
+        <div class="text-medium-emphasis mb-4">{{ t('profile.providersHint') }}</div>
+        <v-table v-if="identities.length > 0" class="mb-4">
+          <thead>
+            <tr>
+              <th>{{ t('profile.provider') }}</th>
+              <th>{{ t('profile.email') }}</th>
+              <th>{{ t('profile.created') }}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="identity in identities" :key="identity.id" data-testid="identity">
+              <td>{{ issuerName(identity.issuer) }}</td>
+              <td>{{ identity.email }}</td>
+              <td>{{ formatDate(identity.createdAt) }}</td>
+              <td class="text-right">
+                <v-btn icon="fa-link-slash" size="small" variant="text" :aria-label="t('profile.unlinkProvider', { name: issuerName(identity.issuer) })" @click="startUnlink(identity)" />
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
+        <div v-else-if="identitiesLoaded" class="text-medium-emphasis mb-4">{{ t('profile.noProviders') }}</div>
+        <div class="mb-6">
+          <v-btn
+            v-for="provider in providers"
+            :key="provider.id"
+            :href="`/api/v1/auth/oidc/${provider.id}/login?link=1`"
+            prepend-icon="fa-link"
+            variant="tonal"
+            class="mr-2 mb-2"
+            data-testid="link-provider"
+            :text="t('profile.linkProvider', { name: provider.name })"
+          />
+        </div>
+        <ConfirmDialog
+          v-model="unlinkOpen"
+          :title="t('profile.unlinkTitle')"
+          :text="t('profile.unlinkText', { name: unlinking ? issuerName(unlinking.issuer) : '' })"
+          :action="t('profile.unlinkAction')"
+          @confirm="unlinkIdentity"
+        />
+      </template>
 
       <h2 class="mb-2">{{ t('profile.webdav') }}</h2>
       <div class="text-medium-emphasis mb-4">

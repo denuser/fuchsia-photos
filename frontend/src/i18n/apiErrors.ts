@@ -30,6 +30,10 @@ const known: Known[] = [
   [/^album not found$/, () => t('apiErrors.albumNotFound')],
   [/^not found$/, () => t('apiErrors.notFound')],
   [/^administrators only$/, () => t('apiErrors.adminsOnly')],
+  [/^too many attempts, try again later$/, () => t('apiErrors.tooManyAttempts')],
+  [/^this is the only way to sign in to the account$/, () => t('apiErrors.onlyWayIn')],
+  [/^"(.*)" is not an email address or a domain$/, (m) => t('apiErrors.allowedEntry', { entry: m[1] })],
+  [/^the list is too long$/, () => t('apiErrors.listTooLong')],
   [/^internal error$/, () => t('apiErrors.internal')],
 ]
 

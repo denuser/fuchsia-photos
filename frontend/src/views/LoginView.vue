@@ -1,18 +1,37 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import logo from '../assets/logo.png'
+import { api, type SignInOptions } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import { t } from '../i18n'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
+
+// A sign-in through a provider that failed comes back here with the reason in the address.
+const reasons = ['expired', 'denied', 'unavailable', 'no_account', 'not_allowed', 'disabled', 'taken', 'failed'] as const
+function providerError(): string {
+  const code = String(route.query.error ?? '').replace(/^oidc_/, '')
+  return (reasons as readonly string[]).includes(code) ? t(`login.oidcErrors.${code as (typeof reasons)[number]}`) : ''
+}
+
+const options = ref<SignInOptions>({ providers: [], passwordAdminsOnly: false })
+const hasProviders = computed(() => options.value.providers.length > 0)
+
+onMounted(async () => {
+  const { data } = await api.GET('/auth/options')
+  if (data) {
+    options.value = data
+  }
+})
 
 const login = ref('')
 const password = ref('')
-const error = ref('')
+const error = ref(providerError())
 const submitting = ref(false)
 
 async function submit() {
@@ -43,6 +62,21 @@ async function submit() {
           </AppFormGroup>
           <v-btn type="submit" color="primary" block :text="t('login.submit')" :loading="submitting"
             :disabled="!login || !password" />
+          <div v-if="options.passwordAdminsOnly" class="text-medium-emphasis mt-3">{{ t('login.passwordAdminsOnly') }}</div>
+          <template v-if="hasProviders">
+            <div class="loginForm__or text-medium-emphasis my-4">{{ t('login.or') }}</div>
+            <!-- A plain link: the whole page goes to the provider and comes back. -->
+            <v-btn
+              v-for="provider in options.providers"
+              :key="provider.id"
+              :href="`/api/v1/auth/oidc/${provider.id}/login`"
+              variant="outlined"
+              block
+              class="mb-2"
+              data-testid="provider-login"
+              :text="t('login.continueWith', { name: provider.name })"
+            />
+          </template>
         </v-card-text>
       </v-form>
     </v-card>
@@ -54,6 +88,19 @@ async function submit() {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.loginForm__or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.loginForm__or::before,
+.loginForm__or::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid rgb(var(--v-theme-on-surface), 0.2);
 }
 
 .loginForm__card {

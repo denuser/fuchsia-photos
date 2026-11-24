@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import { api, type User } from '../api/client'
 import { setLanguage } from '../i18n'
+import { apiError } from '../i18n/apiErrors'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
@@ -26,7 +27,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(login: string, password: string): Promise<string | null> {
     const { data, error } = await api.POST('/login', { body: { login, password } })
     if (error) {
-      return error.error
+      return apiError(error)
     }
     user.value = data
     return null

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { api, type MetadataSettings, type PreviewSettings, type VideoSettings } from '../api/client'
+import { api, type MetadataSettings, type PreviewSettings, type SignInOptions, type SignInSettings, type VideoSettings } from '../api/client'
 import { apiError } from '../i18n/apiErrors'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
@@ -20,6 +20,8 @@ const notices = useNoticesStore()
 const settings = ref<PreviewSettings | null>(null)
 const metadata = ref<MetadataSettings | null>(null)
 const video = ref<VideoSettings | null>(null)
+const signIn = ref<SignInSettings | null>(null)
+const signInOptions = ref<SignInOptions | null>(null)
 
 const transcodeModes = computed(() =>
   (['view', 'upload', 'off'] as const).map((value) => ({ value, title: t(`admin.transcode.${value}`) })),
@@ -57,12 +59,14 @@ const valid = computed(() => {
 })
 
 onMounted(async () => {
-  const [previews, meta, videos] = await Promise.all([
+  const [previews, meta, videos, signing, options] = await Promise.all([
     api.GET('/settings/previews'),
     api.GET('/settings/metadata'),
     api.GET('/settings/video'),
+    api.GET('/settings/sign-in'),
+    api.GET('/auth/options'),
   ])
-  const failure = previews.error ?? meta.error ?? videos.error
+  const failure = previews.error ?? meta.error ?? videos.error ?? signing.error ?? options.error
   if (failure) {
     error.value = apiError(failure)
     return
@@ -70,17 +74,20 @@ onMounted(async () => {
   settings.value = previews.data!
   metadata.value = meta.data!
   video.value = videos.data!
+  signIn.value = signing.data!
+  signInOptions.value = options.data!
 })
 
 async function save() {
   saving.value = true
-  const [previews, meta, videos] = await Promise.all([
+  const [previews, meta, videos, signing] = await Promise.all([
     api.PUT('/settings/previews', { body: settings.value! }),
     api.PUT('/settings/metadata', { body: metadata.value! }),
     api.PUT('/settings/video', { body: { transcode: video.value!.transcode } }),
+    api.PUT('/settings/sign-in', { body: signIn.value! }),
   ])
   saving.value = false
-  const failure = previews.error ?? meta.error ?? videos.error
+  const failure = previews.error ?? meta.error ?? videos.error ?? signing.error
   error.value = failure ? apiError(failure) : ''
   if (previews.data) {
     settings.value = previews.data
@@ -91,7 +98,10 @@ async function save() {
   if (videos.data) {
     video.value = videos.data
   }
-  if (previews.data && meta.data && videos.data) {
+  if (signing.data) {
+    signIn.value = signing.data
+  }
+  if (previews.data && meta.data && videos.data && signing.data) {
     notices.notify(t('admin.saved'))
   }
 }
@@ -104,7 +114,7 @@ async function save() {
 
       <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
-      <v-form v-if="settings && metadata && video" class="settings" @submit.prevent="save">
+      <v-form v-if="settings && metadata && video && signIn && signInOptions" class="settings" @submit.prevent="save">
         <h2 class="mb-2">{{ t('admin.previews') }}</h2>
         <v-alert
           type="info"
@@ -218,6 +228,61 @@ async function save() {
             data-testid="transcode"
           />
         </AppFormGroup>
+
+        <h2 class="mb-2">{{ t('admin.signIn') }}</h2>
+        <v-alert
+          v-if="signInOptions.providers.length === 0"
+          type="info"
+          density="compact"
+          class="mb-6"
+          :title="t('admin.noProviders')"
+          :text="t('admin.noProvidersText')"
+        />
+        <v-switch
+          v-model="signIn.createUsers"
+          data-testid="create-users"
+          :label="t('admin.createUsers')"
+          :hint="t('admin.createUsersHint')"
+          persistent-hint
+          color="primary"
+          density="compact"
+          class="mb-4"
+        />
+        <template v-if="signIn.createUsers">
+          <AppFormGroup v-slot="field" :label="t('admin.allowed')">
+            <v-combobox
+              v-bind="field"
+              v-model="signIn.allowed"
+              multiple
+              chips
+              closable-chips
+              hide-no-data
+              variant="outlined"
+              density="compact"
+              :hint="t('admin.allowedHint')"
+              persistent-hint
+              data-testid="allowed"
+            />
+          </AppFormGroup>
+          <v-alert
+            v-if="signIn.allowed.length === 0"
+            type="warning"
+            density="compact"
+            class="mb-4"
+            :title="t('admin.openRegistration')"
+            :text="t('admin.openRegistrationText')"
+          />
+        </template>
+        <v-switch
+          v-model="signIn.passwordAdminsOnly"
+          data-testid="password-admins-only"
+          :label="t('admin.passwordAdminsOnly')"
+          :hint="t('admin.passwordAdminsOnlyHint')"
+          persistent-hint
+          color="primary"
+          density="compact"
+          class="mb-6"
+        />
 
         <v-btn type="submit" color="primary" :text="t('common.save')" :disabled="!valid" :loading="saving" />
       </v-form>
