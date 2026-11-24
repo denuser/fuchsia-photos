@@ -4,6 +4,8 @@ Changes in each release. Add changes under "Unreleased" as they are made; `make 
 
 ## Unreleased
 
+## 0.4.1 - 2026-11-24
+
 - Six tints for the Glass background (Fuchsia, Orchid, Raspberry, Twilight, Rose, Plum), chosen in the appearance menu once Glass is on and kept per device. Tables no longer draw a solid sheet over the glass panel.
 
 ## 0.4.0 - 2026-11-24
