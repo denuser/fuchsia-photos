@@ -554,8 +554,8 @@ func (q *Queries) GetVisiblePhoto(ctx context.Context, arg GetVisiblePhotoParams
 }
 
 const insertPhoto = `-- name: InsertPhoto :one
-INSERT INTO photos (owner_id, sha256, mime, size, original_name)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO photos (owner_id, sha256, mime, size, original_name, source_path)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path
 `
 
@@ -565,6 +565,7 @@ type InsertPhotoParams struct {
 	Mime         string
 	Size         int64
 	OriginalName string
+	SourcePath   *string
 }
 
 func (q *Queries) InsertPhoto(ctx context.Context, arg InsertPhotoParams) (Photo, error) {
@@ -574,6 +575,7 @@ func (q *Queries) InsertPhoto(ctx context.Context, arg InsertPhotoParams) (Photo
 		arg.Mime,
 		arg.Size,
 		arg.OriginalName,
+		arg.SourcePath,
 	)
 	var i Photo
 	err := row.Scan(

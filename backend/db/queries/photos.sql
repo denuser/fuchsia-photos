@@ -1,6 +1,6 @@
 -- name: InsertPhoto :one
-INSERT INTO photos (owner_id, sha256, mime, size, original_name)
-VALUES (@owner_id, @sha256, @mime, @size, @original_name)
+INSERT INTO photos (owner_id, sha256, mime, size, original_name, source_path)
+VALUES (@owner_id, @sha256, @mime, @size, @original_name, sqlc.narg(source_path))
 RETURNING *;
 
 -- name: GetPhotoByHash :one
