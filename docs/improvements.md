@@ -28,7 +28,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 22 | [Demo activity log](#22-demo-activity-log) | Implemented | Deploy and enable on the public demo |
 | 23 | [Sign in with OIDC](#23-sign-in-with-oidc) | Built; checked with Google on 2026-11-25 | Apple and Yandex ID |
 | 24 | [Two-factor sign-in (TOTP)](#24-two-factor-sign-in-totp) | Built; checked with an authenticator app on 2026-11-25 | The browser test does not cover it |
-| 25 | [Near-duplicates and bursts](#25-near-duplicates-and-bursts) | Plan decided, nothing built | Step 0: calibration on real data; then the candidates job and the review page |
+| 25 | [Near-duplicates and bursts](#25-near-duplicates-and-bursts) | Step 1 built; not yet checked on the development stack | Check the page on the development stack; stacks in the timeline with the profile setting; the limits as settings; the burst check without the ML service |
 
 ## 1. Administration page
 
@@ -698,7 +698,15 @@ Checked against the code on 2026-11-24: password sign-in has no rate limit today
 
 ## 25. Near-duplicates and bursts
 
-**Status:** plan decided on 2026-11-25 (see below), reviewed once. Nothing is built; the first step is the calibration.
+**Status:** step 1 built on 2026-11-25, with tests (`internal/similar`, `internal/api/similar_test.go`, `internal/media/hash_test.go`): the hash of each preview, the job that finds the pairs, the groups, the two kinds of resolution and the page with a tab for each tier, in all ten languages. Not yet checked on the development stack, and the browser test does not cover it.
+
+Built on 2026-11-25, with these differences from the plan below:
+- The limits are constants in `internal/similar`, not settings; the administration page does not show them yet.
+- The job works only on vectors that exist, so it finds nothing for a photo the ML service has not embedded. The check from time and camera without the ML service (default for question 5) is not built.
+- The review page shows every photo of a group, and a chain of similar frames can make a large group; groups are connected components of open pairs. The answer holds at most 200 groups, the newest first.
+- Stacks in the timeline, and with them the profile setting that turns grouping on, are not built: the page is the only place a group shows. Without them every photo stays its own tile.
+- Resolving moves albums (and a chosen cover), tags, favorites, shares, the choice to show the photo to everyone and a description the kept photo lacks. The archive marks stay where they were. A photo of a library folder goes to the trash like any other; the file on the read-only mount stays.
+- A photo is looked at again when its vector is made again (`similar_checks` holds the time of the vector it used). Its open pairs are replaced, and the pairs marked as not the same stay.
 
 What exists today: exact duplicates (`UNIQUE (owner_id, sha256)`, so an upload of the same bytes adds nothing); "similar photos" in the viewer (`SearchSimilarPhotos`: the nearest vectors the viewer can see, no threshold, no ML service needed); `photo_links`, which hides a file under another photo (`live`, `edited`, `raw`). What is missing: telling that two different files are the same shot (a resized or re-saved copy, a copy from a messenger, an edit made elsewhere) and grouping the frames of a burst, which Immich, PhotoPrism (stacks) and Ente have in some form (see the comparison in `promotion.md`; the competitors' columns come from memory).
 
@@ -717,10 +725,43 @@ The plan, with the choices still open:
 3. **Resolving.** Moves the albums, tags, favorites, shares, description and public-link entries of the removed photos to the kept one, or leaves them (question 6). A pair marked "not the same" is stored by photo ids, not by model, so a change of `ML_MODEL` or an edited library file does not bring it back.
 4. **Interface and tests.** Backend tests with a fake set of vectors, as for the text search; the interface is checked by hand on the development stack.
 
+Step 0, first results, measured on 2026-11-25 with the base model (`siglip2-base-patch16-384@1`) on the 222 photos of the `demo` library (public domain, so they could be looked at) and on one pair of the owner's own photos. The vector is the cosine distance of the viewer previews; the hash is a 64-bit dHash of the viewer preview (9×8 grey), compared by the number of differing bits. A copy was made from each of 30 photos with ffmpeg:
+
+| Copy of the same photo | Vector distance, median (largest) | Hash bits, median (largest) |
+|---|---|---|
+| half size, a messenger copy (1280 px), heavy JPEG recompression | 0.000 (0.044) | 0 (1) |
+| brighter, more contrast | 0.006 (0.012) | 1 (15) |
+| black and white | 0.070 (0.151) | 0 (9) |
+| crop to 90% | 0.011 (0.025) | 9 (21) |
+| crop to 75% | 0.023 (0.101) | 19 (31) |
+| **the closest other photo** of the same library | 0.197 (closest 0.014) | 18 (closest 10) |
+
+- The hash separates resized and recompressed copies cleanly: at most 1 bit of 64 for them, and no other photo of the 222 closer than 10 bits. It does not see crops, and a colour or contrast edit can move it by up to 15.
+- The vector sees every kind of copy at 0.15 or less, and most at 0.03 or less. But the closest wrong answer of the library, two shots of the same castle from two steps apart 40 minutes apart, is at 0.014, closer than a crop to 90% (0.025). So **the vector alone cannot tell a copy from "the same place, another shot"**, and a threshold alone, for either signal, is not enough.
+- A pair of the owner's own photos (two frames of one scene from one phone, five seconds apart) is at 0.019 by the vector and 11 bits by the hash, so the hash does not catch it and the vector does. Its next neighbours, other shots of the same place about four minutes earlier, are at 0.042, 0.058 and 0.074. Both files carry the same `DateTimeOriginal` and the same `SubSecTimeOriginal` although their file names, which hold the time, are five seconds apart: the capture time of this phone cannot tell a burst frame from the next one, and the file name has to be read as well.
+- What the first results suggested: a vector distance under a tight limit plus a second reason (a hash of at most 6 bits, or a capture time within seconds). The second part below, on real pairs, changes it: see there.
+
+Step 0, second part, measured on 2026-11-25 on labelled pairs of the owner's own libraries (two libraries, 1,837 items, only photos with camera data). Candidates were the three nearest neighbours of each photo under a distance of 0.12, 2,374 pairs, of which 103 were sampled across six distance bands and labelled by the owner on contact sheets without seeing the numbers: 6 copies or edits of one photo (S), 35 burst frames (B), 41 the same place in another shot (P), 21 different (N). The tables here count pairs, not photos, and the proposals that matter are estimated for the whole candidate set by weighting each band by its real size:
+
+| Class | Vector distance, median (range) | Hash bits | Capture time apart |
+|---|---|---|---|
+| S copy or edit | 0.007 (0.004–0.012) | 0, 1, 6, 19, 26, 31 | 0 to 3 s in 4 of 6 |
+| B burst frame | 0.028 (0.009–0.073) | 3 to 33, median 23 | 1 s to 2 h, median 39 s |
+| P same place, another shot | 0.029 (0.005–0.117) | 4 to 35, median 23 | 0 s to 4 days, median 3 min |
+| N different | 0.072 (0.017–0.117) | 24 to 39 | 9 s to 11 days |
+
+- A burst frame and "the same place, another shot" cannot be told apart by any signal measured here: by vector distance, hash, capture time or image size. 21 of 35 burst pairs are within a minute of each other, and so are 16 of 41 of the others; the owner's own labels put burst frames up to two hours apart and "another shot" at 0 to 5 s. The data holds one kind of relation, shots of the same scene, and the owner's split into burst and not a burst is a judgement about it, not a property of the files. The best rule tried (vector at most 0.03, time within 10 s, same size) found 14 of the 41 burst-or-copy pairs with 5 wrong, and a wider one found more with more wrong.
+- The hash is of little use outside copies: of the 6 copies or edits only 3 are within 6 bits (the others are edits and crops), and it alone cannot separate any other class.
+- **Near-identical frames** (`vector <= 0.012` and either `hash <= 6` or a capture time within 3 s): about 27 proposals in the two libraries, about 24 right if frames of a burst count as right, about 17 if only copies and edits do. The wrong ones are frames taken a few seconds apart, which are fit to review for the same reason.
+- **Same scene** (`vector <= 0.03`): about 274 proposals, about 269 right (precision about 0.98); at 0.05 about 925 proposals, about 758 right (0.82); the time limit of 15 minutes adds almost nothing. The estimate weights the sampled bands by the number of pairs in each, and a band of 24 sampled pairs is a wide margin of error.
+- Capture time cannot be taken as exact: at least one phone writes one time for frames that its file names put five seconds apart, so the sub-second tags and the file name must be read too, and a missing time must not count as a reason.
+
 Decided on 2026-11-25:
 - **Order:** the review page for near-duplicates comes first, then bursts on the same candidates job (question 1).
 - **Storage of groups:** a separate stack table (stack, photo, cover), not a new kind in `photo_links`, so the trash, restore and purge stay as they are and a single frame can be trashed or a new cover chosen (question 2). The timeline does not collapse stacks in the first step; the review page is the only place a group shows.
 - **Signal:** both a perceptual hash of the grid preview (dHash, computed in processing on libvips, no ML service) and the SigLIP vector, each with its own threshold found in step 0 (question 3).
+- **Two tiers of groups** (question 9, decided on 2026-11-25): *duplicates* are copies, edits and near-identical frames (`vector <= 0.012` and `hash <= 6` or a capture time within 3 s), *similar shots* are shots of one scene (`vector <= 0.03`). Both come from one candidates job, and the review page has a tab for each. The limits are settings with these defaults.
+- **Grouping in the timeline is a setting of each user, in the profile, off by default** (decided on 2026-11-25). Without it every frame is its own tile. It covers only the stacks of similar shots; a Live Photo, a RAW and the original of an edit stay hidden as before. The review page does not depend on it. The first step builds no stacks in the timeline, so the setting arrives with them.
 - **Burst grouping only proposes:** the owner confirms; nothing is hidden or deleted without the owner (question 4).
 
 Defaults for the rest, which hold unless the owner says otherwise:
@@ -738,3 +779,4 @@ Questions that were asked (kept for the record):
 6. Whether albums, tags, favorites and shares move to the kept photo.
 7. Whether a recipient sees the owner's stack collapsed, and whether videos are in scope.
 8. An HNSW index now, or after a measurement on the NAS.
+9. Added after step 0: what a "group" is. The data has no line between a burst and "the same place, another shot", so a stack can be (a) only near-identical frames and copies (about 27 proposals in the owner's two libraries, precise), or (b) every shot of one scene at `vector <= 0.03` (about 274 proposals, precise, bigger and fuzzier groups), or both as two tiers, the first called duplicates and the second similar shots.
