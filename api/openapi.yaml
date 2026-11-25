@@ -1088,6 +1088,86 @@ paths:
                       $ref: "#/components/schemas/MemoryYear"
         "400":
           $ref: "#/components/responses/Error"
+  /similar:
+    get:
+      operationId: listSimilar
+      summary: Groups of photos that look alike
+      description: |
+        The user's own photos that look alike, in groups. `duplicate` is a copy, an edit or a nearly identical frame:
+        a vector distance of at most 0.012 and either a picture hash at most 6 bits away or a capture time within 3
+        seconds. `similar` is another shot of the same scene: a vector distance of at most 0.03 that is not a
+        duplicate. Photos linked by pairs form one group. A pair marked as not the same is left out, as are photos in
+        the trash or hidden under another. A group lists the photo to keep first: the largest picture, then the
+        largest file. The newest group comes first, at most 200 groups; `total` counts them all. The groups come from
+        a background job over the photos that have a vector, so they trail the library.
+      parameters:
+        - name: tier
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [duplicate, similar]
+      responses:
+        "200":
+          description: The groups
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [groups, total]
+                properties:
+                  groups:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SimilarGroup"
+                  total:
+                    type: integer
+        "400":
+          $ref: "#/components/responses/Error"
+  /similar/dismiss:
+    post:
+      operationId: dismissSimilar
+      summary: Mark photos as not the same
+      description: Closes every open pair among the photos for good, so a later look at them does not bring it back. At least two photos of the user's own.
+      requestBody:
+        $ref: "#/components/requestBodies/PhotoIds"
+      responses:
+        "204":
+          description: The pairs are closed
+        "400":
+          $ref: "#/components/responses/Error"
+  /similar/resolve:
+    post:
+      operationId: resolveSimilar
+      summary: Keep one photo of a group and trash the others
+      description: |
+        The albums (and covers), tags, favorites and shares of the removed photos, their choice to show the photo to
+        everyone and a description the kept photo lacks move to the kept photo, and the removed photos go to the
+        trash, where they can be restored. All photos must be the user's own and in the library.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [keepId, removeIds]
+              properties:
+                keepId:
+                  type: integer
+                  format: int64
+                removeIds:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: integer
+                    format: int64
+      responses:
+        "204":
+          description: The photos are resolved
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /photos/cameras:
     get:
       operationId: listCameras
@@ -3126,6 +3206,15 @@ components:
         coverVersion:
           type: integer
           description: The preview version of the cover, for its URL
+    SimilarGroup:
+      type: object
+      required: [photos]
+      properties:
+        photos:
+          type: array
+          description: The photo to keep first
+          items:
+            $ref: "#/components/schemas/Photo"
     MemoryYear:
       type: object
       required: [year, yearsAgo, date, exact, photos]

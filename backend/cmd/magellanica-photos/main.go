@@ -29,6 +29,7 @@ import (
 	"github.com/magellanica-app/magellanica-photos/backend/internal/metadata"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/ml"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/scan"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/similar"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/transcode"
@@ -175,6 +176,7 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		Layout:  layout,
 		Queries: store.New(pool),
 	}
+	similarity := &similar.Service{Model: cfg.MLModel, Layout: layout, Pool: pool}
 	jobClient, err := jobs.NewClient(pool, jobs.Config{
 		Layout:   layout,
 		Metadata: reader,
@@ -183,6 +185,7 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 			scanner.Register(workers)
 			libraries.Register(workers)
 			embedder.Register(workers)
+			similarity.Register(workers)
 			copies.Register(workers)
 		},
 		Queues: map[string]river.QueueConfig{
@@ -190,7 +193,7 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 			library.Queue:   {MaxWorkers: 1},
 			transcode.Queue: {MaxWorkers: 1},
 		},
-		PeriodicJobs: []*river.PeriodicJob{ml.PeriodicJob(), transcode.PeriodicJob(), library.PeriodicJob()},
+		PeriodicJobs: []*river.PeriodicJob{ml.PeriodicJob(), similar.PeriodicJob(), transcode.PeriodicJob(), library.PeriodicJob()},
 		Processed:    copies.Processed,
 	})
 	if err != nil {

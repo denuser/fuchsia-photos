@@ -197,7 +197,7 @@ func (q *Queries) SaveEmbedding(ctx context.Context, arg SaveEmbeddingParams) er
 }
 
 const searchPhotosByVector = `-- name: SearchPhotosByVector :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, (e.embedding <=> CAST($1::text AS halfvec))::float8 AS distance
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, p.phash, (e.embedding <=> CAST($1::text AS halfvec))::float8 AS distance
 FROM photo_embeddings e
 JOIN photos p ON p.id = e.photo_id
 WHERE e.model = $2
@@ -277,6 +277,7 @@ func (q *Queries) SearchPhotosByVector(ctx context.Context, arg SearchPhotosByVe
 			&i.Photo.Latitude,
 			&i.Photo.Longitude,
 			&i.Photo.SourcePath,
+			&i.Photo.Phash,
 			&i.Distance,
 		); err != nil {
 			return nil, err
@@ -290,7 +291,7 @@ func (q *Queries) SearchPhotosByVector(ctx context.Context, arg SearchPhotosByVe
 }
 
 const searchSimilarPhotos = `-- name: SearchSimilarPhotos :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, (e.embedding <=> s.embedding)::float8 AS distance
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, p.phash, (e.embedding <=> s.embedding)::float8 AS distance
 FROM photo_embeddings s
 JOIN photo_embeddings e ON e.model = s.model AND e.photo_id <> s.photo_id
 JOIN photos p ON p.id = e.photo_id
@@ -366,6 +367,7 @@ func (q *Queries) SearchSimilarPhotos(ctx context.Context, arg SearchSimilarPhot
 			&i.Photo.Latitude,
 			&i.Photo.Longitude,
 			&i.Photo.SourcePath,
+			&i.Photo.Phash,
 			&i.Distance,
 		); err != nil {
 			return nil, err

@@ -170,6 +170,7 @@ type Photo struct {
 	Latitude          *float64
 	Longitude         *float64
 	SourcePath        *string
+	Phash             *int64
 }
 
 type PhotoArchive struct {
@@ -257,6 +258,23 @@ type SignInSetting struct {
 	CreateUsers        bool
 	Allowed            []string
 	PasswordAdminsOnly bool
+}
+
+type SimilarCheck struct {
+	PhotoID     int64
+	Model       string
+	EmbeddingAt time.Time
+}
+
+type SimilarPair struct {
+	PhotoA       int64
+	PhotoB       int64
+	Tier         string
+	Distance     float64
+	HashBits     *int16
+	SecondsApart *float64
+	Dismissed    bool
+	CreatedAt    time.Time
 }
 
 type Tag struct {

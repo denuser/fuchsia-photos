@@ -190,6 +190,18 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo, rep
 	if err != nil {
 		return fmt.Errorf("update photo: %w", err)
 	}
+	// The hash lets the search for similar photos tell a copy from another shot.
+	// A photo without one is hashed later by that search.
+	if !video {
+		if hash, err := media.Hash(previews.Viewer.Data); err != nil {
+			slog.Warn("hash photo", "photo", photo.ID, "error", err)
+		} else {
+			stored := int64(hash)
+			if err := w.queries.SavePerceptualHash(ctx, store.SavePerceptualHashParams{ID: photo.ID, Phash: &stored}); err != nil {
+				slog.Warn("save photo hash", "photo", photo.ID, "error", err)
+			}
+		}
+	}
 	// An import may know more about the date and the place than the tags do.
 	if err := ApplyImportedMetadata(ctx, w.queries, []int64{photo.ID}); err != nil {
 		return err
