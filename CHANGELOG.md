@@ -4,6 +4,9 @@ Changes in each release. Add changes under "Unreleased" as they are made; `make 
 
 ## Unreleased
 
+- Library folders: an administrator adds a folder of a new read-only mount, `FOLDERS_DIR` (`/data/folders`), with an owner and a scan interval, and its photos are read where they are, without a copy in the library. Scans run on a schedule and read only the folders and the files that changed. A file edited in another program, such as Lightroom, stays the same photo with its albums, tags and shares, and its previews are made again; a moved file follows its photo; a file that stays away for two scans sends its photo to the trash, where it shows that the file is not available, and the photo comes back with the file. Files that are not photos, that could not be read or that hold another photo's content are listed on the page. Links in the share are never followed. See [Library folders](docs/deployment.md#library-folders).
+- To use it on an existing installation, add the mount to the application and to the transcoder: `${FOLDERS_DIR:-./data/folders}:/data/folders:ro` in a Compose file, or a dataset mounted at `/data/folders` on TrueNAS, and read [Library folders](docs/deployment.md#library-folders) for the permissions. Nothing changes without it. Until the transcoder is rebuilt and says it reads the folders, videos of library folders get no H.264 copy, and none fails. Three migrations run forward only on the first start.
+
 ## 0.4.1 - 2026-11-24
 
 - Six tints for the Glass background (Fuchsia, Orchid, Raspberry, Twilight, Rose, Plum), chosen in the appearance menu once Glass is on and kept per device. Tables no longer draw a solid sheet over the glass panel.

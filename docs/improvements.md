@@ -22,7 +22,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 16 | [Ten interface languages](#16-ten-interface-languages) | Done | Check date fields and fonts in Chinese, Japanese and Korean |
 | 17 | [RAW photos from cameras](#17-raw-photos-from-cameras) | Done, released in 0.1.0 | NAS checks 2, 3, 4, 6 and 7 |
 | 18 | [Lightroom XMP sidecars](#18-lightroom-xmp-sidecars) | Draft plan | Open questions 2 to 4; builds on 19 |
-| 19 | [Library folders indexed in place](#19-library-folders-indexed-in-place) | In progress: steps 1 to 5 done | Steps 6 and 7: the NAS check, README, changelog and the architecture rows |
+| 19 | [Library folders indexed in place](#19-library-folders-indexed-in-place) | Built; checked on the development stack only | Step 6: a check on the NAS with a copy of a real Lightroom folder, and with the transcoder built from the branch |
 | 20 | [Safer RAW decoding](#20-safer-raw-decoding) | Done, released in 0.1.1 | |
 | 21 | [Map](#21-map) | Done, released in 0.2.0 | Check the map on a phone and with a larger library |
 | 22 | [Demo activity log](#22-demo-activity-log) | Implemented | Deploy and enable on the public demo |
@@ -481,7 +481,7 @@ Pairing keeps the file name (decided on 2026-11-21): a pair needs the same base 
 
 ## 19. Library folders indexed in place
 
-**Status:** planned on 2026-11-21; steps 1 to 4 of the draft plan done on 2026-11-25 on the branch `library-folders`: migration 00042, `Layout.OriginalOf` and the nine readers of an original; the scan itself in `backend/internal/library` (`Service.Scan`, `ingest.ImportInPlace`); changed files (`ingest.ReplaceInPlace`) with jobs that wait for an unreadable original; and the schedule, the API (`/library-folders`), the administration page and the viewer's notice.
+**Status:** built on 2026-11-25 on the branch `library-folders`, not merged; the NAS check (step 6) is left. Done in steps 1 to 5 and 7 of the draft plan: migration 00042, `Layout.OriginalOf` and the nine readers of an original; the scan itself in `backend/internal/library` (`Service.Scan`, `ingest.ImportInPlace`); changed files (`ingest.ReplaceInPlace`) with jobs that wait for an unreadable original; and the schedule, the API (`/library-folders`), the administration page and the viewer's notice.
 
 RAW files that Lightroom works on are kept in a share on the NAS, and the application is to show them without copying them into its library (decided on 2026-11-21, see improvement 18). Today every source goes through `Ingest`, which moves the file to `originals/<owner>/<hash>` (`storage.Layout.Original`), and a folder scan copies, hashes every file on every run and is started by hand. This improvement adds a second kind of folder: a library folder, read where it is, rescanned on a schedule, with the files allowed to change, move and disappear. It is the base for improvement 18: the sidecars, the pairs with Lightroom's exports and their re-publishing all happen in such a folder.
 

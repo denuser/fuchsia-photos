@@ -34,6 +34,7 @@ It is built for modest hardware. It is developed and measured on an Intel N150 w
 - Upload from the browser, files or whole folders, straight into an album, with previews made in the background and progress shown as it goes
 - Upload from phones over WebDAV, with sync apps such as PhotoSync and FolderSync. A folder can be linked to an album
 - Import from a folder on the NAS, which stays untouched. A repeated import skips the photos already imported or deleted
+- Library folders: a share such as a Lightroom folder is read where it is, with no copy, and followed as files are added, edited, moved and deleted. A photo keeps its albums and tags when its file is edited or moved
 - Import from Google Takeout, straight from its `.zip` or `.tgz` parts: dates and places from Google, albums, descriptions, favorites, the archive and the trash, with edited copies shown over their originals
 - A timeline that stays fast in large libraries, with a year scrubber and filters by date, tag, camera and lens
 - A map of photos by where they were taken, with clusters that open their photos, on OpenStreetMap tiles
