@@ -9,6 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
 )
 
 // A photo with a source path is read from its library folder and is never
@@ -110,5 +113,50 @@ func TestLibraryFolderFileSwappedForALink(t *testing.T) {
 	wantStatus(t, res, http.StatusOK)
 	if got := decode[photoJSON](t, res); got.FileMissing == nil || !*got.FileMissing {
 		t.Errorf("fileMissing = %v, want true for a file swapped for a link", got.FileMissing)
+	}
+}
+
+// A photo the scan put in the trash for a missing file can be uploaded again: the upload
+// becomes its original in the library, and the photo works.
+func TestUploadOfAPhotoWhoseLibraryFileIsAway(t *testing.T) {
+	folders := t.TempDir()
+	e := setupWith(t, func(d *Deps) { d.Layout.Folders = folders })
+	e.addUser("anna", "user")
+	anna := e.loggedIn("anna")
+	ctx := context.Background()
+
+	res := anna.upload("landscape.jpg")
+	wantStatus(t, res, http.StatusCreated)
+	id := decode[uploadResult](t, res).Photo.ID
+	photo, _ := e.queries.GetPhoto(ctx, id)
+	if err := os.Remove(e.layout.Original(photo.OwnerID, photo.Sha256, photo.Mime)); err != nil {
+		t.Fatal(err)
+	}
+	// As the scan left it: read from a folder, its file away, in the trash.
+	folder, err := e.queries.CreateLibraryFolder(ctx, store.CreateLibraryFolderParams{Path: "lightroom", OwnerID: photo.OwnerID, ScanInterval: 600})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `UPDATE photos SET source_path = 'lightroom/a.jpg' WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.queries.InsertPhotoFile(ctx, store.InsertPhotoFileParams{FolderID: folder.ID, Path: "a.jpg", PhotoID: &id, State: "source", Size: 1, Mtime: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	wantStatus(t, anna.json(http.MethodPost, "/api/v1/photos/trash", ids(id)), http.StatusNoContent)
+	wantStatus(t, anna.get(fmt.Sprintf("/api/v1/photos/%d/original", id)), http.StatusNotFound)
+
+	res = anna.upload("landscape.jpg")
+	wantStatus(t, res, http.StatusOK)
+	if got := decode[uploadResult](t, res); !got.Duplicate || got.Photo.ID != id || !got.Restored {
+		t.Fatalf("upload = %+v, want the same photo restored", got)
+	}
+	wantStatus(t, anna.get(fmt.Sprintf("/api/v1/photos/%d/original", id)), http.StatusOK)
+	after, _ := e.queries.GetPhoto(ctx, id)
+	if after.SourcePath != nil || after.DeletedAt != nil {
+		t.Errorf("source path = %v, deleted = %v; want the photo kept in the library and out of the trash", after.SourcePath, after.DeletedAt)
+	}
+	if files, _ := e.queries.ListPhotoFiles(ctx, folder.ID); len(files) != 0 {
+		t.Errorf("rows of the folder = %+v, want none: the file's row ended with its source", files)
 	}
 }

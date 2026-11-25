@@ -98,6 +98,17 @@ func (q *Queries) ForgetPhotoEmbedding(ctx context.Context, id int64) error {
 	return err
 }
 
+const forgetSourceOfPhoto = `-- name: ForgetSourceOfPhoto :exec
+WITH file_removed AS (DELETE FROM photo_files WHERE photo_id = $1 AND state = 'source')
+UPDATE photos p SET source_path = NULL, updated_at = now() WHERE p.id = $1
+`
+
+// A photo that is now stored in the library no longer has a source in a library folder.
+func (q *Queries) ForgetSourceOfPhoto(ctx context.Context, photoID int64) error {
+	_, err := q.db.Exec(ctx, forgetSourceOfPhoto, photoID)
+	return err
+}
+
 const getLibraryFolder = `-- name: GetLibraryFolder :one
 SELECT id, path, owner_id, scan_interval, last_scan_at, created_at, last_result, last_error FROM library_folders WHERE id = $1
 `

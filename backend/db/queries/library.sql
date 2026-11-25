@@ -146,3 +146,8 @@ WHERE f.folder_id = @folder_id
       END
 ORDER BY f.path
 LIMIT @max_rows;
+
+-- A photo that is now stored in the library no longer has a source in a library folder.
+-- name: ForgetSourceOfPhoto :exec
+WITH file_removed AS (DELETE FROM photo_files WHERE photo_id = @photo_id AND state = 'source')
+UPDATE photos p SET source_path = NULL, updated_at = now() WHERE p.id = @photo_id;

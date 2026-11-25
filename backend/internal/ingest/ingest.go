@@ -349,6 +349,15 @@ func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhot
 	case err == nil && keepDeleted:
 		return importedDuplicate(existing), nil
 	case err == nil && existing.PurgedAt == nil:
+		if existing.SourcePath != nil && s.Layout.Unavailable(existing.SourcePath, s.Layout.OriginalOf(existing.OwnerID, existing.Sha256, existing.Mime, existing.SourcePath)) {
+			// The photo was read from a library folder whose file is away, and somebody has
+			// the file to upload: it becomes the photo's original in the library, so the
+			// photo works again. The file in the folder, if it comes back, is a duplicate.
+			existing, err = s.adopt(ctx, queries, tmp, existing)
+			if err != nil {
+				return Result{}, err
+			}
+		}
 		return s.duplicate(ctx, tx, queries, existing)
 	case err == nil:
 		// Uploading a permanently deleted photo adds it again.
@@ -379,6 +388,24 @@ func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhot
 		return Result{}, fmt.Errorf("commit: %w", err)
 	}
 	return Result{Photo: photo}, nil
+}
+
+// adopt keeps an uploaded file as the original of a photo that was read from a
+// library folder, and ends the photo's source there. The photo goes on with its id,
+// albums and previews.
+func (s *Service) adopt(ctx context.Context, queries *store.Queries, tmp string, photo store.Photo) (store.Photo, error) {
+	path := s.Layout.Original(photo.OwnerID, photo.Sha256, photo.Mime)
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return store.Photo{}, fmt.Errorf("create photo folder: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return store.Photo{}, fmt.Errorf("move photo into place: %w", err)
+	}
+	if err := queries.ForgetSourceOfPhoto(ctx, photo.ID); err != nil {
+		return store.Photo{}, fmt.Errorf("forget source: %w", err)
+	}
+	photo.SourcePath = nil
+	return photo, nil
 }
 
 // duplicate handles a file the owner already has. Uploading a photo from the

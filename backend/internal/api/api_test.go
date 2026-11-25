@@ -229,6 +229,7 @@ func decode[T any](t *testing.T, res *http.Response) T {
 type uploadResult struct {
 	Photo     photoJSON `json:"photo"`
 	Duplicate bool      `json:"duplicate"`
+	Restored  bool      `json:"restored"`
 }
 
 func wantStatus(t *testing.T, res *http.Response, status int) {
