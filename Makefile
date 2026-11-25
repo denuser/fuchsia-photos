@@ -68,7 +68,7 @@ dev-psql:
 HOST_CGO = CGO_LDFLAGS_ALLOW='-Xpreprocessor|-fopenmp'
 
 dev-backend:
-	mkdir -p "$(DEV_DATA)/import"
+	mkdir -p "$(DEV_DATA)/import" "$(DEV_DATA)/folders"
 	cd backend && $(DEV_ENV) $(HOST_CGO) go run ./cmd/magellanica-photos serve
 
 # Sync apps such as FolderSync connect only over HTTPS, so the dev server

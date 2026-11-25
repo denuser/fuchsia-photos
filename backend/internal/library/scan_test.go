@@ -617,3 +617,47 @@ func TestScanTriesFailedFilesAgain(t *testing.T) {
 		t.Errorf("problems = %+v, want none once it could be read", problems)
 	}
 }
+
+// A scan cut off in the middle, by a restart or by its time limit, marks nothing missing and
+// changes no row: what it had not seen is not away.
+func TestInterruptedScanMarksNothing(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	e.put("a.jpg", "landscape.jpg")
+	e.put("b.jpg", "rotated.jpg")
+	e.scan()
+	if err := os.Remove(filepath.Join(e.layout.Folders, "lightroom", "a.jpg")); err != nil {
+		t.Fatal(err)
+	}
+
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	folder, _ := e.queries.GetLibraryFolder(ctx, e.folder.ID)
+	run := &scanRun{Service: e.service, queries: e.queries, folder: folder, seen: map[string]bool{}, moved: map[int64]bool{}}
+	if err := run.scan(cancelled); err == nil {
+		t.Fatal("a cancelled scan ended without an error")
+	}
+	files, _ := e.queries.ListPhotoFiles(ctx, e.folder.ID)
+	for _, f := range files {
+		if f.MissedScans != 0 || f.MissingSince != nil {
+			t.Errorf("%s: missed %d times, missing since %v; want nothing marked", f.Path, f.MissedScans, f.MissingSince)
+		}
+	}
+
+	// It is recorded as not done, so it is due again.
+	before, _ := e.queries.GetLibraryFolder(ctx, e.folder.ID)
+	if _, err := e.service.Scan(cancelled, e.folder.ID); err == nil {
+		t.Fatal("a cancelled Scan ended without an error")
+	}
+	after, _ := e.queries.GetLibraryFolder(ctx, e.folder.ID)
+	if !equalTimes(before.LastScanAt, after.LastScanAt) {
+		t.Error("an interrupted scan was recorded as finished")
+	}
+}
+
+func equalTimes(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Equal(*b)
+}

@@ -146,6 +146,19 @@ func TestUploadOfAPhotoWhoseLibraryFileIsAway(t *testing.T) {
 	wantStatus(t, anna.json(http.MethodPost, "/api/v1/photos/trash", ids(id)), http.StatusNoContent)
 	wantStatus(t, anna.get(fmt.Sprintf("/api/v1/photos/%d/original", id)), http.StatusNotFound)
 
+	// While no scan has found the file away, as when a share is not mounted for a while, an
+	// upload only restores the photo: the file may come back and be edited.
+	res = anna.upload("landscape.jpg")
+	wantStatus(t, res, http.StatusOK)
+	if kept, _ := e.queries.GetPhoto(ctx, id); kept.SourcePath == nil {
+		t.Fatal("an upload during an outage took the photo out of its folder")
+	}
+	wantStatus(t, anna.json(http.MethodPost, "/api/v1/photos/trash", ids(id)), http.StatusNoContent)
+
+	// Once two scans did not find it, the upload becomes the original.
+	if _, err := e.pool.Exec(ctx, `UPDATE photo_files SET missing_since = now()`); err != nil {
+		t.Fatal(err)
+	}
 	res = anna.upload("landscape.jpg")
 	wantStatus(t, res, http.StatusOK)
 	if got := decode[uploadResult](t, res); !got.Duplicate || got.Photo.ID != id || !got.Restored {

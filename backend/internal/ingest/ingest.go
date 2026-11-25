@@ -349,10 +349,11 @@ func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhot
 	case err == nil && keepDeleted:
 		return importedDuplicate(existing), nil
 	case err == nil && existing.PurgedAt == nil:
-		if existing.SourcePath != nil && s.Layout.Unavailable(existing.SourcePath, s.Layout.OriginalOf(existing.OwnerID, existing.Sha256, existing.Mime, existing.SourcePath)) {
-			// The photo was read from a library folder whose file is away, and somebody has
-			// the file to upload: it becomes the photo's original in the library, so the
-			// photo works again. The file in the folder, if it comes back, is a duplicate.
+		if s.fileGone(ctx, queries, existing) {
+			// The photo was read from a library folder whose file a scan found away, and
+			// somebody has the file to upload: it becomes the photo's original in the
+			// library, so the photo works again. The file in the folder, if it comes back,
+			// is a duplicate.
 			existing, err = s.adopt(ctx, queries, tmp, existing)
 			if err != nil {
 				return Result{}, err
@@ -388,6 +389,18 @@ func (s *Service) store(ctx context.Context, tmp string, params store.InsertPhot
 		return Result{}, fmt.Errorf("commit: %w", err)
 	}
 	return Result{Photo: photo}, nil
+}
+
+// fileGone tells whether a photo read from a library folder has lost its file for good: a scan
+// found it away twice, and it cannot be read now. A share that is only not mounted for a while
+// is not that, or an upload during the outage would take the photo out of its folder, where the
+// next edit of the file in Lightroom would make a new photo.
+func (s *Service) fileGone(ctx context.Context, queries *store.Queries, photo store.Photo) bool {
+	if photo.SourcePath == nil || !s.Layout.Unavailable(photo.SourcePath, s.Layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath)) {
+		return false
+	}
+	file, err := queries.GetPhotoFileOfPhoto(ctx, &photo.ID)
+	return err == nil && file.MissingSince != nil
 }
 
 // adopt keeps an uploaded file as the original of a photo that was read from a

@@ -18,10 +18,12 @@ import (
 // a large folder does not take workers from photo processing or from imports.
 const Queue = "library"
 
-// scanTimeout leaves room for a first scan of a large share, which hashes every
-// file. A scan stopped by a restart or by this limit starts over with what is
-// still unknown, as the files it recorded are not read again.
-const scanTimeout = 12 * time.Hour
+// scanTimeout ends a scan that runs long, and it is also how long a scan that a crash left
+// as running keeps its folder from being queued again, as River counts it as running until its
+// timeout. A scan stopped at the limit records nothing and is due again a minute later, and
+// continues with what is still unknown, as the files it recorded are not read again, so a first
+// scan of a large share takes several runs.
+const scanTimeout = 30 * time.Minute
 
 // ScanArgs queues the scan of one library folder.
 type ScanArgs struct {
