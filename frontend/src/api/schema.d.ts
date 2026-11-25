@@ -676,6 +676,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Groups of photos that look alike
+         * @description The user's own photos that look alike, in groups. `duplicate` is a copy, an edit or a nearly identical frame:
+         *     a vector distance of at most 0.012 and either a picture hash at most 6 bits away or a capture time within 3
+         *     seconds. `similar` is another shot of the same scene: a vector distance of at most 0.03 that is not a
+         *     duplicate. Photos linked by pairs form one group. A pair marked as not the same is left out, as are photos in
+         *     the trash or hidden under another. A group lists the photo to keep first: the largest picture, then the
+         *     largest file. The newest group comes first, at most 200 groups; `total` counts them all. The groups come from
+         *     a background job over the photos that have a vector, so they trail the library.
+         */
+        get: operations["listSimilar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/similar/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark photos as not the same
+         * @description Closes every open pair among the photos for good, so a later look at them does not bring it back. At least two photos of the user's own.
+         */
+        post: operations["dismissSimilar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/similar/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep one photo of a group and trash the others
+         * @description The albums (and covers), tags, favorites and shares of the removed photos, their choice to show the photo to
+         *     everyone and a description the kept photo lacks move to the kept photo, and the removed photos go to the
+         *     trash, where they can be restored. All photos must be the user's own and in the library.
+         */
+        post: operations["resolveSimilar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/photos/cameras": {
         parameters: {
             query?: never;
@@ -2066,6 +2134,10 @@ export interface components {
             coverId: number;
             /** @description The preview version of the cover, for its URL */
             coverVersion: number;
+        };
+        SimilarGroup: {
+            /** @description The photo to keep first */
+            photos: components["schemas"]["Photo"][];
         };
         MemoryYear: {
             year: number;
@@ -3541,6 +3613,79 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+        };
+    };
+    listSimilar: {
+        parameters: {
+            query: {
+                tier: "duplicate" | "similar";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The groups */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        groups: components["schemas"]["SimilarGroup"][];
+                        total: number;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    dismissSimilar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["PhotoIds"];
+        responses: {
+            /** @description The pairs are closed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    resolveSimilar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    keepId: number;
+                    removeIds: number[];
+                };
+            };
+        };
+        responses: {
+            /** @description The photos are resolved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     listCameras: {

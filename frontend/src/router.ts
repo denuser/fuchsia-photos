@@ -16,6 +16,7 @@ import PublicAlbumView from './views/PublicAlbumView.vue'
 import ProfileView from './views/ProfileView.vue'
 import SearchView from './views/SearchView.vue'
 import SharedView from './views/SharedView.vue'
+import SimilarView from './views/SimilarView.vue'
 import TagsView from './views/TagsView.vue'
 import TimelineView from './views/TimelineView.vue'
 import TrashView from './views/TrashView.vue'
@@ -35,6 +36,7 @@ export const router = createRouter({
     { path: '/memories', component: MemoriesView },
     // Loaded when first opened, so that the map library stays out of the main bundle.
     { path: '/map', component: () => import('./views/MapView.vue') },
+    { path: '/similar', component: SimilarView },
     { path: '/archive', component: ArchiveView },
     { path: '/shared', component: SharedView },
     { path: '/tags', component: TagsView },
