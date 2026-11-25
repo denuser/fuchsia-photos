@@ -1408,6 +1408,25 @@ export interface paths {
         patch: operations["updateLibraryFolder"];
         trace?: never;
     };
+    "/library-folders/{id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** List the files of a library folder that need a look, up to 500 (administrators only) */
+        get: operations["listLibraryFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/library-folders/{id}/scan": {
         parameters: {
             query?: never;
@@ -1854,6 +1873,33 @@ export interface components {
              * @description Files skipped because the owner has their content already
              */
             duplicates: number;
+            /**
+             * Format: int64
+             * @description Files that are not photos or videos. They are read again when they change or the application learns a format
+             */
+            unsupported: number;
+            /**
+             * Format: int64
+             * @description Files that could not be read, or that hold the content of another photo and were left as they are
+             */
+            problems: number;
+        };
+        LibraryFile: {
+            /** @description Relative to the library folder */
+            path: string;
+            /** @enum {string} */
+            state: "source" | "duplicate" | "unsupported" | "failed";
+            /** @enum {string|null} */
+            problem: "conflict" | "failed" | null;
+            /** @description Why the file could not be read, or which photo has its content. In English, as the server wrote it */
+            detail: string | null;
+            /**
+             * Format: int64
+             * @description The photo the file is the source of or repeats
+             */
+            photoId: number | null;
+            /** @description Whether that photo was deleted permanently, so that the file stays out of the library */
+            purged: boolean;
         };
         LibraryScanResult: {
             listed: number;
@@ -4735,6 +4781,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LibraryFolder"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listLibraryFiles: {
+        parameters: {
+            query: {
+                /** @description problems are files that could not be read or hold the content of another photo; duplicates are files skipped because the owner has their content already; unsupported files are not photos or videos */
+                kind: "problems" | "duplicates" | "unsupported";
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The files */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryFile"][];
                 };
             };
             400: components["responses"]["Error"];

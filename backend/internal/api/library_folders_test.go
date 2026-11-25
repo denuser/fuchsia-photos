@@ -99,6 +99,18 @@ func TestLibraryFolders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	wantStatus(t, root.get(path+"/files?kind=bogus"), http.StatusBadRequest)
+	wantStatus(t, root.get("/api/v1/library-folders/9999/files?kind=problems"), http.StatusNotFound)
+	if _, err := e.queries.InsertPhotoFile(ctx, store.InsertPhotoFileParams{
+		FolderID: created.ID, Path: "scan.psd", State: "unsupported", Size: 1, Mtime: time.Now(), SupportVersion: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res = root.get(path + "/files?kind=unsupported")
+	wantStatus(t, res, http.StatusOK)
+	if got := decode[[]libraryFileJSON](t, res); len(got) != 1 || got[0].Path != "scan.psd" || got[0].State != "unsupported" {
+		t.Errorf("unsupported = %+v", got)
+	}
 	wantStatus(t, root.json(http.MethodDelete, path, nil), http.StatusConflict)
 	res = root.get("/api/v1/library-folders")
 	wantStatus(t, res, http.StatusOK)

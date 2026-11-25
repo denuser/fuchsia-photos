@@ -200,17 +200,20 @@ type PhotoFavorite struct {
 }
 
 type PhotoFile struct {
-	ID            int64
-	FolderID      int64
-	Path          string
-	PhotoID       *int64
-	State         string
-	Size          int64
-	Mtime         time.Time
-	MissedScans   int32
-	MissingSince  *time.Time
-	TrashedByScan bool
-	CreatedAt     time.Time
+	ID             int64
+	FolderID       int64
+	Path           string
+	PhotoID        *int64
+	State          string
+	Size           int64
+	Mtime          time.Time
+	MissedScans    int32
+	MissingSince   *time.Time
+	TrashedByScan  bool
+	CreatedAt      time.Time
+	Problem        *string
+	Detail         *string
+	SupportVersion int32
 }
 
 type PhotoLink struct {

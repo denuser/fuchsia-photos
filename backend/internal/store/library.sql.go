@@ -119,7 +119,7 @@ func (q *Queries) GetLibraryFolder(ctx context.Context, id int64) (LibraryFolder
 }
 
 const getPhotoFileOfPhoto = `-- name: GetPhotoFileOfPhoto :one
-SELECT id, folder_id, path, photo_id, state, size, mtime, missed_scans, missing_since, trashed_by_scan, created_at FROM photo_files WHERE photo_id = $1 AND state = 'source'
+SELECT id, folder_id, path, photo_id, state, size, mtime, missed_scans, missing_since, trashed_by_scan, created_at, problem, detail, support_version FROM photo_files WHERE photo_id = $1 AND state = 'source'
 `
 
 func (q *Queries) GetPhotoFileOfPhoto(ctx context.Context, photoID *int64) (PhotoFile, error) {
@@ -137,23 +137,28 @@ func (q *Queries) GetPhotoFileOfPhoto(ctx context.Context, photoID *int64) (Phot
 		&i.MissingSince,
 		&i.TrashedByScan,
 		&i.CreatedAt,
+		&i.Problem,
+		&i.Detail,
+		&i.SupportVersion,
 	)
 	return i, err
 }
 
 const insertPhotoFile = `-- name: InsertPhotoFile :one
-INSERT INTO photo_files (folder_id, path, photo_id, state, size, mtime)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, folder_id, path, photo_id, state, size, mtime, missed_scans, missing_since, trashed_by_scan, created_at
+INSERT INTO photo_files (folder_id, path, photo_id, state, size, mtime, detail, support_version)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, folder_id, path, photo_id, state, size, mtime, missed_scans, missing_since, trashed_by_scan, created_at, problem, detail, support_version
 `
 
 type InsertPhotoFileParams struct {
-	FolderID int64
-	Path     string
-	PhotoID  *int64
-	State    string
-	Size     int64
-	Mtime    time.Time
+	FolderID       int64
+	Path           string
+	PhotoID        *int64
+	State          string
+	Size           int64
+	Mtime          time.Time
+	Detail         *string
+	SupportVersion int32
 }
 
 func (q *Queries) InsertPhotoFile(ctx context.Context, arg InsertPhotoFileParams) (PhotoFile, error) {
@@ -164,6 +169,8 @@ func (q *Queries) InsertPhotoFile(ctx context.Context, arg InsertPhotoFileParams
 		arg.State,
 		arg.Size,
 		arg.Mtime,
+		arg.Detail,
+		arg.SupportVersion,
 	)
 	var i PhotoFile
 	err := row.Scan(
@@ -178,12 +185,15 @@ func (q *Queries) InsertPhotoFile(ctx context.Context, arg InsertPhotoFileParams
 		&i.MissingSince,
 		&i.TrashedByScan,
 		&i.CreatedAt,
+		&i.Problem,
+		&i.Detail,
+		&i.SupportVersion,
 	)
 	return i, err
 }
 
 const listDuplicateFilesOfPhoto = `-- name: ListDuplicateFilesOfPhoto :many
-SELECT f.id, f.folder_id, f.path, f.photo_id, f.state, f.size, f.mtime, f.missed_scans, f.missing_since, f.trashed_by_scan, f.created_at, l.path AS folder_path
+SELECT f.id, f.folder_id, f.path, f.photo_id, f.state, f.size, f.mtime, f.missed_scans, f.missing_since, f.trashed_by_scan, f.created_at, f.problem, f.detail, f.support_version, l.path AS folder_path
 FROM photo_files f
 JOIN library_folders l ON l.id = f.folder_id
 WHERE f.photo_id = $1 AND f.state = 'duplicate'
@@ -191,18 +201,21 @@ ORDER BY f.id
 `
 
 type ListDuplicateFilesOfPhotoRow struct {
-	ID            int64
-	FolderID      int64
-	Path          string
-	PhotoID       *int64
-	State         string
-	Size          int64
-	Mtime         time.Time
-	MissedScans   int32
-	MissingSince  *time.Time
-	TrashedByScan bool
-	CreatedAt     time.Time
-	FolderPath    string
+	ID             int64
+	FolderID       int64
+	Path           string
+	PhotoID        *int64
+	State          string
+	Size           int64
+	Mtime          time.Time
+	MissedScans    int32
+	MissingSince   *time.Time
+	TrashedByScan  bool
+	CreatedAt      time.Time
+	Problem        *string
+	Detail         *string
+	SupportVersion int32
+	FolderPath     string
 }
 
 // The copies of a photo's file that the scans skipped as duplicates, with the folder each lies in.
@@ -227,7 +240,69 @@ func (q *Queries) ListDuplicateFilesOfPhoto(ctx context.Context, photoID *int64)
 			&i.MissingSince,
 			&i.TrashedByScan,
 			&i.CreatedAt,
+			&i.Problem,
+			&i.Detail,
+			&i.SupportVersion,
 			&i.FolderPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLibraryFiles = `-- name: ListLibraryFiles :many
+SELECT f.path, f.state, f.problem, f.detail, f.photo_id, (p.purged_at IS NOT NULL)::boolean AS purged
+FROM photo_files f
+LEFT JOIN photos p ON p.id = f.photo_id
+WHERE f.folder_id = $1
+  AND CASE $2::text
+        WHEN 'problems' THEN f.state = 'failed' OR f.problem IS NOT NULL
+        WHEN 'duplicates' THEN f.state = 'duplicate'
+        WHEN 'unsupported' THEN f.state = 'unsupported'
+        ELSE false
+      END
+ORDER BY f.path
+LIMIT $3
+`
+
+type ListLibraryFilesParams struct {
+	FolderID int64
+	Kind     string
+	MaxRows  int32
+}
+
+type ListLibraryFilesRow struct {
+	Path    string
+	State   string
+	Problem *string
+	Detail  *string
+	PhotoID *int64
+	Purged  bool
+}
+
+// The files of a folder to look at on the page: those with a problem, the duplicates that were skipped
+// (with their photo, and whether it is deleted permanently), or the files that are not supported.
+func (q *Queries) ListLibraryFiles(ctx context.Context, arg ListLibraryFilesParams) ([]ListLibraryFilesRow, error) {
+	rows, err := q.db.Query(ctx, listLibraryFiles, arg.FolderID, arg.Kind, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLibraryFilesRow
+	for rows.Next() {
+		var i ListLibraryFilesRow
+		if err := rows.Scan(
+			&i.Path,
+			&i.State,
+			&i.Problem,
+			&i.Detail,
+			&i.PhotoID,
+			&i.Purged,
 		); err != nil {
 			return nil, err
 		}
@@ -309,7 +384,7 @@ func (q *Queries) ListLibraryFoldersDue(ctx context.Context) ([]LibraryFolder, e
 }
 
 const listPhotoFiles = `-- name: ListPhotoFiles :many
-SELECT id, folder_id, path, photo_id, state, size, mtime, missed_scans, missing_since, trashed_by_scan, created_at FROM photo_files WHERE folder_id = $1 ORDER BY path
+SELECT id, folder_id, path, photo_id, state, size, mtime, missed_scans, missing_since, trashed_by_scan, created_at, problem, detail, support_version FROM photo_files WHERE folder_id = $1 ORDER BY path
 `
 
 func (q *Queries) ListPhotoFiles(ctx context.Context, folderID int64) ([]PhotoFile, error) {
@@ -333,6 +408,9 @@ func (q *Queries) ListPhotoFiles(ctx context.Context, folderID int64) ([]PhotoFi
 			&i.MissingSince,
 			&i.TrashedByScan,
 			&i.CreatedAt,
+			&i.Problem,
+			&i.Detail,
+			&i.SupportVersion,
 		); err != nil {
 			return nil, err
 		}
@@ -364,7 +442,7 @@ const missPhotoFiles = `-- name: MissPhotoFiles :many
 UPDATE photo_files
 SET missed_scans = missed_scans + 1
 WHERE id = ANY ($1::bigint[])
-RETURNING id, folder_id, path, photo_id, state, size, mtime, missed_scans, missing_since, trashed_by_scan, created_at
+RETURNING id, folder_id, path, photo_id, state, size, mtime, missed_scans, missing_since, trashed_by_scan, created_at, problem, detail, support_version
 `
 
 // Counts a scan that did not find the files. The row of a file that is back, and
@@ -390,6 +468,9 @@ func (q *Queries) MissPhotoFiles(ctx context.Context, ids []int64) ([]PhotoFile,
 			&i.MissingSince,
 			&i.TrashedByScan,
 			&i.CreatedAt,
+			&i.Problem,
+			&i.Detail,
+			&i.SupportVersion,
 		); err != nil {
 			return nil, err
 		}
@@ -545,6 +626,22 @@ func (q *Queries) SetLibraryFolderInterval(ctx context.Context, arg SetLibraryFo
 	return i, err
 }
 
+const setPhotoFileProblem = `-- name: SetPhotoFileProblem :exec
+UPDATE photo_files SET problem = $1, detail = $2 WHERE id = $3
+`
+
+type SetPhotoFileProblemParams struct {
+	Problem *string
+	Detail  *string
+	ID      int64
+}
+
+// A changed file that could not be read stays as it was, so that the next scan looks at it again.
+func (q *Queries) SetPhotoFileProblem(ctx context.Context, arg SetPhotoFileProblemParams) error {
+	_, err := q.db.Exec(ctx, setPhotoFileProblem, arg.Problem, arg.Detail, arg.ID)
+	return err
+}
+
 const setPhotoSourcePath = `-- name: SetPhotoSourcePath :exec
 UPDATE photos SET source_path = $1, updated_at = now() WHERE id = $2
 `
@@ -563,16 +660,20 @@ const summarizeLibraryFolders = `-- name: SummarizeLibraryFolders :many
 SELECT f.folder_id,
        count(*) FILTER (WHERE f.state = 'source')::bigint AS photos,
        count(*) FILTER (WHERE f.state = 'source' AND f.missing_since IS NOT NULL)::bigint AS missing,
-       count(*) FILTER (WHERE f.state = 'duplicate')::bigint AS duplicates
+       count(*) FILTER (WHERE f.state = 'duplicate')::bigint AS duplicates,
+       count(*) FILTER (WHERE f.state = 'unsupported')::bigint AS unsupported,
+       count(*) FILTER (WHERE f.state = 'failed' OR f.problem IS NOT NULL)::bigint AS problems
 FROM photo_files f
 GROUP BY f.folder_id
 `
 
 type SummarizeLibraryFoldersRow struct {
-	FolderID   int64
-	Photos     int64
-	Missing    int64
-	Duplicates int64
+	FolderID    int64
+	Photos      int64
+	Missing     int64
+	Duplicates  int64
+	Unsupported int64
+	Problems    int64
 }
 
 // What each folder holds, for the administration page: photos read from it, files
@@ -591,6 +692,8 @@ func (q *Queries) SummarizeLibraryFolders(ctx context.Context) ([]SummarizeLibra
 			&i.Photos,
 			&i.Missing,
 			&i.Duplicates,
+			&i.Unsupported,
+			&i.Problems,
 		); err != nil {
 			return nil, err
 		}
@@ -603,16 +706,27 @@ func (q *Queries) SummarizeLibraryFolders(ctx context.Context) ([]SummarizeLibra
 }
 
 const updatePhotoFileStat = `-- name: UpdatePhotoFileStat :exec
-UPDATE photo_files SET size = $1, mtime = $2 WHERE id = $3
+UPDATE photo_files
+SET size = $1, mtime = $2, problem = $3, detail = $4
+WHERE id = $5
 `
 
 type UpdatePhotoFileStatParams struct {
-	Size  int64
-	Mtime time.Time
-	ID    int64
+	Size    int64
+	Mtime   time.Time
+	Problem *string
+	Detail  *string
+	ID      int64
 }
 
+// The scan looked at the file as it is now. A problem it found, or none, replaces the last one.
 func (q *Queries) UpdatePhotoFileStat(ctx context.Context, arg UpdatePhotoFileStatParams) error {
-	_, err := q.db.Exec(ctx, updatePhotoFileStat, arg.Size, arg.Mtime, arg.ID)
+	_, err := q.db.Exec(ctx, updatePhotoFileStat,
+		arg.Size,
+		arg.Mtime,
+		arg.Problem,
+		arg.Detail,
+		arg.ID,
+	)
 	return err
 }

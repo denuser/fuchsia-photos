@@ -98,10 +98,13 @@ func TestScan(t *testing.T) {
 		t.Fatalf("first scan = %+v, want 2 added, 1 unsupported of 3 listed", res)
 	}
 	files, err := e.queries.ListPhotoFiles(context.Background(), e.folder.ID)
-	if err != nil || len(files) != 2 {
-		t.Fatalf("known files = %d, %v; want 2", len(files), err)
+	if err != nil || len(files) != 3 {
+		t.Fatalf("known files = %d, %v; want 2 photos and the note that is not one", len(files), err)
 	}
 	for _, f := range files {
+		if f.State == "unsupported" {
+			continue
+		}
 		photo, err := e.queries.GetPhoto(context.Background(), *f.PhotoID)
 		if err != nil {
 			t.Fatal(err)
@@ -392,6 +395,21 @@ func TestScanFollowsAChangedFile(t *testing.T) {
 	if got := e.photoAt("a.jpg"); !bytes.Equal(got.Sha256, after.Sha256) {
 		t.Error("the photo took the hash of another photo")
 	}
+	// The conflict stays on the page until the file is fixed, and is not read again meanwhile.
+	problems, err := e.queries.ListLibraryFiles(context.Background(), store.ListLibraryFilesParams{FolderID: e.folder.ID, Kind: "problems", MaxRows: 10})
+	if err != nil || len(problems) != 1 || problems[0].Problem == nil || *problems[0].Problem != "conflict" || problems[0].Path != "a.jpg" {
+		t.Fatalf("problems = %+v, %v; want the conflict of a.jpg", problems, err)
+	}
+	if res := e.scan(); res.Changed != 0 || res.Conflicts != 0 {
+		t.Errorf("rescan = %+v, want the conflict left alone", res)
+	}
+	e.put("a.jpg", "landscape.webp")
+	if res := e.scan(); res.Replaced != 1 {
+		t.Fatalf("after fixing the file = %+v", res)
+	}
+	if problems, _ := e.queries.ListLibraryFiles(context.Background(), store.ListLibraryFilesParams{FolderID: e.folder.ID, Kind: "problems", MaxRows: 10}); len(problems) != 0 {
+		t.Errorf("problems = %+v, want none once the file holds its own content", problems)
+	}
 }
 
 func TestScanKeepsAPurgedPhotoPurged(t *testing.T) {
@@ -517,5 +535,85 @@ func TestScanFollowsAFileToAnotherFolder(t *testing.T) {
 	got, _ := e.queries.GetPhoto(ctx, photo.ID)
 	if got.DeletedAt != nil || got.SourcePath == nil || *got.SourcePath != "archive/a.jpg" {
 		t.Errorf("photo = trashed %v, source %v; want it kept and read from the archive folder", got.DeletedAt != nil, got.SourcePath)
+	}
+}
+
+// A file that is not a photo is remembered, so that a rescan does not open it again. It is read
+// again when it changes or when the application's list of formats grows.
+func TestScanRemembersUnsupportedFiles(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	jpeg, err := os.ReadFile(filepath.Join(fixtures, "landscape.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	notes := bytes.Repeat([]byte("x"), len(jpeg))
+	e.putBytes("notes.psd", notes)
+	if res := e.scan(); res.Unsupported != 1 || res.Added != 0 {
+		t.Fatalf("first scan = %+v", res)
+	}
+	rows, _ := e.queries.ListPhotoFiles(ctx, e.folder.ID)
+	if len(rows) != 1 || rows[0].State != "unsupported" || rows[0].SupportVersion != ingest.SupportVersion {
+		t.Fatalf("rows = %+v, want one unsupported row at the current version", rows)
+	}
+
+	// The same size and time with other content shows whether the file is opened again: it is not.
+	p := filepath.Join(e.layout.Folders, "lightroom", "notes.psd")
+	if err := os.WriteFile(p, jpeg, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(p, rows[0].Mtime, rows[0].Mtime); err != nil {
+		t.Fatal(err)
+	}
+	if res := e.scan(); res.Added != 0 || res.Unsupported != 1 {
+		t.Fatalf("rescan = %+v, want the file left alone", res)
+	}
+
+	// An application that learns a format reads the files again with no migration.
+	if _, err := e.service.Ingest.Pool.Exec(ctx, `UPDATE photo_files SET support_version = 0`); err != nil {
+		t.Fatal(err)
+	}
+	if res := e.scan(); res.Added != 1 {
+		t.Fatalf("scan after the formats changed = %+v, want the photo added", res)
+	}
+	if rows, _ := e.queries.ListPhotoFiles(ctx, e.folder.ID); len(rows) != 1 || rows[0].State != "source" {
+		t.Errorf("rows = %+v, want the file to be a source now", rows)
+	}
+
+	// A file that goes is forgotten too.
+	e.putBytes("other.tmp", []byte("text"))
+	e.scan()
+	if err := os.Remove(filepath.Join(e.layout.Folders, "lightroom", "other.tmp")); err != nil {
+		t.Fatal(err)
+	}
+	e.scan()
+	if rows, _ := e.queries.ListPhotoFiles(ctx, e.folder.ID); len(rows) != 1 {
+		t.Errorf("rows = %+v, want the vanished file forgotten", rows)
+	}
+}
+
+// A new file that could not be read is tried again by every scan.
+func TestScanTriesFailedFilesAgain(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	e.put("a.jpg", "landscape.jpg")
+	info, err := os.Stat(filepath.Join(e.layout.Folders, "lightroom", "a.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.queries.InsertPhotoFile(ctx, store.InsertPhotoFileParams{
+		FolderID: e.folder.ID, Path: "a.jpg", State: "failed", Size: info.Size(), Mtime: info.ModTime(), Detail: new("permission denied"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	problems, _ := e.queries.ListLibraryFiles(ctx, store.ListLibraryFilesParams{FolderID: e.folder.ID, Kind: "problems", MaxRows: 10})
+	if len(problems) != 1 || problems[0].State != "failed" || *problems[0].Detail != "permission denied" {
+		t.Fatalf("problems = %+v", problems)
+	}
+	if res := e.scan(); res.Added != 1 {
+		t.Fatalf("scan = %+v, want the file read again and added", res)
+	}
+	if problems, _ := e.queries.ListLibraryFiles(ctx, store.ListLibraryFilesParams{FolderID: e.folder.ID, Kind: "problems", MaxRows: 10}); len(problems) != 0 {
+		t.Errorf("problems = %+v, want none once it could be read", problems)
 	}
 }

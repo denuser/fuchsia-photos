@@ -33,6 +33,10 @@ type libraryFolderJSON struct {
 	Photos     int64 `json:"photos"`
 	Missing    int64 `json:"missing"`
 	Duplicates int64 `json:"duplicates"`
+	// Unsupported files are not photos or videos; Problems are files that could not be
+	// read or that hold the content of another photo.
+	Unsupported int64 `json:"unsupported"`
+	Problems    int64 `json:"problems"`
 }
 
 func toLibraryFolderJSON(f store.LibraryFolder, sum store.SummarizeLibraryFoldersRow) libraryFolderJSON {
@@ -40,6 +44,7 @@ func toLibraryFolderJSON(f store.LibraryFolder, sum store.SummarizeLibraryFolder
 		ID: f.ID, Path: f.Path, OwnerID: f.OwnerID, ScanInterval: f.ScanInterval,
 		LastScanAt: f.LastScanAt, LastError: f.LastError, LastResult: f.LastResult,
 		Photos: sum.Photos, Missing: sum.Missing, Duplicates: sum.Duplicates,
+		Unsupported: sum.Unsupported, Problems: sum.Problems,
 	}
 }
 
@@ -234,4 +239,50 @@ func (s *server) deleteLibraryFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+const maxLibraryFiles = 500
+
+type libraryFileJSON struct {
+	Path string `json:"path"`
+	// What the scan made of the file: source, duplicate, unsupported or failed.
+	State string `json:"state"`
+	// conflict or failed for a file that needs a look; null otherwise.
+	Problem *string `json:"problem"`
+	Detail  *string `json:"detail"`
+	// The photo the file is or repeats, if any, and whether it was deleted permanently.
+	PhotoID *int64 `json:"photoId"`
+	Purged  bool   `json:"purged"`
+}
+
+// listLibraryFiles lists the files of a folder that the page's tabs show: problems, duplicates
+// the scan skipped, and files that are not supported.
+func (s *server) listLibraryFiles(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	kind := r.URL.Query().Get("kind")
+	if kind != "problems" && kind != "duplicates" && kind != "unsupported" {
+		writeError(w, http.StatusBadRequest, "kind must be problems, duplicates or unsupported")
+		return
+	}
+	ctx := r.Context()
+	if _, err := s.Queries.GetLibraryFolder(ctx, id); errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	} else if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	rows, err := s.Queries.ListLibraryFiles(ctx, store.ListLibraryFilesParams{FolderID: id, Kind: kind, MaxRows: maxLibraryFiles})
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	out := make([]libraryFileJSON, len(rows))
+	for i, f := range rows {
+		out[i] = libraryFileJSON{Path: f.Path, State: f.State, Problem: f.Problem, Detail: f.Detail, PhotoID: f.PhotoID, Purged: f.Purged}
+	}
+	writeJSON(w, http.StatusOK, out)
 }

@@ -27,8 +27,10 @@ import (
 )
 
 const (
-	stateSource    = "source"
-	stateDuplicate = "duplicate"
+	stateSource      = "source"
+	stateDuplicate   = "duplicate"
+	stateUnsupported = "unsupported"
+	stateFailed      = "failed"
 
 	// A file is missing after this many scans in a row did not find it, so that
 	// a program that deletes a file before it writes it again is not caught
@@ -282,17 +284,31 @@ func sameTime(a, b time.Time) bool {
 // known handles a file at a path the folder has seen before. It never reads the file.
 func (r *scanRun) known(ctx context.Context, row store.PhotoFile, f listed) error {
 	changed := row.Size != f.size || !sameTime(row.Mtime, f.mtime)
-	if row.State == stateDuplicate {
+	switch row.State {
+	case stateDuplicate:
 		if !changed {
 			return nil
 		}
-		// What a duplicate was may no longer be what is there: look at it as a new file.
-		if err := r.queries.DeletePhotoFiles(ctx, []int64{row.ID}); err != nil {
-			return fmt.Errorf("forget file: %w", err)
+	case stateUnsupported:
+		if !changed && row.SupportVersion >= ingest.SupportVersion {
+			r.result.Unsupported++
+			return nil
 		}
-		delete(r.rows, f.path)
-		return r.add(ctx, f)
+	case stateFailed:
+		// Whatever went wrong may be over: every scan tries a failed file again.
+	default:
+		return r.knownSource(ctx, row, f, changed)
 	}
+	// What the file was may no longer be what is there: look at it as a new file.
+	if err := r.queries.DeletePhotoFiles(ctx, []int64{row.ID}); err != nil {
+		return fmt.Errorf("forget file: %w", err)
+	}
+	delete(r.rows, f.path)
+	return r.add(ctx, f)
+}
+
+// knownSource handles a file that is the source of a photo.
+func (r *scanRun) knownSource(ctx context.Context, row store.PhotoFile, f listed, changed bool) error {
 	if row.MissedScans > 0 || row.MissingSince != nil {
 		if err := r.queries.SeePhotoFile(ctx, row.ID); err != nil {
 			return fmt.Errorf("record file: %w", err)
@@ -340,15 +356,26 @@ func (r *scanRun) replace(ctx context.Context, row store.PhotoFile, f listed) er
 		r.result.Waiting++ // Still being written.
 		return nil
 	}
+	// A file that cannot be read keeps the photo's old content, and the row its old size and
+	// time, so that the next scan looks at it again. The page lists it with the reason.
+	unreadable := func(cause error) error {
+		if err := r.failed(ctx, f, cause); err != nil {
+			return err
+		}
+		if err := r.queries.SetPhotoFileProblem(ctx, store.SetPhotoFileProblemParams{ID: row.ID, Problem: new("failed"), Detail: new(cause.Error())}); err != nil {
+			return fmt.Errorf("record problem: %w", err)
+		}
+		return nil
+	}
 	source := r.sourcePath(f.path)
 	file, err := r.root.Open(source)
 	if err != nil {
-		return r.failed(ctx, f, err)
+		return unreadable(err)
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return r.failed(ctx, f, err)
+		return unreadable(err)
 	}
 	if !info.Mode().IsRegular() || info.Size() != f.size || !sameTime(info.ModTime(), f.mtime) {
 		r.result.Waiting++
@@ -357,17 +384,18 @@ func (r *scanRun) replace(ctx context.Context, row store.PhotoFile, f listed) er
 
 	outcome, other, err := r.Ingest.ReplaceInPlace(ctx, *row.PhotoID, file, path.Base(f.path))
 	if err != nil {
-		// The photo keeps its old content, and the next scan looks at the file again.
-		return r.failed(ctx, f, err)
+		return unreadable(err)
 	}
+	var problem, detail *string
 	switch outcome {
 	case ingest.Replaced:
 		r.result.Replaced++
 	case ingest.Conflict:
 		r.result.Conflicts++
 		slog.Warn("library file holds the content of another photo and is left as it is", "folder", r.folder.Path, "path", f.path, "photo", *row.PhotoID, "other", other)
+		problem, detail = new("conflict"), new(fmt.Sprintf("the content of photo %d", other))
 	}
-	if err := r.queries.UpdatePhotoFileStat(ctx, store.UpdatePhotoFileStatParams{ID: row.ID, Size: f.size, Mtime: f.mtime}); err != nil {
+	if err := r.queries.UpdatePhotoFileStat(ctx, store.UpdatePhotoFileStatParams{ID: row.ID, Size: f.size, Mtime: f.mtime, Problem: problem, Detail: detail}); err != nil {
 		return fmt.Errorf("record file: %w", err)
 	}
 	return nil
@@ -397,12 +425,12 @@ func (r *scanRun) add(ctx context.Context, f listed) error {
 	source := r.sourcePath(f.path)
 	file, err := r.root.Open(source)
 	if err != nil {
-		return r.failed(ctx, f, err)
+		return r.failedNew(ctx, f, err)
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return r.failed(ctx, f, err)
+		return r.failedNew(ctx, f, err)
 	}
 	if !info.Mode().IsRegular() || info.Size() != f.size || !sameTime(info.ModTime(), f.mtime) {
 		r.result.Waiting++ // It changed since it was listed; the next scan reads it.
@@ -413,9 +441,9 @@ func (r *scanRun) add(ctx context.Context, f listed) error {
 	switch {
 	case errors.Is(err, ingest.ErrUnsupported):
 		r.result.Unsupported++
-		return nil
+		return r.recordWith(ctx, f, nil, stateUnsupported, nil, ingest.SupportVersion)
 	case err != nil:
-		return r.failed(ctx, f, err)
+		return r.failedNew(ctx, f, err)
 	}
 
 	if !res.Duplicate {
@@ -491,13 +519,27 @@ func (r *scanRun) move(ctx context.Context, photo store.Photo, f listed) (bool, 
 }
 
 func (r *scanRun) record(ctx context.Context, f listed, photoID *int64, state string) error {
+	return r.recordWith(ctx, f, photoID, state, nil, 0)
+}
+
+func (r *scanRun) recordWith(ctx context.Context, f listed, photoID *int64, state string, detail *string, supportVersion int32) error {
 	_, err := r.queries.InsertPhotoFile(ctx, store.InsertPhotoFileParams{
 		FolderID: r.folder.ID, Path: f.path, PhotoID: photoID, State: state, Size: f.size, Mtime: f.mtime,
+		Detail: detail, SupportVersion: supportVersion,
 	})
 	if err != nil {
 		return fmt.Errorf("record file: %w", err)
 	}
 	return nil
+}
+
+// failedNew records a new file that could not be read, with the reason, so that the page lists it.
+// Every scan tries it again.
+func (r *scanRun) failedNew(ctx context.Context, f listed, cause error) error {
+	if err := r.failed(ctx, f, cause); err != nil {
+		return err
+	}
+	return r.recordWith(ctx, f, nil, stateFailed, new(cause.Error()), 0)
 }
 
 // failed reports a problem with one file and goes on; only a stopped scan is an error.
@@ -518,8 +560,8 @@ func (r *scanRun) missing(ctx context.Context, rows []store.PhotoFile) error {
 		if r.seen[row.Path] || r.moved[row.ID] {
 			continue
 		}
-		if row.State == stateDuplicate {
-			gone = append(gone, row.ID)
+		if row.State != stateSource {
+			gone = append(gone, row.ID) // A copy, or a file that was not a photo, and it is gone.
 			continue
 		}
 		away = append(away, row.ID)

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
 
-import { api, type LibraryFolder } from '../api/client'
+import { api, type LibraryFile, type LibraryFolder } from '../api/client'
 import AppAutocomplete from '../components/AppAutocomplete.vue'
+import AppDialog from '../components/AppDialog.vue'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -24,6 +25,11 @@ const owner = ref<number | null>(null)
 const path = ref<string | null>(null)
 const interval = ref(600)
 const error = ref('')
+type FileKind = 'problems' | 'duplicates' | 'unsupported'
+
+const filesOf = ref<LibraryFolder | null>(null)
+const fileKind = ref<FileKind>('problems')
+const files = shallowRef<LibraryFile[]>([])
 const removing = ref<LibraryFolder | null>(null)
 const removeOpen = ref(false)
 
@@ -98,6 +104,25 @@ async function scanNow(folder: LibraryFolder) {
   notices.notify(t('library.scanQueued', { path: folder.path }))
 }
 
+async function openFiles(folder: LibraryFolder, kind: FileKind = 'problems') {
+  filesOf.value = folder
+  await showFiles(kind)
+}
+
+async function showFiles(kind: FileKind) {
+  fileKind.value = kind
+  files.value = []
+  const { data } = await api.GET('/library-folders/{id}/files', { params: { path: { id: filesOf.value!.id }, query: { kind } } })
+  files.value = data ?? []
+}
+
+function fileNote(file: LibraryFile) {
+  if (file.problem) {
+    return `${t(`library.problemKinds.${file.problem}`)}${file.detail ? `: ${file.detail}` : ''}`
+  }
+  return file.purged ? t('library.purgedNote') : ''
+}
+
 function askRemove(folder: LibraryFolder) {
   removing.value = folder
   removeOpen.value = true
@@ -157,6 +182,8 @@ function summary(folder: LibraryFolder) {
             <th class="text-right">{{ t('library.photos') }}</th>
             <th class="text-right">{{ t('library.missing') }}</th>
             <th class="text-right">{{ t('library.duplicates') }}</th>
+            <th class="text-right">{{ t('library.unsupported') }}</th>
+            <th class="text-right">{{ t('library.problems') }}</th>
             <th>{{ t('library.scanEvery') }}</th>
             <th>{{ t('library.lastScan') }}</th>
             <th :aria-label="t('users.actions')" />
@@ -169,6 +196,8 @@ function summary(folder: LibraryFolder) {
             <td class="text-right">{{ folder.photos }}</td>
             <td class="text-right" :class="{ 'text-error': folder.missing > 0 }">{{ folder.missing }}</td>
             <td class="text-right">{{ folder.duplicates }}</td>
+            <td class="text-right">{{ folder.unsupported }}</td>
+            <td class="text-right" :class="{ 'text-error': folder.problems > 0 }">{{ folder.problems }}</td>
             <td class="interval">
               <v-select
                 :model-value="folder.scanInterval"
@@ -189,12 +218,40 @@ function summary(folder: LibraryFolder) {
               <template v-else>{{ t('library.neverScanned') }}</template>
             </td>
             <td class="text-right">
+              <v-btn
+                variant="text"
+                size="small"
+                :text="t('library.files')"
+                :disabled="folder.problems + folder.duplicates + folder.unsupported === 0"
+                @click="openFiles(folder, folder.problems > 0 ? 'problems' : folder.duplicates > 0 ? 'duplicates' : 'unsupported')"
+              />
               <v-btn variant="text" size="small" :text="t('library.scanNow')" @click="scanNow(folder)" />
               <v-btn variant="text" size="small" color="error" :text="t('library.remove')" @click="askRemove(folder)" />
             </td>
           </tr>
         </tbody>
       </v-table>
+
+      <AppDialog
+        :model-value="filesOf !== null"
+        :title="t('library.filesTitle', { path: filesOf?.path })"
+        :cancel="t('common.close')"
+        max-width="720"
+        @update:model-value="filesOf = null"
+      >
+        <v-btn-toggle :model-value="fileKind" mandatory density="compact" class="mb-4" @update:model-value="showFiles">
+          <v-btn v-for="kind in ['problems', 'duplicates', 'unsupported']" :key="kind" :value="kind" :text="t(`library.kinds.${kind}`)" />
+        </v-btn-toggle>
+        <p v-if="files.length === 0" class="text-medium-emphasis">{{ t('library.noFiles') }}</p>
+        <v-table v-else>
+          <tbody>
+            <tr v-for="file in files" :key="file.path" data-testid="library-file">
+              <td class="path">{{ file.path }}</td>
+              <td>{{ fileNote(file) }}</td>
+            </tr>
+          </tbody>
+        </v-table>
+      </AppDialog>
 
       <ConfirmDialog
         v-model="removeOpen"

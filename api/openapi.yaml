@@ -2143,6 +2143,35 @@ paths:
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
+  /library-folders/{id}/files:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: listLibraryFiles
+      summary: List the files of a library folder that need a look, up to 500 (administrators only)
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          description: problems are files that could not be read or hold the content of another photo; duplicates are files skipped because the owner has their content already; unsupported files are not photos or videos
+          schema:
+            type: string
+            enum: [problems, duplicates, unsupported]
+      responses:
+        "200":
+          description: The files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LibraryFile"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /library-folders/{id}/scan:
     parameters:
       - $ref: "#/components/parameters/Id"
@@ -2754,7 +2783,7 @@ components:
     LibraryFolder:
       description: A folder of the library folders mount whose photos are read where they are
       type: object
-      required: [id, path, ownerId, scanInterval, lastScanAt, lastError, lastResult, photos, missing, duplicates]
+      required: [id, path, ownerId, scanInterval, lastScanAt, lastError, lastResult, photos, missing, duplicates, unsupported, problems]
       properties:
         id:
           type: integer
@@ -2791,6 +2820,37 @@ components:
           description: Files skipped because the owner has their content already
           type: integer
           format: int64
+        unsupported:
+          description: Files that are not photos or videos. They are read again when they change or the application learns a format
+          type: integer
+          format: int64
+        problems:
+          description: Files that could not be read, or that hold the content of another photo and were left as they are
+          type: integer
+          format: int64
+    LibraryFile:
+      type: object
+      required: [path, state, problem, detail, photoId, purged]
+      properties:
+        path:
+          description: Relative to the library folder
+          type: string
+        state:
+          type: string
+          enum: [source, duplicate, unsupported, failed]
+        problem:
+          type: [string, "null"]
+          enum: [conflict, failed, null]
+        detail:
+          description: Why the file could not be read, or which photo has its content. In English, as the server wrote it
+          type: [string, "null"]
+        photoId:
+          description: The photo the file is the source of or repeats
+          type: [integer, "null"]
+          format: int64
+        purged:
+          description: Whether that photo was deleted permanently, so that the file stays out of the library
+          type: boolean
     LibraryScanResult:
       type: object
       required: [listed, added, moved, duplicates, inTrash, purged, unsupported, waiting, failed, changed, replaced, conflicts, returned, missing, trashed]

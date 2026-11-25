@@ -206,6 +206,7 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("PATCH /api/v1/library-folders/{id}", s.admin(s.updateLibraryFolder))
 	mux.HandleFunc("DELETE /api/v1/library-folders/{id}", s.admin(s.deleteLibraryFolder))
 	mux.HandleFunc("POST /api/v1/library-folders/{id}/scan", s.admin(s.scanLibraryFolder))
+	mux.HandleFunc("GET /api/v1/library-folders/{id}/files", s.admin(s.listLibraryFiles))
 
 	mux.HandleFunc("GET /api/v1/settings/previews", s.admin(s.getPreviewSettings))
 	mux.HandleFunc("PUT /api/v1/settings/previews", s.admin(s.updatePreviewSettings))

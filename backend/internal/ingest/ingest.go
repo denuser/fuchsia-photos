@@ -47,6 +47,12 @@ var (
 	ErrTooLarge = errors.New("the file is too large")
 )
 
+// SupportVersion changes whenever the formats the application supports do. A library
+// folder scan remembers the files it found unsupported and reads them again only after
+// they change or this number grows, so a format added later brings its files in at the
+// next scan with no migration. Raise it in the commit that adds a format.
+const SupportVersion = 1
+
 // ErrUnsupportedMessage tells a client which files are supported.
 const ErrUnsupportedMessage = "only JPEG, PNG, WebP, HEIC and camera RAW photos and MP4 and MOV videos are supported"
 

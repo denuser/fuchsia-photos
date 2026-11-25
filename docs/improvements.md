@@ -22,7 +22,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 16 | [Ten interface languages](#16-ten-interface-languages) | Done | Check date fields and fonts in Chinese, Japanese and Korean |
 | 17 | [RAW photos from cameras](#17-raw-photos-from-cameras) | Done, released in 0.1.0 | NAS checks 2, 3, 4, 6 and 7 |
 | 18 | [Lightroom XMP sidecars](#18-lightroom-xmp-sidecars) | Draft plan | Open questions 2 to 4; builds on 19 |
-| 19 | [Library folders indexed in place](#19-library-folders-indexed-in-place) | In progress: steps 1 to 4 done | Steps 5 to 7: deployment, the NAS check, docs; and the open questions on skipped files |
+| 19 | [Library folders indexed in place](#19-library-folders-indexed-in-place) | In progress: steps 1 to 4 done | Steps 5 to 7: deployment, the NAS check, docs |
 | 20 | [Safer RAW decoding](#20-safer-raw-decoding) | Done, released in 0.1.1 | |
 | 21 | [Map](#21-map) | Done, released in 0.2.0 | Check the map on a phone and with a larger library |
 | 22 | [Demo activity log](#22-demo-activity-log) | Implemented | Deploy and enable on the public demo |
@@ -511,7 +511,7 @@ Done in step 4, as built (2026-11-25): migration 00043 keeps how the last scan e
 
 Found by the advisor's review on 2026-11-25 and fixed in the same step: a photo whose file went away was moved to the trash even when an identical copy was still in a library folder. Now the scan promotes the copy to the photo's source, in the same folder or in another of the owner's, in one transaction, and trashes only a photo with no copy left. The preview version of a reprocessed photo goes up in the same update that makes it ready, not after it.
 
-Left open, as the 2026-11-21 design asks for more than is built: the folder page does not list skipped files (purged ones, conflicts, failures); `.xmp` files are skipped, not recorded for improvement 18; and unsupported files such as PSD and TIFF are opened again by every scan, as only files that became photos or duplicates have a row.
+Decided on 2026-11-25, after the review above, and built: what a scan leaves out is kept in `photo_files` (migration 00044), so that a rescan reads directories and not files, and the page lists it (`GET /library-folders/{id}/files`, three tabs). A file that is not a photo or video is a row with the state `unsupported` and a `support_version`; it is opened again only when its size or time change or when `ingest.SupportVersion`, raised in the commit that adds a format, is above the row's, so a new format brings its files in at the next scan with no migration. A new file that could not be read is a `failed` row with the reason and is tried again by every scan. A source file that holds the content of another photo, or could not be read after a change, keeps a `problem` and `detail` until it is fixed. A purged photo's duplicate rows are listed with their photo. `.xmp` files stay skipped without a row until improvement 18 decides how it stores them.
 
 Draft plan:
 
