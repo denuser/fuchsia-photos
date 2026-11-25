@@ -18,6 +18,7 @@ Edit `deploy/.env`:
 | `CACHE_DIR` | `./data/cache` | Previews. Use an SSD if the NAS has one |
 | `LIBRARY_DIR` | `./data/library` | Original photos |
 | `IMPORT_DIR` | `./data/import` | Folder scanned for imports, mounted read-only |
+| `FOLDERS_DIR` | `./data/folders` | Folders read where they are, mounted read-only. See [Library folders](#library-folders) |
 | `IMPORT_STABLE_SECONDS` | `60` | How long a file must stay unchanged before a folder scan imports it |
 | `WORKERS` | `3` | Photos processed at once. Keep at least one core free for the UI |
 | `MEMORY_LIMIT` | `4G` | Memory the application container may take. See [RAW photos](#raw-photos) |
@@ -35,12 +36,12 @@ Relative paths are relative to the `deploy` folder.
 The application runs as UID 1000, and Docker creates missing folders as root, so create them first and hand them over:
 
 ```sh
-mkdir -p /path/to/library /path/to/cache /path/to/import
+mkdir -p /path/to/library /path/to/cache /path/to/import /path/to/folders
 sudo chown 1000:1000 /path/to/library /path/to/cache
-sudo chmod -R a+rX /path/to/import
+sudo chmod -R a+rX /path/to/import /path/to/folders
 ```
 
-The application only reads the import folder, so UID 1000 needs no more than read access there.
+The application only reads the import and library folders, so UID 1000 needs no more than read access there.
 
 Then start everything and create the first administrator. Other users are managed in the web interface.
 
@@ -140,6 +141,21 @@ To move a library from Google Photos, export it at [takeout.google.com](https://
 The import reads the JSON files Google puts next to the photos. A photo without a date of its own, or with one without a time zone, takes the date from Google, and a photo without a location takes the place added in Google Photos. Folders with an album's file become albums of the owner, found by their title, so importing again fills the same albums. Descriptions, favorites and the archive come across, and photos Google had in the trash go to the trash. An edited copy is shown over its original, and the owner can switch to the original in the viewer. **Album photos in the trash** chooses what happens to a photo of an album that the owner has already moved to the trash.
 
 Several exports may sit in the folder together, such as an export of the whole library and later ones: a photo is added once, and the newest export's details win. The scan's summary counts the JSON files, the edited copies, the photos without JSON and the albums.
+
+## Library folders
+
+An import copies the photos into the library. A library folder is read where it is: the files stay in their folder, nothing is copied, and the application follows the folder as files are added, edited, moved and deleted there. This suits a share that another program works in, such as the folder of a Lightroom Classic catalog's originals and exports, where copying would double the space the files take.
+
+Put the folders under `FOLDERS_DIR`, which is mounted read-only at `/data/folders`, and as an administrator open **Library folders** in the account menu. Choose the owner, a folder and how often to scan it, which is every 10 minutes by default and at least a minute. The first scan reads every file once and can take a long time for a large share; later scans read only the folders and the files that changed, by size and modification time. **Scan now** starts one at once. The photos belong to the owner like any other: the library folder only says where their files are, and other users see them through albums and shares.
+
+- **Edits.** A file that changes at the same path stays the same photo, with its albums, tags and shares, and its previews are made again. A file whose new content is another photo of the owner is not merged into it: the page lists it under **Problems**.
+- **Moves.** A file that appears at a new path when the old one is gone, in this folder or in another of the owner's, is the same photo moved. Nothing is processed again.
+- **Missing files.** A file that two scans in a row do not find sends its photo to the trash, where it shows "the file is not available" and keeps its previews. When the file comes back, the photo comes out of the trash, unless its owner put it there. If an identical copy of the file lies elsewhere in a library folder, the photo is read from the copy and goes nowhere. A folder that cannot be read or lists no files, as an unmounted share does, stops the scan without marking anything.
+- **Deleting.** The folder is mounted read-only. Moving a photo to the trash and deleting it permanently never touch its file, and a photo deleted permanently stays deleted even if its file is edited later. A copy of a file the owner already has is skipped, and **Files** lists these and the files that are not photos or videos, such as PSD and TIFF, which are read again only when they change.
+- **Links.** Symbolic links are never followed, so a link left in the share cannot be used to read other files.
+- **Removing a folder.** A folder with photos cannot be removed. Delete the photos first; their files are not touched.
+
+On Linux, the application reads the folder as the user it runs as, UID 1000 or `apps` (568), so it needs read access there. On TrueNAS, files that a Mac writes to the share over SMB get their permissions from the dataset's ACL: give `apps` an inheritable entry that can read and traverse, or every new file shows up under **Problems** as unreadable. The originals in a library folder are not in the nightly dump or in the library's snapshots: back them up with the share. The dump holds only which file is which photo.
 
 ## Uploading from a phone over WebDAV
 
@@ -262,6 +278,7 @@ It applies to the password form only. A sign-in through a provider is not asked 
 |---|---|---|
 | Database | `BACKUP_DIR` | Dumped every night by the `backup` container |
 | Originals | `LIBRARY_DIR` | Snapshots of the folder, for example ZFS snapshots on TrueNAS |
+| Originals in [library folders](#library-folders) | `FOLDERS_DIR` | With the share they live in, not with the library: the dump knows only which file is which photo |
 | Previews | `CACHE_DIR` | Not backed up. After a restore, `render-previews` makes them again from the originals |
 
 Back up the dumps and the originals together, and keep a copy off the NAS: a snapshot on the same pool does not survive the loss of the pool. On TrueNAS, add a periodic snapshot task for the `backups` and `library` datasets that runs daily, shortly after `BACKUP_TIME`, and a replication task to another disk or machine.
@@ -411,6 +428,7 @@ The transcoder reads the videos from the library and the cache, and writes the c
          - '107'
        volumes:
          - ${LIBRARY_DIR:-./data/library}:/data/library:ro
+         - ${FOLDERS_DIR:-./data/folders}:/data/folders:ro
          - ${CACHE_DIR:-./data/cache}:/data/cache
    ```
 
@@ -426,7 +444,7 @@ The transcoder's settings:
 |---|---|---|
 | `TRANSCODER_TOKEN` | required | Bearer token the application sends |
 | `VAAPI_DEVICE` | `/dev/dri/renderD128` | Render node of the graphics |
-| `LIBRARY_DIR`, `CACHE_DIR` | `/data/library`, `/data/cache` | The application's folders, at the same paths as in its container |
+| `LIBRARY_DIR`, `FOLDERS_DIR`, `CACHE_DIR` | `/data/library`, `/data/folders`, `/data/cache` | The application's folders, at the same paths as in its container. The library folders are read only |
 | `TRANSCODER_ADDR` | `:8091` | Address it listens on |
 | `LOG_LEVEL`, `LOG_FORMAT` | `info`, `text` | As for the application |
 
@@ -434,7 +452,7 @@ The transcoder's settings:
 
 On TrueNAS, the setup from [Running from an image](#running-from-an-image) runs as a custom app. TrueNAS does not read a `.env` file, so the values go into the YAML itself.
 
-Both containers run as the TrueNAS `apps` user and group, UID and GID 568. For H.264 copies of videos, add the transcoder as described [below](#video-copies-on-truenas). Create a dataset for the application, and inside it a dataset or folder for each of `library`, `cache`, `import`, `postgres`, `backups` and `caddy`. Separate datasets for `library` and `backups` can be snapshotted on their own, as described in [Backups](#backups). In **Datasets**, select the parent dataset and choose **Edit** on the **Permissions** card. Set the owner and the owning group to `apps`, give `owner@` full control and `group@` modify, and apply the permissions to the child datasets. The application only reads `import`, so files copied there by other users need to be readable by `apps`.
+Both containers run as the TrueNAS `apps` user and group, UID and GID 568. For H.264 copies of videos, add the transcoder as described [below](#video-copies-on-truenas). Create a dataset for the application, and inside it a dataset or folder for each of `library`, `cache`, `import`, `postgres`, `backups` and `caddy`, and, to read a share where it is, [library folders](#library-folders) under `folders` or a dataset you mount there. Separate datasets for `library` and `backups` can be snapshotted on their own, as described in [Backups](#backups). In **Datasets**, select the parent dataset and choose **Edit** on the **Permissions** card. Set the owner and the owning group to `apps`, give `owner@` full control and `group@` modify, and apply the permissions to the child datasets. The application only reads `import` and `folders`, so files copied there by other users need to be readable by `apps`.
 
 In **Apps**, choose **Discover Apps**, then **Install via YAML** from the menu, and paste this, with your paths and password:
 
@@ -482,6 +500,7 @@ services:
       - /mnt/pool/magellanica/library:/data/library
       - /mnt/pool/magellanica/cache:/data/cache
       - /mnt/pool/magellanica/import:/data/import:ro
+      - /mnt/pool/magellanica/folders:/data/folders:ro
     deploy:
       resources:
         limits:
@@ -585,6 +604,7 @@ and the transcoder under `services`, with the image for your graphics, the group
       TRANSCODER_TOKEN: change-me-too
     volumes:
       - /mnt/pool/magellanica/library:/data/library:ro
+      - /mnt/pool/magellanica/folders:/data/folders:ro
       - /mnt/pool/magellanica/cache:/data/cache
 ```
 

@@ -22,7 +22,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 16 | [Ten interface languages](#16-ten-interface-languages) | Done | Check date fields and fonts in Chinese, Japanese and Korean |
 | 17 | [RAW photos from cameras](#17-raw-photos-from-cameras) | Done, released in 0.1.0 | NAS checks 2, 3, 4, 6 and 7 |
 | 18 | [Lightroom XMP sidecars](#18-lightroom-xmp-sidecars) | Draft plan | Open questions 2 to 4; builds on 19 |
-| 19 | [Library folders indexed in place](#19-library-folders-indexed-in-place) | In progress: steps 1 to 4 done | Steps 5 to 7: deployment, the NAS check, docs |
+| 19 | [Library folders indexed in place](#19-library-folders-indexed-in-place) | In progress: steps 1 to 5 done | Steps 6 and 7: the NAS check, README, changelog and the architecture rows |
 | 20 | [Safer RAW decoding](#20-safer-raw-decoding) | Done, released in 0.1.1 | |
 | 21 | [Map](#21-map) | Done, released in 0.2.0 | Check the map on a phone and with a larger library |
 | 22 | [Demo activity log](#22-demo-activity-log) | Implemented | Deploy and enable on the public demo |
@@ -516,6 +516,8 @@ Found by the advisor's second review on 2026-11-25 and fixed: whoever can write 
 Decided on 2026-11-25: uploading a photo whose file in a library folder is away, as a photo the scan moved to the trash is, makes the upload the photo's original in the library. The photo is restored as an upload restores any photo, its `source_path` and the file's row end, and the file, if it comes back to the folder, is a duplicate of it.
 
 Decided on 2026-11-25, after the review above, and built: what a scan leaves out is kept in `photo_files` (migration 00044), so that a rescan reads directories and not files, and the page lists it (`GET /library-folders/{id}/files`, three tabs). A file that is not a photo or video is a row with the state `unsupported` and a `support_version`; it is opened again only when its size or time change or when `ingest.SupportVersion`, raised in the commit that adds a format, is above the row's, so a new format brings its files in at the next scan with no migration. A new file that could not be read is a `failed` row with the reason and is tried again by every scan. A source file that holds the content of another photo, or could not be read after a change, keeps a `problem` and `detail` until it is fixed. A purged photo's duplicate rows are listed with their photo. `.xmp` files stay skipped without a row until improvement 18 decides how it stores them.
+
+Done in step 5 (2026-11-25): the mount `${FOLDERS_DIR:-./data/folders}:/data/folders:ro` in `deploy/compose.yaml` and `deploy/compose.image.yaml`, in the TrueNAS YAML and in both transcoder snippets of `docs/deployment.md`, the variable in `.env.example` and the development environment of the Makefile, and a "Library folders" section of the deployment guide with the SMB ACL for `apps` and the backup note. Checked with `docker compose config -q` on both compose files and on the TrueNAS YAML with and without the transcoder, extracted from the guide. The transcoder service refused every input outside the library and the cache, so the copy of a video read in place would have failed with a bad request and been marked failed for good; it now reads the folders mount too, through the same link check as the application (`FOLDERS_DIR`, default `/data/folders`).
 
 Draft plan:
 

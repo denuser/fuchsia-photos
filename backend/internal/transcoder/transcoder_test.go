@@ -22,22 +22,24 @@ type env struct {
 	client  *Client
 	library string
 	cache   string
+	folders string
 }
 
 func setup(t *testing.T, transcode func(ctx context.Context, in, out string, video vaapi.Source, hw vaapi.Hardware) error) env {
 	t.Helper()
-	library, cache := t.TempDir(), t.TempDir()
+	library, cache, folders := t.TempDir(), t.TempDir(), t.TempDir()
 	s := &Server{
 		Token:     "secret",
 		Library:   library,
 		Cache:     cache,
+		Folders:   folders,
 		Device:    "/dev/dri/renderD128",
 		Detect:    func(context.Context, string) (vaapi.Hardware, error) { return intel, nil },
 		Transcode: transcode,
 	}
 	h := httptest.NewServer(s.Handler())
 	t.Cleanup(h.Close)
-	return env{s, h, NewClient(h.URL, "secret"), library, cache}
+	return env{s, h, NewClient(h.URL, "secret"), library, cache, folders}
 }
 
 // touch makes a file, as the application has the video and the file for its
@@ -251,5 +253,30 @@ func TestWithin(t *testing.T) {
 	}
 	if within("/a", "") {
 		t.Error("an empty folder contains /a")
+	}
+}
+
+// A video read in place from a library folder is copied, unless a link is in its way.
+func TestLibraryFolderVideos(t *testing.T) {
+	e := setup(t, writeCopy)
+	ctx := context.Background()
+	video := vaapi.Source{Width: 1920, Height: 1080}
+	out := filepath.Join(e.cache, "previews", "01", "1-copy.mp4")
+	touch(t, out)
+
+	in := filepath.Join(e.folders, "lightroom", "a.mov")
+	touch(t, in)
+	if err := e.client.Transcode(ctx, in, out, video); err != nil {
+		t.Fatalf("a video of a library folder: %v", err)
+	}
+
+	secret := filepath.Join(e.cache, "previews", "05", "5-viewer.webp")
+	touch(t, secret)
+	swapped := filepath.Join(e.folders, "lightroom", "b.mov")
+	if err := os.Symlink(secret, swapped); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.client.Transcode(ctx, swapped, out, video); err == nil || !strings.Contains(err.Error(), "400") {
+		t.Errorf("a link in a library folder: %v, want a bad request", err)
 	}
 }

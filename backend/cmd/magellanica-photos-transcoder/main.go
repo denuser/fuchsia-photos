@@ -46,6 +46,7 @@ func run() error {
 		Token:   token,
 		Library: getenv("LIBRARY_DIR", "/data/library"),
 		Cache:   getenv("CACHE_DIR", "/data/cache"),
+		Folders: getenv("FOLDERS_DIR", "/data/folders"),
 		Device:  getenv("VAAPI_DEVICE", "/dev/dri/renderD128"),
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

@@ -64,6 +64,8 @@ services:
       - ${LIBRARY_DIR:-./data/library}:/data/library
       - ${CACHE_DIR:-./data/cache}:/data/cache
       - ${IMPORT_DIR:-./data/import}:/data/import:ro
+      # Library folders are read where they are, never changed.
+      - ${FOLDERS_DIR:-./data/folders}:/data/folders:ro
 
   # Dumps the database every night and keeps the latest dumps. See "Backups" in
   # docs/deployment.md. $$ stands for $ in the script.

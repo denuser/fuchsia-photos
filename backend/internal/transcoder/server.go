@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/vaapi"
 )
 
@@ -41,6 +42,10 @@ type Server struct {
 	// it writes copies into Cache only.
 	Library string
 	Cache   string
+	// Folders is the library folders mount, where the originals of photos read in place are.
+	// It is read like the library, with one more check: no step of the path may be a link, as
+	// whoever writes to a share could point one at a file of the application.
+	Folders string
 	// Detect finds the graphics; Transcode makes a copy. They default to
 	// vaapi.DetectHardware on Device and vaapi.Transcode.
 	Device    string
@@ -111,9 +116,16 @@ func (s *Server) transcode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request: "+err.Error())
 		return
 	}
-	if !within(req.In, s.Library) && !within(req.In, s.Cache) {
-		writeError(w, http.StatusBadRequest, "the video is outside the library and the cache: "+req.In)
+	inFolders := s.Folders != "" && within(req.In, s.Folders)
+	if !within(req.In, s.Library) && !within(req.In, s.Cache) && !inFolders {
+		writeError(w, http.StatusBadRequest, "the video is outside the library, the library folders and the cache: "+req.In)
 		return
+	}
+	if inFolders {
+		if err := (storage.Layout{Folders: s.Folders}).CheckSource(req.In); err != nil {
+			writeError(w, http.StatusBadRequest, "the video is not a regular file under the library folders: "+req.In)
+			return
+		}
 	}
 	if !within(req.Out, s.Cache) {
 		writeError(w, http.StatusBadRequest, "the copy is outside the cache: "+req.Out)

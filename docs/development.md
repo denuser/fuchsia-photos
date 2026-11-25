@@ -72,6 +72,7 @@ The server reads its settings from environment variables:
 | `LIBRARY_DIR` | `/data/library` | Original photos |
 | `CACHE_DIR` | `/data/cache` | Previews |
 | `IMPORT_DIR` | `/data/import` | The folder that scans read from. Only read, never changed |
+| `FOLDERS_DIR` | `/data/folders` | The mount of library folders, read where they are. Only read, never changed |
 | `IMPORT_STABLE_SECONDS` | `60` | How long a file must stay unchanged before a scan imports it |
 | `WORKERS` | `3` | Photos processed at once |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. `debug` logs every request |
