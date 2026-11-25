@@ -618,6 +618,127 @@ func TestScanTriesFailedFilesAgain(t *testing.T) {
 	}
 }
 
+// skipAsRoot skips a test that needs a file the process may not read: root reads anything.
+func skipAsRoot(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, which ignores file permissions")
+	}
+}
+
+// A subfolder the scan may not read is not an empty one: its files are not listed, and not
+// marking them missing is what keeps their photos out of the trash.
+func TestScanKeepsPhotosOfAnUnreadableSubfolder(t *testing.T) {
+	skipAsRoot(t)
+	e := setup(t)
+	ctx := context.Background()
+	e.put("a/IMG_0001.jpg", "landscape.jpg")
+	e.put("IMG_0002.jpg", "rotated.jpg")
+	if res := e.scan(); res.Added != 2 {
+		t.Fatalf("first scan = %+v, want 2 added", res)
+	}
+
+	dir := filepath.Join(e.layout.Folders, "lightroom", "a")
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o750) })
+	// More scans than a file needs to go to the trash after it is missing.
+	for i := range 4 {
+		res, err := e.service.Scan(ctx, e.folder.ID)
+		if err != nil {
+			t.Fatalf("scan %d: %v, want the unreadable subfolder to leave it going", i+1, err)
+		}
+		if res.Missing != 0 || res.Trashed != 0 || res.Listed != 1 {
+			t.Fatalf("scan %d = %+v, want 1 file listed and nothing missing or trashed", i+1, res)
+		}
+	}
+	files, _ := e.queries.ListPhotoFiles(ctx, e.folder.ID)
+	if len(files) != 2 {
+		t.Fatalf("known files = %d, want both kept", len(files))
+	}
+	for _, f := range files {
+		if f.MissedScans != 0 {
+			t.Errorf("%s: missed scans = %d, want none counted", f.Path, f.MissedScans)
+		}
+		photo, err := e.queries.GetPhoto(ctx, *f.PhotoID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if photo.DeletedAt != nil {
+			t.Errorf("%s: the photo is in the trash", f.Path)
+		}
+	}
+
+	// Readable again: the scan sees the file and nothing has changed for its photo.
+	if err := os.Chmod(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if res := e.scan(); res.Listed != 2 || res.Missing != 0 || res.Trashed != 0 || res.Added != 0 {
+		t.Errorf("scan after the folder was readable = %+v", res)
+	}
+}
+
+// A file the scan may not read is a problem of that file only: a new one waits as a problem
+// and is added once it can be read, and one already known is left alone, as it is not read
+// while its size and time are the same.
+func TestScanReportsAnUnreadableFile(t *testing.T) {
+	skipAsRoot(t)
+	e := setup(t)
+	ctx := context.Background()
+	e.put("known.jpg", "landscape.jpg")
+	if res := e.scan(); res.Added != 1 {
+		t.Fatalf("first scan = %+v", res)
+	}
+	e.put("new.jpg", "rotated.jpg")
+	dir := filepath.Join(e.layout.Folders, "lightroom")
+	for _, name := range []string{"known.jpg", "new.jpg"} {
+		p := filepath.Join(dir, name)
+		if err := os.Chmod(p, 0); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(p, 0o640) })
+	}
+
+	problems := func() []store.ListLibraryFilesRow {
+		rows, err := e.queries.ListLibraryFiles(ctx, store.ListLibraryFilesParams{FolderID: e.folder.ID, Kind: "problems", MaxRows: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rows
+	}
+	for i := range 3 {
+		res := e.scan()
+		if res.Added != 0 || res.Failed != 1 || res.Missing != 0 || res.Trashed != 0 {
+			t.Fatalf("scan %d = %+v, want only the new file failed", i+1, res)
+		}
+	}
+	if p := problems(); len(p) != 1 || p[0].Path != "new.jpg" || p[0].State != "failed" || p[0].Detail == nil {
+		t.Fatalf("problems = %+v, want new.jpg failed with the reason", p)
+	}
+	files, _ := e.queries.ListPhotoFiles(ctx, e.folder.ID)
+	for _, f := range files {
+		if f.Path == "known.jpg" {
+			photo, err := e.queries.GetPhoto(ctx, *f.PhotoID)
+			if err != nil || photo.DeletedAt != nil || f.MissedScans != 0 {
+				t.Errorf("known.jpg: photo %+v, missed %d, err %v; want it left alone", photo.DeletedAt, f.MissedScans, err)
+			}
+		}
+	}
+
+	for _, name := range []string{"known.jpg", "new.jpg"} {
+		if err := os.Chmod(filepath.Join(dir, name), 0o640); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if res := e.scan(); res.Added != 1 || res.Failed != 0 {
+		t.Fatalf("scan after the files were readable = %+v, want the new file added", res)
+	}
+	if p := problems(); len(p) != 0 {
+		t.Errorf("problems = %+v, want none once it could be read", p)
+	}
+}
+
 // A scan cut off in the middle, by a restart or by its time limit, marks nothing missing and
 // changes no row: what it had not seen is not away.
 func TestInterruptedScanMarksNothing(t *testing.T) {
