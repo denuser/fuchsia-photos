@@ -11,6 +11,7 @@ import MemoriesView from './views/MemoriesView.vue'
 import ImportView from './views/ImportView.vue'
 import ActivityView from './views/ActivityView.vue'
 import LoginView from './views/LoginView.vue'
+import PublicAlbumView from './views/PublicAlbumView.vue'
 import ProfileView from './views/ProfileView.vue'
 import SearchView from './views/SearchView.vue'
 import SharedView from './views/SharedView.vue'
@@ -23,6 +24,8 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', component: LoginView, meta: { public: true } },
+    // A public link opens for anyone, signed in or not.
+    { path: '/s/:token', component: PublicAlbumView, meta: { anyone: true } },
     { path: '/', component: TimelineView },
     { path: '/search', component: SearchView },
     { path: '/albums', component: AlbumsView },
@@ -49,6 +52,9 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore()
   await auth.load()
 
+  if (to.meta.anyone) {
+    return true
+  }
   if (to.meta.public) {
     return auth.user ? '/' : true
   }

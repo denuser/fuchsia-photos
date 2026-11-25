@@ -38,6 +38,15 @@ type Album struct {
 	Visibility   string
 }
 
+type AlbumLink struct {
+	ID           int64
+	AlbumID      int64
+	Token        string
+	PasswordHash string
+	ExpiresAt    *time.Time
+	CreatedAt    time.Time
+}
+
 type AlbumPhoto struct {
 	AlbumID int64
 	PhotoID int64

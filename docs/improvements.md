@@ -16,7 +16,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 10 | [Import from Google Takeout and iCloud](#10-import-from-google-takeout-and-icloud) | Takeout done, iCloud plan drafted | iCloud: a real export from the library's owner (step 0), then the build |
 | 11 | [Grid tile size](#11-grid-tile-size) | Done | |
 | 12 | [Upload into an album, and whole folders](#12-upload-into-an-album-and-whole-folders) | Done | Check "Choose folder" on iPhone and Android |
-| 13 | [Public links to albums](#13-public-links-to-albums) | Planned | Open questions, then a plan |
+| 13 | [Public links to albums](#13-public-links-to-albums) | Built; checked in the browser test only | A check from outside the home network, through the tunnel |
 | 14 | [Memories: on this day](#14-memories-on-this-day) | Done, released in 0.2.0 | |
 | 15 | [Wait for the copy of an HDR video](#15-wait-for-the-copy-of-an-hdr-video) | Done | Check in Firefox on the NAS |
 | 16 | [Ten interface languages](#16-ten-interface-languages) | Done | Check date fields and fonts in Chinese, Japanese and Korean |
@@ -301,16 +301,21 @@ Plan, three changes in this order, merged in one commit:
 
 ## 13. Public links to albums
 
-**Status:** planned, not started.
+**Status:** built on 2026-11-25, with backend tests (`internal/api/links_test.go`) and a step in the browser test. Not checked through a real tunnel from outside the home network.
 
-The owner of an album makes a link that opens it without an account, to show photos to people who do not use the server. Today sharing reaches only users of the server, as described under [sharing](architecture.md#decisions). People moving from other photo libraries tend to expect such links.
+The owner of an album makes a link that opens it without an account, to show photos to people who do not use the server. Today sharing between users is described under [sharing](architecture.md#decisions); a public link is a separate way in that never gives a visitor a user.
 
-Open questions before a plan:
+Decided on 2026-11-25 (the answers to the open questions, from the defaults the user accepted):
+- **Albums only**, not single photos. A photo goes into an album first.
+- **Expiry and a password are optional.** An expiry is 1 to 365 days; a password is at least 8 characters, kept as an argon2id hash, and is given once per link (a signed cookie for that link's path, 12 hours).
+- **No originals.** A visitor gets the grid and viewer previews, which carry no EXIF, and the video that plays (its H.264 copy when there is one, else the file; a video file does keep its container metadata). The list holds the id, the kind, the size, the date taken and the duration: no name, camera or place. A motion photo shows as its still.
+- **Places are not shown**, whatever the administrator's setting for signed-in users.
+- **Where it is served.** The page is `/s/<token>`, the API is `/api/v1/public/<token>/...`, apart from the rest, so a tunnel or proxy can open only those and the static files. `docs/deployment.md` has a Cloudflare Tunnel example. The link is built from `PUBLIC_URL`; without it the interface completes the path with the address it is opened at and says that may not work from outside.
+- **Limits.** Wrong passwords slow down per link (`auth.Limiter`, keyed by the token), not per address. A rate limit for visitors in general is left to the proxy. Previews are `Cache-Control: private`, so a CDN does not keep what a revoked link showed.
 
-- Albums only, or single photos too.
-- Whether a link may have an expiry date and a password, and whether visitors may download originals, which keep their EXIF and GPS.
-- Whether the album's location data is shown to visitors, given that locations are shown only when an administrator allows them.
-- How the page is served to visitors without a session, and how its requests are limited, as the NAS would then be reached from outside the home network.
+How it is kept: the table `album_links` (migration 00041) holds the token itself, not a hash, so that the owner sees a link again later; reading the database already gives access to everything else a link shows. An unknown, expired or revoked token, a deleted album and a disabled owner all answer 404. A link works while its owner is active, and a photo that leaves the album, goes to the trash or is hidden under another one (a RAW under its JPEG) leaves the link with it.
+
+Not done: a way for a visitor to download the whole album or one original (the default is off, and no setting turns it on), a view count, editing a link's expiry or password after it is made (revoke and make another), and the tunnel check.
 
 ## 14. Memories: on this day
 

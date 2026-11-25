@@ -40,6 +40,7 @@ It is built for modest hardware. It is developed and measured on an Intel N150 w
 - Memories: a strip above the timeline and a page with the photos taken on this day in earlier years, or on the closest day within three days
 - Albums, personal tags, favorites, an archive, descriptions, bulk actions and a trash
 - Sharing of photos and albums with all users or with specific ones, read-only for the recipient
+- Public links to albums for people with no account, with an optional expiry and password, showing previews only
 - Users created by the administrator, with no self-registration, and two roles: administrator and user
 - Search by description and similar photos, with an optional ML service
 - Nightly database dumps with a tested restore, request logs and the job queue on the administration page

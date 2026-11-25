@@ -1119,6 +1119,132 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/albums/{id}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The public links of an album its owner made */
+        get: operations["listAlbumLinks"];
+        put?: never;
+        /**
+         * Make a link that opens the album without an account
+         * @description Visitors see the album's name, its photos as previews, without names, cameras or places, and play its videos. They get no originals. A link has at most 10 per album, may expire, and may have a password.
+         */
+        post: operations["createAlbumLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/albums/{id}/links/{linkId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a link. It stops working at once */
+        delete: operations["deleteAlbumLink"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A public album, for visitors with no account
+         * @description Everything under /public/{token} is open to anyone who has the token. An unknown, expired or revoked link, and one of a disabled user, answers 404. With a password, the album's name stays out until /public/{token}/unlock has accepted it.
+         */
+        get: operations["getPublicAlbum"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/{token}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give the password of a link. Sets a cookie for this link, valid 12 hours */
+        post: operations["unlockPublicAlbum"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/{token}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The photos of a public album, newest first */
+        get: operations["listPublicPhotos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/{token}/photos/{id}/previews/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A preview of a photo of a public album */
+        get: operations["getPublicPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/{token}/photos/{id}/video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A video of a public album, as its H.264 copy when there is one, with range requests */
+        get: operations["getPublicVideo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/albums/{id}/sharing": {
         parameters: {
             query?: never;
@@ -1639,6 +1765,39 @@ export interface components {
         };
         /** @enum {string} */
         Role: "admin" | "user";
+        AlbumLink: {
+            /** Format: int64 */
+            id: number;
+            /** @description The page's address on this server, such as /s/<token> */
+            path: string;
+            /** @description The full address, built from PUBLIC_URL. Empty when the server has no PUBLIC_URL */
+            url: string;
+            hasPassword: boolean;
+            /** Format: date-time */
+            expiresAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        PublicAlbum: {
+            passwordRequired: boolean;
+            unlocked: boolean;
+            /** @description Absent until a link with a password is unlocked */
+            name?: string;
+            /** Format: date-time */
+            expiresAt: string | null;
+        };
+        PublicPhoto: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "photo" | "video";
+            width: number | null;
+            height: number | null;
+            /** Format: date-time */
+            takenAt: string | null;
+            duration: number | null;
+            previewVersion: number;
+        };
         TwoFactorPending: {
             twoFactor: boolean;
             token: string;
@@ -2047,6 +2206,7 @@ export interface components {
         };
     };
     parameters: {
+        Token: string;
         Id: number;
         SearchLimit: number;
     };
@@ -3897,6 +4057,228 @@ export interface operations {
                     "application/json": components["schemas"]["Album"];
                 };
             };
+            404: components["responses"]["Error"];
+        };
+    };
+    listAlbumLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The links, oldest first. Empty for an album that is not the user's */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumLink"][];
+                };
+            };
+        };
+    };
+    createAlbumLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Days until the link stops working, 1 to 365. Without it the link does not expire */
+                    expiresInDays?: number;
+                    /** @description At least 8 characters. Without it anyone with the link sees the album */
+                    password?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The link */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumLink"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    deleteAlbumLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+                linkId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    getPublicAlbum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: components["parameters"]["Token"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The album, or only that it needs a password */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicAlbum"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    unlockPublicAlbum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: components["parameters"]["Token"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    password: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Unlocked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description Too many wrong passwords for this link. Retry-After says how many seconds to wait */
+            429: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listPublicPhotos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: components["parameters"]["Token"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Photos that are ready and not in the trash */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicPhoto"][];
+                };
+            };
+            /** @description The link needs a password */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    getPublicPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: components["parameters"]["Token"];
+                id: components["parameters"]["Id"];
+                kind: "grid" | "viewer";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getPublicVideo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: components["parameters"]["Token"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The video */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp4": string;
+                };
+            };
+            401: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };

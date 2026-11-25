@@ -279,6 +279,56 @@ const steps = {
     }
     await context.close()
   },
+  'a public link opens an album for a visitor with no account, until it is revoked': async () => {
+    await page.goto(`${BASE}/albums`)
+    await page.getByText('Trip').click()
+    await tiles(2)
+    await button('Album actions').click()
+    await page.locator('.v-list-item', { hasText: /^Public links$/ }).click()
+    await page.getByTestId('create-album-link').click()
+    const link = page.getByTestId('album-link')
+    await link.waitFor()
+    const address = await link.locator('input').inputValue()
+    if (!address.includes('/s/')) {
+      throw new Error(`the public address is ${address}`)
+    }
+
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
+    const visitor = await context.newPage()
+    visitor.on('pageerror', (error) => problems.push(`visitor's page error: ${error.message}`))
+    await visitor.goto(address)
+    await visitor.getByRole('heading', { name: 'Trip' }).waitFor()
+    await visitor
+      .waitForFunction(
+        () => {
+          const images = [...document.querySelectorAll('[data-testid=public-photo] img')]
+          return images.length === 2 && images.every((img) => img.complete && img.naturalWidth > 0)
+        },
+        undefined,
+        { timeout: 30_000 },
+      )
+      .catch(() => {
+        throw new Error('the visitor did not see the two previews')
+      })
+    if ((await visitor.getByRole('button', { name: 'Upload', exact: true }).count()) > 0) {
+      throw new Error('a visitor sees the application')
+    }
+    await visitor.getByTestId('public-photo').first().click()
+    await visitor.getByTestId('public-viewer').waitFor()
+    await visitor.keyboard.press('Escape')
+    await visitor.getByTestId('public-viewer').waitFor({ state: 'hidden' })
+
+    // Revoking asks to confirm, then closes the link at once.
+    await dialog().getByRole('button', { name: 'Revoke', exact: true }).click()
+    await Promise.all([
+      page.waitForResponse((r) => r.request().method() === 'DELETE' && /\/links\/\d+$/.test(new URL(r.url()).pathname) && r.ok(), { timeout: 30_000 }),
+      page.getByRole('dialog').last().getByRole('button', { name: 'Revoke', exact: true }).click(),
+    ])
+    await visitor.reload()
+    await visitor.getByTestId('public-missing').waitFor()
+    await context.close()
+    await dialog().getByRole('button', { name: 'Close', exact: true }).click()
+  },
   'upload into a new album from the dialog, then into it from the album menu': async () => {
     await page.goto(BASE)
     await previews(5)

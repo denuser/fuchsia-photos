@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -67,7 +68,11 @@ type server struct {
 	// codes does the same for wrong two-factor codes, per user id. It is apart from logins, whose
 	// keys are whatever a visitor types as a login.
 	codes *auth.Limiter
-	oidc  []*oidcProvider
+	// linkTries slows down wrong passwords of one public link, and linkKey signs the cookie that
+	// says a visitor gave it right.
+	linkTries *auth.Limiter
+	linkKey   []byte
+	oidc      []*oidcProvider
 }
 
 // NewHandler returns the application handler.
@@ -78,7 +83,15 @@ func NewHandler(deps Deps) http.Handler {
 	if deps.Transcode == nil {
 		deps.Transcode = &transcode.Service{Queries: deps.Queries, Layout: deps.Layout}
 	}
-	s := &server{Deps: deps, logins: auth.NewLimiter(), codes: auth.NewLimiter()}
+	s := &server{Deps: deps, logins: auth.NewLimiter(), codes: auth.NewLimiter(), linkTries: auth.NewLimiter()}
+	// Without SESSION_SECRET the key is made at start, so visitors give a link's password again after a restart.
+	s.linkKey = []byte(deps.SessionSecret)
+	if len(s.linkKey) == 0 {
+		s.linkKey = make([]byte, 32)
+		if _, err := rand.Read(s.linkKey); err != nil {
+			panic(err)
+		}
+	}
 	for _, p := range deps.OIDCProviders {
 		s.oidc = append(s.oidc, &oidcProvider{OIDCProvider: p})
 	}
@@ -91,6 +104,14 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/auth/options", s.listSignInOptions)
 	mux.HandleFunc("GET /api/v1/auth/oidc/{id}/login", s.oidcLogin)
 	mux.HandleFunc("GET /api/v1/auth/oidc/{id}/callback", s.oidcCallback)
+
+	// What visitors of a public link use. A proxy or tunnel can open these paths, /s/ and the static files
+	// to the internet and keep the rest of the application home.
+	mux.HandleFunc("GET /api/v1/public/{token}", s.getPublicAlbum)
+	mux.HandleFunc("POST /api/v1/public/{token}/unlock", s.unlockPublicAlbum)
+	mux.HandleFunc("GET /api/v1/public/{token}/photos", s.listPublicPhotos)
+	mux.HandleFunc("GET /api/v1/public/{token}/photos/{id}/previews/{kind}", s.getPublicPreview)
+	mux.HandleFunc("GET /api/v1/public/{token}/photos/{id}/video", s.getPublicVideo)
 
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.getMe))
 	mux.HandleFunc("PATCH /api/v1/me", s.authenticated(s.updateMe))
@@ -159,6 +180,9 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("PATCH /api/v1/albums/{id}", s.authenticated(s.renameAlbum))
 	mux.HandleFunc("DELETE /api/v1/albums/{id}", s.authenticated(s.deleteAlbum))
 	mux.HandleFunc("PUT /api/v1/albums/{id}/cover", s.authenticated(s.setAlbumCover))
+	mux.HandleFunc("GET /api/v1/albums/{id}/links", s.authenticated(s.listAlbumLinks))
+	mux.HandleFunc("POST /api/v1/albums/{id}/links", s.authenticated(s.createAlbumLink))
+	mux.HandleFunc("DELETE /api/v1/albums/{id}/links/{linkId}", s.authenticated(s.deleteAlbumLink))
 	mux.HandleFunc("GET /api/v1/albums/{id}/sharing", s.authenticated(s.getAlbumSharing))
 	mux.HandleFunc("POST /api/v1/albums/{id}/sharing", s.authenticated(s.changeAlbumSharing))
 	mux.HandleFunc("POST /api/v1/albums/{id}/photos", s.authenticated(s.addAlbumPhotos))

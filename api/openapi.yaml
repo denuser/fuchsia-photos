@@ -1716,6 +1716,197 @@ paths:
                 $ref: "#/components/schemas/Album"
         "404":
           $ref: "#/components/responses/Error"
+  /albums/{id}/links:
+    get:
+      operationId: listAlbumLinks
+      summary: The public links of an album its owner made
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The links, oldest first. Empty for an album that is not the user's
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlbumLink"
+    post:
+      operationId: createAlbumLink
+      summary: Make a link that opens the album without an account
+      description: >-
+        Visitors see the album's name, its photos as previews, without names, cameras or places, and
+        play its videos. They get no originals. A link has at most 10 per album, may expire, and may
+        have a password.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresInDays:
+                  description: Days until the link stops working, 1 to 365. Without it the link does not expire
+                  type: integer
+                password:
+                  description: At least 8 characters. Without it anyone with the link sees the album
+                  type: string
+      responses:
+        "201":
+          description: The link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumLink"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /albums/{id}/links/{linkId}:
+    delete:
+      operationId: deleteAlbumLink
+      summary: Revoke a link. It stops working at once
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: linkId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Revoked
+        "404":
+          $ref: "#/components/responses/Error"
+  /public/{token}:
+    get:
+      operationId: getPublicAlbum
+      summary: A public album, for visitors with no account
+      description: >-
+        Everything under /public/{token} is open to anyone who has the token. An unknown, expired or revoked
+        link, and one of a disabled user, answers 404. With a password, the album's name stays out until
+        /public/{token}/unlock has accepted it.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Token"
+      responses:
+        "200":
+          description: The album, or only that it needs a password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicAlbum"
+        "404":
+          $ref: "#/components/responses/Error"
+  /public/{token}/unlock:
+    post:
+      operationId: unlockPublicAlbum
+      summary: Give the password of a link. Sets a cookie for this link, valid 12 hours
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Token"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+      responses:
+        "204":
+          description: Unlocked
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "429":
+          description: Too many wrong passwords for this link. Retry-After says how many seconds to wait
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /public/{token}/photos:
+    get:
+      operationId: listPublicPhotos
+      summary: The photos of a public album, newest first
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Token"
+      responses:
+        "200":
+          description: Photos that are ready and not in the trash
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PublicPhoto"
+        "401":
+          description: The link needs a password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /public/{token}/photos/{id}/previews/{kind}:
+    get:
+      operationId: getPublicPreview
+      summary: A preview of a photo of a public album
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Token"
+        - $ref: "#/components/parameters/Id"
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [grid, viewer]
+      responses:
+        "200":
+          description: The image
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /public/{token}/photos/{id}/video:
+    get:
+      operationId: getPublicVideo
+      summary: A video of a public album, as its H.264 copy when there is one, with range requests
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Token"
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: The video
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /albums/{id}/sharing:
     get:
       operationId: getAlbumSharing
@@ -2121,6 +2312,12 @@ components:
       in: cookie
       name: magellanica_session
   parameters:
+    Token:
+      name: token
+      in: path
+      required: true
+      schema:
+        type: string
     Id:
       name: id
       in: path
@@ -2468,6 +2665,62 @@ components:
     Role:
       type: string
       enum: [admin, user]
+    AlbumLink:
+      type: object
+      required: [id, path, url, hasPassword, expiresAt, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        path:
+          description: The page's address on this server, such as /s/<token>
+          type: string
+        url:
+          description: The full address, built from PUBLIC_URL. Empty when the server has no PUBLIC_URL
+          type: string
+        hasPassword:
+          type: boolean
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    PublicAlbum:
+      type: object
+      required: [passwordRequired, unlocked, expiresAt]
+      properties:
+        passwordRequired:
+          type: boolean
+        unlocked:
+          type: boolean
+        name:
+          description: Absent until a link with a password is unlocked
+          type: string
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+    PublicPhoto:
+      type: object
+      required: [id, kind, width, height, takenAt, duration, previewVersion]
+      properties:
+        id:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum: [photo, video]
+        width:
+          type: [integer, "null"]
+        height:
+          type: [integer, "null"]
+        takenAt:
+          type: [string, "null"]
+          format: date-time
+        duration:
+          type: [number, "null"]
+        previewVersion:
+          type: integer
     TwoFactorPending:
       type: object
       required: [twoFactor, token]

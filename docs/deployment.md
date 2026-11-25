@@ -212,6 +212,34 @@ An account made through a provider has no password; its login comes from the pro
 
 An account made through a provider can set a first password in its profile, so that it has a way in when the provider is down and can turn on two-factor sign-in. The profile sends the user to the provider to sign in again, and a password is accepted for five minutes after the provider confirms it is the same account that is linked here. Providers that ignore the request to ask again (the application sends `prompt=login` and `max_age=0`, and checks `auth_time` when the provider sends it) count the existing sign-in, so for them this proves only that the session and the provider's own session belong to the same person.
 
+## Public links to albums
+
+The owner of an album makes a link in the album's menu, **Public links**. Anyone with the link sees the album with no account: its name and its photos as previews, and its videos play. They do not get the originals, the file names, camera details or places: the previews carry no EXIF, and the page is given only the date taken. A link may expire after 7 to 365 days and may have a password, which visitors enter once (it holds for 12 hours). An album has at most 10 links. Revoking a link closes it at once, as does deleting the album or disabling its owner. Photos in the trash or still being processed are not shown.
+
+Set `PUBLIC_URL` in `.env`, as for [signing in with a provider](#signing-in-with-a-provider), to the address visitors reach the application at, such as `https://photos.example.org`. The link shown to the owner is built from it, never from the headers of a request. Without it the link is built from the address the owner has the page open at, which a home address (`truenas.local`, an IP address) makes useless outside the house, and the dialog says so.
+
+**What a tunnel or proxy should open.** Visitors need only three groups of paths, so a tunnel or proxy that faces the internet can pass those and refuse the rest, and the rest of the application, the sign-in page included, stays reachable from home only:
+
+| Path | What it is |
+|---|---|
+| `/s/<token>` | The page |
+| `/api/v1/public/<token>/...` | What the page reads: the album, its photos, previews and videos |
+| `/assets/...` | The application's scripts and styles |
+
+For a Cloudflare Tunnel set by a configuration file, give the public name only those paths and everything else a 404. `path` is a regular expression:
+
+```yaml
+ingress:
+  - hostname: photos.example.org
+    path: ^/(s/|api/v1/public/|assets/)
+    service: http://127.0.0.1:10303
+  - service: http_status:404
+```
+
+You then open the application itself from home, at its home address, and the public name serves only links. Without such a filter the whole application, with its sign-in page, is reachable by the public name, as it is for the public demo.
+
+**Limits.** A link's token is 43 random characters, and an unknown, expired or revoked link all answer 404, so one cannot be told from another. Wrong passwords of one link slow down as passwords of a login do (after 5 wrong, 30 seconds and then longer), counted for the link and not for an address, as the application behind a proxy sees only the proxy. Nothing else limits the requests of visitors, so put a rate limit in front when the public name is open to everyone: Cloudflare's rules do it without changes here. A visitor can save a photo's preview and the video that plays, as with any page; what a link withholds is the original file and its metadata, not the picture.
+
 ## Two-factor sign-in
 
 A user can ask for a code from an authenticator app (Google Authenticator, Aegis, 1Password and the like) after the password. It is off until the administrator sets `TOTP_KEY` in `.env` next to the Compose file:

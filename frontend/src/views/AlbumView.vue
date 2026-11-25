@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { api, type Album } from '../api/client'
 import AppPageHeader from '../components/AppPageHeader.vue'
+import AlbumLinksDialog from '../components/AlbumLinksDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import { apiError } from '../i18n/apiErrors'
@@ -28,6 +29,7 @@ const album = shallowRef<Album | null>(null)
 const renameOpen = ref(false)
 const deleteOpen = ref(false)
 const shareOpen = ref(false)
+const linksOpen = ref(false)
 // Another user's album is read-only here, even for an administrator.
 const owned = computed(() => album.value?.ownerId === auth.user?.id)
 const breadcrumbs = computed(() => [owned.value ? { title: t('nav.albums'), to: '/albums' } : { title: t('nav.shared'), to: '/shared' }])
@@ -139,6 +141,7 @@ async function resetCover() {
                 <v-list-item :title="t('album.upload')" prepend-icon="fa-upload" @click="uploads.openDialog(uploadTarget)" />
                 <v-list-item :title="t('common.rename')" prepend-icon="fa-pen" @click="renameOpen = true" />
                 <v-list-item :title="t('browser.share')" prepend-icon="fa-share-nodes" @click="shareOpen = true" />
+                <v-list-item :title="t('publicLinks.title')" prepend-icon="fa-link" @click="linksOpen = true" />
                 <v-list-item
                   v-if="album.coverChosen"
                   :title="t('album.resetCover')"
@@ -164,6 +167,7 @@ async function resetCover() {
   </UploadDropZone>
 
   <ShareDialog v-model="shareOpen" :album-id="id" @done="loadAlbum" />
+  <AlbumLinksDialog v-model="linksOpen" :album-id="id" />
   <NameDialog
     v-model="renameOpen"
     :title="t('albums.rename')"
