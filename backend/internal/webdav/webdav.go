@@ -317,7 +317,17 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request, fs *fileSystem) {
 		internalError(w, r, err)
 		return
 	}
-	file, err := os.Open(h.Layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath))
+	original := h.Layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath)
+	var file *os.File
+	if h.Layout.IsSource(original) {
+		// A file of a library folder may have been swapped for a link by whoever can write to the share.
+		file, err = h.Layout.OpenSource(original)
+		if errors.Is(err, storage.ErrUnsafeSource) {
+			err = os.ErrNotExist
+		}
+	} else {
+		file, err = os.Open(original)
+	}
 	if os.IsNotExist(err) {
 		http.NotFound(w, r)
 		return

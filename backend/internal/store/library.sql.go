@@ -192,15 +192,15 @@ func (q *Queries) InsertPhotoFile(ctx context.Context, arg InsertPhotoFileParams
 	return i, err
 }
 
-const listDuplicateFilesOfPhoto = `-- name: ListDuplicateFilesOfPhoto :many
+const listDuplicateFilesOfPhotos = `-- name: ListDuplicateFilesOfPhotos :many
 SELECT f.id, f.folder_id, f.path, f.photo_id, f.state, f.size, f.mtime, f.missed_scans, f.missing_since, f.trashed_by_scan, f.created_at, f.problem, f.detail, f.support_version, l.path AS folder_path
 FROM photo_files f
 JOIN library_folders l ON l.id = f.folder_id
-WHERE f.photo_id = $1 AND f.state = 'duplicate'
+WHERE f.photo_id = ANY ($1::bigint[]) AND f.state = 'duplicate'
 ORDER BY f.id
 `
 
-type ListDuplicateFilesOfPhotoRow struct {
+type ListDuplicateFilesOfPhotosRow struct {
 	ID             int64
 	FolderID       int64
 	Path           string
@@ -218,16 +218,16 @@ type ListDuplicateFilesOfPhotoRow struct {
 	FolderPath     string
 }
 
-// The copies of a photo's file that the scans skipped as duplicates, with the folder each lies in.
-func (q *Queries) ListDuplicateFilesOfPhoto(ctx context.Context, photoID *int64) ([]ListDuplicateFilesOfPhotoRow, error) {
-	rows, err := q.db.Query(ctx, listDuplicateFilesOfPhoto, photoID)
+// The copies of the files of some photos that the scans skipped as duplicates, with the folder each lies in.
+func (q *Queries) ListDuplicateFilesOfPhotos(ctx context.Context, photoIds []int64) ([]ListDuplicateFilesOfPhotosRow, error) {
+	rows, err := q.db.Query(ctx, listDuplicateFilesOfPhotos, photoIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListDuplicateFilesOfPhotoRow
+	var items []ListDuplicateFilesOfPhotosRow
 	for rows.Next() {
-		var i ListDuplicateFilesOfPhotoRow
+		var i ListDuplicateFilesOfPhotosRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.FolderID,

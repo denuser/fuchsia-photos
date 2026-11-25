@@ -117,12 +117,12 @@ WHERE id = @id;
 -- name: SetPhotoFileProblem :exec
 UPDATE photo_files SET problem = @problem, detail = @detail WHERE id = @id;
 
--- The copies of a photo's file that the scans skipped as duplicates, with the folder each lies in.
--- name: ListDuplicateFilesOfPhoto :many
+-- The copies of the files of some photos that the scans skipped as duplicates, with the folder each lies in.
+-- name: ListDuplicateFilesOfPhotos :many
 SELECT f.*, l.path AS folder_path
 FROM photo_files f
 JOIN library_folders l ON l.id = f.folder_id
-WHERE f.photo_id = @photo_id AND f.state = 'duplicate'
+WHERE f.photo_id = ANY (@photo_ids::bigint[]) AND f.state = 'duplicate'
 ORDER BY f.id;
 
 -- A copy takes over as the photo's file, once the file it was a copy of is gone.

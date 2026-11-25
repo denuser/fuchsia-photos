@@ -102,7 +102,7 @@ func (w *processPhotoWorker) Work(ctx context.Context, job *river.Job[ProcessPho
 
 func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo, replacesPreviews bool) error {
 	path := w.layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath)
-	if storage.Unavailable(photo.SourcePath, path) {
+	if w.layout.Unavailable(photo.SourcePath, path) {
 		return errOriginalUnavailable
 	}
 	video := storage.IsVideo(photo.Mime)
@@ -597,7 +597,7 @@ func (w *backfillMotionWorker) Work(ctx context.Context, _ *river.Job[BackfillMo
 		for _, photo := range photos {
 			after = photo.ID
 			path := layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath)
-			if storage.Unavailable(photo.SourcePath, path) {
+			if layout.Unavailable(photo.SourcePath, path) {
 				continue
 			}
 			if !w.process.extractMotion(ctx, photo.ID, path, metadata.MotionTag(photo.Exif)) {
@@ -648,7 +648,7 @@ func (w *backfillVideoHDRWorker) Work(ctx context.Context, _ *river.Job[Backfill
 		for _, v := range videos {
 			after = v.ID
 			path := w.layout.OriginalOf(v.OwnerID, v.Sha256, v.Mime, v.SourcePath)
-			if storage.Unavailable(v.SourcePath, path) {
+			if w.layout.Unavailable(v.SourcePath, path) {
 				continue
 			}
 			video, err := media.ProbeVideo(ctx, path)

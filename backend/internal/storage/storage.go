@@ -3,10 +3,12 @@ package storage
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // Preview kinds.
@@ -65,15 +67,63 @@ func (l Layout) OriginalOf(ownerID int64, sha256 []byte, mime string, sourcePath
 	return l.Original(ownerID, sha256, mime)
 }
 
+// ErrUnsafeSource means a file of a library folder is, or lies behind, a symbolic link, or is not
+// a regular file. The scan never indexes a link, so a source path through one means somebody
+// changed the share after the scan, as a way to read files of the application or of others.
+var ErrUnsafeSource = errors.New("the file in the library folder is not a regular file under its folder")
+
+// CheckSource tells whether path, a file under the library folders mount, may be read: every part
+// of it below the mount is a real folder and the file is a regular file. The mount itself is
+// resolved once, as it may be a link, such as /var on macOS.
+func (l Layout) CheckSource(path string) error {
+	rel, err := filepath.Rel(l.Folders, path)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ErrUnsafeSource
+	}
+	cur, err := filepath.EvalSymlinks(l.Folders)
+	if err != nil {
+		return err
+	}
+	parts := strings.Split(rel, string(filepath.Separator))
+	for i, part := range parts {
+		cur = filepath.Join(cur, part)
+		info, err := os.Lstat(cur)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return ErrUnsafeSource
+		}
+		if i == len(parts)-1 && !info.Mode().IsRegular() {
+			return ErrUnsafeSource
+		}
+	}
+	return nil
+}
+
+// OpenSource opens a file of a library folder after CheckSource, and without following a link at
+// the last step, which closes most of the gap between the check and the open.
+func (l Layout) OpenSource(path string) (*os.File, error) {
+	if err := l.CheckSource(path); err != nil {
+		return nil, err
+	}
+	return os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+}
+
+// IsSource tells whether path is under the library folders mount.
+func (l Layout) IsSource(path string) bool {
+	return l.Folders != "" && strings.HasPrefix(path, l.Folders+string(filepath.Separator))
+}
+
 // Unavailable tells whether an original that lives in a library folder cannot
-// be read now, as when the share is not mounted or the file is away. An
-// original in the library is never reported: if it is gone, that is an error.
-func Unavailable(sourcePath *string, path string) bool {
+// be read now, as when the share is not mounted, the file is away or it was
+// replaced by a link. An original in the library is never reported: if it is
+// gone, that is an error.
+func (l Layout) Unavailable(sourcePath *string, path string) bool {
 	if sourcePath == nil {
 		return false
 	}
-	_, err := os.Stat(path)
-	return err != nil
+	return l.CheckSource(path) != nil
 }
 
 func extension(mime string) string {

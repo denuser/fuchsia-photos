@@ -777,7 +777,7 @@ func (s *server) getPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 	out.Archived = &archived
 	if photo.SourcePath != nil {
-		missing := storage.Unavailable(photo.SourcePath, s.Layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath))
+		missing := s.Layout.Unavailable(photo.SourcePath, s.Layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath))
 		out.FileMissing = &missing
 		if photo.OwnerID == currentUser(r).ID {
 			out.SourcePath = photo.SourcePath
@@ -869,8 +869,18 @@ func (s *server) getMotion(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) serveFile(w http.ResponseWriter, r *http.Request, path string) {
-	file, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) && (path == "" || s.Layout.Folders != "" && strings.HasPrefix(path, s.Layout.Folders+string(os.PathSeparator))) {
+	var file *os.File
+	var err error
+	if s.Layout.IsSource(path) {
+		// A file of a library folder may be swapped for a link by whoever can write to the share.
+		file, err = s.Layout.OpenSource(path)
+		if errors.Is(err, storage.ErrUnsafeSource) {
+			err = os.ErrNotExist
+		}
+	} else {
+		file, err = os.Open(path)
+	}
+	if errors.Is(err, os.ErrNotExist) && (path == "" || s.Layout.IsSource(path)) {
 		// An original in a library folder whose file is away or whose share is not mounted, or
 		// a motion with no readable source. A file missing from the library or the cache is a
 		// fault, and stays an error.

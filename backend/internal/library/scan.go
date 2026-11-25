@@ -13,7 +13,7 @@ import (
 	"log/slog"
 	"os"
 	"path"
-	"slices"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -368,7 +368,7 @@ func (r *scanRun) replace(ctx context.Context, row store.PhotoFile, f listed) er
 		return nil
 	}
 	source := r.sourcePath(f.path)
-	file, err := r.root.Open(source)
+	file, err := r.Ingest.Layout.OpenSource(filepath.Join(r.Ingest.Layout.Folders, filepath.FromSlash(source)))
 	if err != nil {
 		return unreadable(err)
 	}
@@ -423,7 +423,7 @@ func (r *scanRun) add(ctx context.Context, f listed) error {
 		return nil
 	}
 	source := r.sourcePath(f.path)
-	file, err := r.root.Open(source)
+	file, err := r.Ingest.Layout.OpenSource(filepath.Join(r.Ingest.Layout.Folders, filepath.FromSlash(source)))
 	if err != nil {
 		return r.failedNew(ctx, f, err)
 	}
@@ -556,6 +556,7 @@ func (r *scanRun) failed(ctx context.Context, f listed, cause error) error {
 // that stayed away for missedToMissing scans.
 func (r *scanRun) missing(ctx context.Context, rows []store.PhotoFile) error {
 	var away, gone []int64
+	awaySet := map[int64]bool{}
 	for _, row := range rows {
 		if r.seen[row.Path] || r.moved[row.ID] {
 			continue
@@ -565,6 +566,7 @@ func (r *scanRun) missing(ctx context.Context, rows []store.PhotoFile) error {
 			continue
 		}
 		away = append(away, row.ID)
+		awaySet[row.ID] = true
 	}
 	if len(gone) > 0 {
 		if err := r.queries.DeletePhotoFiles(ctx, gone); err != nil {
@@ -572,18 +574,41 @@ func (r *scanRun) missing(ctx context.Context, rows []store.PhotoFile) error {
 		}
 	}
 	// A file that is away is not lost if the same content lies at another path of the
-	// owner's library folders: the copy takes its place.
-	var lost []int64
+	// owner's library folders: the copy takes its place. The copies of all of them are looked
+	// up at once, as a folder deleted at one go has thousands of rows.
+	var awayRows []store.PhotoFile
+	var photoIDs []int64
 	for _, row := range rows {
-		if !slices.Contains(away, row.ID) {
+		if row.PhotoID != nil && awaySet[row.ID] {
+			awayRows = append(awayRows, row)
+			photoIDs = append(photoIDs, *row.PhotoID)
+		}
+	}
+	copies := map[int64][]store.ListDuplicateFilesOfPhotosRow{}
+	if len(photoIDs) > 0 {
+		found, err := r.queries.ListDuplicateFilesOfPhotos(ctx, photoIDs)
+		if err != nil {
+			return fmt.Errorf("look up copies: %w", err)
+		}
+		for _, c := range found {
+			copies[*c.PhotoID] = append(copies[*c.PhotoID], c)
+		}
+	}
+	promotedRows := map[int64]bool{}
+	for _, row := range awayRows {
+		if len(copies[*row.PhotoID]) == 0 {
 			continue
 		}
-		promoted, err := r.promoteCopy(ctx, row)
+		promoted, err := r.promoteCopy(ctx, row, copies[*row.PhotoID])
 		if err != nil {
 			return err
 		}
-		if !promoted {
-			lost = append(lost, row.ID)
+		promotedRows[row.ID] = promoted
+	}
+	var lost []int64
+	for _, id := range away {
+		if !promotedRows[id] {
+			lost = append(lost, id)
 		}
 	}
 	away = lost
@@ -704,10 +729,7 @@ func (s *Service) CheckPath(ctx context.Context, path string) error {
 // promoteCopy gives a photo whose file is away the file of a copy that is still there, in
 // this folder or in another of the owner's: the photo keeps its place and nothing goes to the
 // trash. The row of the file that went is dropped first, as a photo has one source.
-func (r *scanRun) promoteCopy(ctx context.Context, row store.PhotoFile) (bool, error) {
-	if row.PhotoID == nil {
-		return false, nil
-	}
+func (r *scanRun) promoteCopy(ctx context.Context, row store.PhotoFile, copies []store.ListDuplicateFilesOfPhotosRow) (bool, error) {
 	photo, err := r.queries.GetPhoto(ctx, *row.PhotoID)
 	if err != nil {
 		return false, fmt.Errorf("look up photo: %w", err)
@@ -715,16 +737,12 @@ func (r *scanRun) promoteCopy(ctx context.Context, row store.PhotoFile) (bool, e
 	if photo.PurgedAt != nil {
 		return false, nil
 	}
-	copies, err := r.queries.ListDuplicateFilesOfPhoto(ctx, row.PhotoID)
-	if err != nil {
-		return false, fmt.Errorf("look up copies: %w", err)
-	}
 	for _, c := range copies {
 		if c.FolderID == r.folder.ID {
 			if !r.seen[c.Path] {
 				continue
 			}
-		} else if _, err := r.root.Lstat(c.FolderPath + "/" + c.Path); err != nil {
+		} else if info, err := r.root.Lstat(c.FolderPath + "/" + c.Path); err != nil || !info.Mode().IsRegular() {
 			continue
 		}
 		source := c.FolderPath + "/" + c.Path
