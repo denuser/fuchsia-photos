@@ -27,7 +27,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 21 | [Map](#21-map) | Done, released in 0.2.0 | Check the map on a phone and with a larger library |
 | 22 | [Demo activity log](#22-demo-activity-log) | Implemented | Deploy and enable on the public demo |
 | 23 | [Sign in with OIDC](#23-sign-in-with-oidc) | Built; checked with Google on 2026-11-25 | Apple and Yandex ID |
-| 24 | [Two-factor sign-in (TOTP)](#24-two-factor-sign-in-totp) | Built; not yet checked with a real authenticator app | A check by hand with an authenticator app; the browser test does not cover it |
+| 24 | [Two-factor sign-in (TOTP)](#24-two-factor-sign-in-totp) | Built; checked with an authenticator app on 2026-11-25 | The browser test does not cover it |
 
 ## 1. Administration page
 
@@ -672,7 +672,7 @@ The plan:
 
 ## 24. Two-factor sign-in (TOTP)
 
-**Status:** built on 2026-11-25, with tests (`internal/api/twofactor_test.go`, `internal/auth/totp_test.go`) and the interface: a step on the sign-in page, a section in the profile, a reset on the users page, in all ten languages. The codes were checked against the library only, not yet with a real authenticator app, and the browser test does not cover it.
+**Status:** built on 2026-11-25, with tests (`internal/api/twofactor_test.go`, `internal/auth/totp_test.go`) and the interface: a step on the sign-in page, a section in the profile, a reset on the users page, in all ten languages. Checked by hand with a real authenticator app on 2026-11-25, on the development stack: turning it on with the QR code and a code, the code step after the password, a wrong code, a code of the same time step refused, a recovery code accepted once and refused the second time, and turning it off with the password and a code (the secret is cleared). The administrator's reset was not checked by hand (a Go test covers it). The browser test does not cover it.
 
 Differences from the plan below:
 - The password step answers `202` with `{twoFactor, token}` instead of a session; `POST /api/v1/login/totp` takes the token and a code. The token is signed (HMAC) under a key derived from `TOTP_KEY`, not `SESSION_SECRET`, which exists only with OIDC; it holds the user and the expiry, so nothing is stored.
