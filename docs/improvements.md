@@ -26,7 +26,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 20 | [Safer RAW decoding](#20-safer-raw-decoding) | Done, released in 0.1.1 | |
 | 21 | [Map](#21-map) | Done, released in 0.2.0 | Check the map on a phone and with a larger library |
 | 22 | [Demo activity log](#22-demo-activity-log) | Implemented | Deploy and enable on the public demo |
-| 23 | [Sign in with OIDC](#23-sign-in-with-oidc) | Built; not yet checked with a real provider | A check with Google; Apple and Yandex after it |
+| 23 | [Sign in with OIDC](#23-sign-in-with-oidc) | Built; checked with Google on 2026-11-25 | Apple and Yandex ID |
 | 24 | [Two-factor sign-in (TOTP)](#24-two-factor-sign-in-totp) | Built; not yet checked with a real authenticator app | A check by hand with an authenticator app; the browser test does not cover it |
 
 ## 1. Administration page
@@ -617,7 +617,7 @@ Decided on 2026-11-23: keep web login and upload events in PostgreSQL across dem
 
 ## 23. Sign in with OIDC
 
-**Status:** built on 2026-11-24: configuration, the flow, linking, account creation, the settings and the identities API, with tests on a fake provider, and the interface: provider buttons on the sign-in page, linked providers in the profile, the sign-in settings on the administration page, in all ten languages. The browser test does not cover it, as it would need a provider. A first password for an account made by a provider is built on 2026-11-25 (see below). Not done: a check with Google, Apple and Yandex ID.
+**Status:** built on 2026-11-24: configuration, the flow, linking, account creation, the settings and the identities API, with tests on a fake provider, and the interface: provider buttons on the sign-in page, linked providers in the profile, the sign-in settings on the administration page, in all ten languages. The browser test does not cover it, as it would need a provider. A first password for an account made by a provider is built on 2026-11-25 (see below). Checked by hand with Google on 2026-11-25 (see below). Not done: Apple and Yandex ID.
 
 Single sign-on through OpenID Connect providers: Google, and self-hosted ones (Authelia, Authentik, Keycloak), as Immich and PhotoPrism have; then Apple and Yandex ID as later steps. Today only a login and an argon2id password exist (`internal/auth`, `internal/api/session.go`), with sessions in HttpOnly `SameSite=Lax` cookies.
 
@@ -645,8 +645,10 @@ Built on 2026-11-24, with these differences from the plan below:
 
 A first password for an account made by a provider, built on 2026-11-25 (the plan above left it open):
 - The profile links to `GET /api/v1/auth/oidc/{id}/login?password=1`. It needs a session and an account with no password (409 otherwise), sends the provider `prompt=login` and `max_age=0`, and keeps `SetPassword` in the signed state cookie.
-- On return, the identity must be one linked to the signed-in account (`wrong_account` otherwise), and `auth_time`, when the provider sends it, must be under five minutes old (`expired`). Google is not known to honour `prompt=login`; the existing session then counts, which proves the same person holds both sessions, not that the password was typed again. Not checked with a real provider.
+- On return, the identity must be one linked to the signed-in account (`wrong_account` otherwise), and `auth_time`, when the provider sends it, must be under five minutes old (`expired`). Google honours `prompt=login`: it asked for the account again on 2026-11-25. A provider that ignores it counts the existing session, which proves the same person holds both sessions, not that the password was typed again.
 - The return sets a cookie signed with `SESSION_SECRET` under its own purpose, valid five minutes, for the path `/api/v1/me/password` only. `POST /me/password` takes it in place of the current password, and only when the account has no password. The cookie is cleared after a password is set.
+
+Checked with Google on 2026-11-25, on the development stack opened at `https://localhost` with `PUBLIC_URL=https://localhost` and the redirect address `https://localhost/api/v1/auth/oidc/1/callback`: the sign-in page, the full flow with an unknown account (`no_account`), linking from the profile and signing in through it, unlinking, creating an account on a first sign-in (login from the email, role user, no password), refusing to unlink the only way in, a first password after Google asked for the account again, and the list of addresses (a foreign address refuses, a matching one creates). The page must be opened at the same host as `PUBLIC_URL`, as the state cookie is kept per host. It found two interface bugs, fixed: the hint under the list of addresses held an unescaped `@`, which vue-i18n reads as a link, so the administration page failed to render when the setting was on; and the refusal to unlink was shown in the alert at the top of the profile, out of sight. Not checked: Google's own consent screen for a second Google account, a provider with a private certificate.
 
 The plan:
 
