@@ -646,7 +646,7 @@ const ko: typeof en = {
     createUsers: '제공자를 통한 첫 로그인으로 계정을 만듭니다',
     createUsersHint: '새 계정의 역할은 사용자입니다. 끔: 이미 계정이 있는 사람만 제공자를 사용할 수 있습니다.',
     allowed: '이메일 주소와 도메인',
-    allowedHint: '제공자가 확인한 이메일 주소를 기준으로 여기에 적은 것만 계정을 만들 수 있습니다(예: family.example, anna@gmail.com). 하나 입력할 때마다 Enter를 누르세요.',
+    allowedHint: '제공자가 확인한 이메일 주소를 기준으로 여기에 적은 것만 계정을 만들 수 있습니다(예: family.example, anna{\'@\'}gmail.com). 하나 입력할 때마다 Enter를 누르세요.',
     openRegistration: '제공자에 계정이 있는 사람은 누구나 여기서 계정을 만들 수 있습니다',
     openRegistrationText: '범위를 좁히려면 주소나 도메인을 목록에 추가하세요.',
     passwordAdminsOnly: '비밀번호는 관리자만',

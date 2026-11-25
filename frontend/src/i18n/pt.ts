@@ -647,7 +647,7 @@ const pt: typeof en = {
     createUsers: 'O primeiro login por um provedor cria uma conta',
     createUsersHint: 'As contas novas têm a função de usuário. Desativado: só quem já tem conta pode usar um provedor.',
     allowed: 'Endereços de e-mail e domínios',
-    allowedHint: 'Só estes podem criar uma conta, pelo endereço que o provedor confirma: family.example ou anna@gmail.com. Pressione Enter após cada um.',
+    allowedHint: 'Só estes podem criar uma conta, pelo endereço que o provedor confirma: family.example ou anna{\'@\'}gmail.com. Pressione Enter após cada um.',
     openRegistration: 'Qualquer pessoa com conta no provedor pode criar uma conta aqui',
     openRegistrationText: 'Adicione endereços ou domínios à lista para restringir.',
     passwordAdminsOnly: 'Senhas só para administradores',

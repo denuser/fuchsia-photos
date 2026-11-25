@@ -646,7 +646,7 @@ const de: typeof en = {
     createUsers: 'Eine erste Anmeldung über einen Anbieter legt ein Konto an',
     createUsersHint: 'Neue Konten haben die Rolle Benutzer. Aus: Nur wer schon ein Konto hat, kann einen Anbieter nutzen.',
     allowed: 'E-Mail-Adressen und Domains',
-    allowedHint: 'Nur diese dürfen ein Konto anlegen, anhand der E-Mail-Adresse, die der Anbieter bestätigt: family.example oder anna@gmail.com. Nach jedem Eintrag Enter drücken.',
+    allowedHint: 'Nur diese dürfen ein Konto anlegen, anhand der E-Mail-Adresse, die der Anbieter bestätigt: family.example oder anna{\'@\'}gmail.com. Nach jedem Eintrag Enter drücken.',
     openRegistration: 'Jeder mit einem Konto beim Anbieter kann hier ein Konto anlegen',
     openRegistrationText: 'Fügen Sie Adressen oder Domains zur Liste hinzu, um das einzuschränken.',
     passwordAdminsOnly: 'Passwörter nur für Administratoren',

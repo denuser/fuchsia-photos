@@ -646,7 +646,7 @@ const ja: typeof en = {
     createUsers: 'プロバイダー経由の初回ログインでアカウントを作成する',
     createUsersHint: '新しいアカウントのロールは「ユーザー」です。オフ：すでにアカウントがある人だけがプロバイダーを使えます。',
     allowed: 'メールアドレスとドメイン',
-    allowedHint: 'プロバイダーが確認したメールアドレスで、ここに挙げたものだけがアカウントを作成できます（例：family.example、anna@gmail.com）。1件ごとに Enter を押してください。',
+    allowedHint: 'プロバイダーが確認したメールアドレスで、ここに挙げたものだけがアカウントを作成できます（例：family.example、anna{\'@\'}gmail.com）。1件ごとに Enter を押してください。',
     openRegistration: 'プロバイダーのアカウントがあれば誰でもここでアカウントを作成できます',
     openRegistrationText: '範囲を絞るには、アドレスまたはドメインをリストに追加してください。',
     passwordAdminsOnly: 'パスワードは管理者のみ',

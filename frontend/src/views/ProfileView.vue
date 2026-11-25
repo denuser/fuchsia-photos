@@ -179,7 +179,8 @@ async function unlinkIdentity() {
   }
   const { error: failure } = await api.DELETE('/me/identities/{id}', { params: { path: { id: identity.id } } })
   if (failure) {
-    error.value = apiError(failure)
+    // The list is far down the page, so the alert at the top would not be seen.
+    notices.notify(apiError(failure), 'error')
     return
   }
   identities.value = identities.value.filter((i) => i.id !== identity.id)

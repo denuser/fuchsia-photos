@@ -647,7 +647,7 @@ const it: typeof en = {
     createUsers: 'Il primo accesso tramite un provider crea un account',
     createUsersHint: 'I nuovi account hanno il ruolo utente. Disattivato: solo chi ha già un account può usare un provider.',
     allowed: 'Indirizzi e-mail e domini',
-    allowedHint: 'Solo questi possono creare un account, in base all’indirizzo che il provider conferma: family.example o anna@gmail.com. Premi Invio dopo ciascuno.',
+    allowedHint: 'Solo questi possono creare un account, in base all’indirizzo che il provider conferma: family.example o anna{\'@\'}gmail.com. Premi Invio dopo ciascuno.',
     openRegistration: 'Chiunque abbia un account presso il provider può creare un account qui',
     openRegistrationText: 'Aggiungi indirizzi o domini all’elenco per restringere.',
     passwordAdminsOnly: 'Password solo per gli amministratori',

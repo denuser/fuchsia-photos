@@ -646,7 +646,7 @@ const zh: typeof en = {
     createUsers: '通过提供方首次登录时创建账户',
     createUsersHint: '新账户的角色为用户。关闭：只有已有账户的人才能使用提供方。',
     allowed: '邮箱地址和域名',
-    allowedHint: '只有这里列出的才能创建账户，依据提供方确认的邮箱地址，例如 family.example 或 anna@gmail.com。每输入一个按一次 Enter。',
+    allowedHint: '只有这里列出的才能创建账户，依据提供方确认的邮箱地址，例如 family.example 或 anna{\'@\'}gmail.com。每输入一个按一次 Enter。',
     openRegistration: '任何在提供方有账户的人都可以在这里创建账户',
     openRegistrationText: '在列表中添加地址或域名可缩小范围。',
     passwordAdminsOnly: '密码仅限管理员',

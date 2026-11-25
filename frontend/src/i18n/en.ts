@@ -647,7 +647,7 @@ export default {
     createUsers: 'A first sign-in through a provider creates an account',
     createUsersHint: 'New accounts have the role user. Off: only people who already have an account can use a provider.',
     allowed: 'Email addresses and domains',
-    allowedHint: 'Only these may create an account, by the email address the provider confirms: family.example or anna@gmail.com. Press Enter after each one.',
+    allowedHint: 'Only these may create an account, by the email address the provider confirms: family.example or anna{\'@\'}gmail.com. Press Enter after each one.',
     openRegistration: 'Anyone with an account at the provider can create an account here',
     openRegistrationText: 'Add addresses or domains to the list to narrow this down.',
     passwordAdminsOnly: 'Passwords only for administrators',

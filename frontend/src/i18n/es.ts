@@ -646,7 +646,7 @@ const es: typeof en = {
     createUsers: 'El primer inicio de sesión con un proveedor crea una cuenta',
     createUsersHint: 'Las cuentas nuevas tienen el rol de usuario. Desactivado: solo quien ya tiene una cuenta puede usar un proveedor.',
     allowed: 'Direcciones de correo y dominios',
-    allowedHint: 'Solo estos pueden crear una cuenta, según la dirección que confirme el proveedor: family.example o anna@gmail.com. Pulsa Intro después de cada uno.',
+    allowedHint: 'Solo estos pueden crear una cuenta, según la dirección que confirme el proveedor: family.example o anna{\'@\'}gmail.com. Pulsa Intro después de cada uno.',
     openRegistration: 'Cualquiera con una cuenta en el proveedor puede crear una cuenta aquí',
     openRegistrationText: 'Añade direcciones o dominios a la lista para limitarlo.',
     passwordAdminsOnly: 'Contraseñas solo para administradores',

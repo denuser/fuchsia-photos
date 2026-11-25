@@ -647,7 +647,7 @@ const fr: typeof en = {
     createUsers: 'Une première connexion par un fournisseur crée un compte',
     createUsersHint: 'Les nouveaux comptes ont le rôle utilisateur. Désactivé : seules les personnes qui ont déjà un compte peuvent utiliser un fournisseur.',
     allowed: 'Adresses e-mail et domaines',
-    allowedHint: 'Seuls ceux-ci peuvent créer un compte, d’après l’adresse que le fournisseur confirme : family.example ou anna@gmail.com. Appuyez sur Entrée après chacun.',
+    allowedHint: 'Seuls ceux-ci peuvent créer un compte, d’après l’adresse que le fournisseur confirme : family.example ou anna{\'@\'}gmail.com. Appuyez sur Entrée après chacun.',
     openRegistration: 'Toute personne ayant un compte chez le fournisseur peut créer un compte ici',
     openRegistrationText: 'Ajoutez des adresses ou des domaines à la liste pour restreindre.',
     passwordAdminsOnly: 'Mots de passe réservés aux administrateurs',
