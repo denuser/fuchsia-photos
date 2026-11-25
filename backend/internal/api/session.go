@@ -156,6 +156,21 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logins.Reset(req.Login)
 
+	if user.TotpEnabled {
+		if !s.TOTP.On() {
+			// The check at start turns it off for secrets that cannot be read, so this is a setting
+			// that changed while running; refuse rather than sign in without the second step.
+			internalError(w, r, errors.New("two-factor sign-in is on for the user, but TOTP_KEY is missing"))
+			return
+		}
+		// The sign-in is recorded by the code step.
+		event.Action = ""
+		writeJSON(w, http.StatusAccepted, struct {
+			TwoFactor bool   `json:"twoFactor"`
+			Token     string `json:"token"`
+		}{true, s.TOTP.NewPending(user.ID, time.Now())})
+		return
+	}
 	if err := s.startSession(w, r, user.ID, event); err != nil {
 		internalError(w, r, err)
 		return

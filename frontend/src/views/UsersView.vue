@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/auth'
 import AppDialog from '../components/AppDialog.vue'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { t } from '../i18n'
 
 const auth = useAuthStore()
@@ -50,7 +51,15 @@ async function create() {
   await load()
 }
 
-async function update(user: User, body: { role?: Role; disabled?: boolean }) {
+const resetFor = shallowRef<User | null>(null)
+const resetOpen = ref(false)
+
+function startReset(user: User) {
+  resetFor.value = user
+  resetOpen.value = true
+}
+
+async function update(user: User, body: { role?: Role; disabled?: boolean; resetTwoFactor?: boolean }) {
   const { error: failure } = await api.PATCH('/users/{id}', { params: { path: { id: user.id } }, body })
   error.value = failure ? apiError(failure) : ''
   await load()
@@ -122,11 +131,20 @@ async function savePassword() {
               />
             </td>
             <td class="text-right">
+              <v-btn v-if="user.twoFactor && user.id !== auth.user?.id" variant="text" size="small" :text="t('users.resetTwoFactor')" @click="startReset(user)" />
               <v-btn variant="text" size="small" :text="t('users.resetPassword')" @click="openPassword(user)" />
             </td>
           </tr>
         </tbody>
       </v-table>
+
+      <ConfirmDialog
+        v-model="resetOpen"
+        :title="t('users.resetTwoFactorTitle', { login: resetFor?.login })"
+        :text="t('users.resetTwoFactorText', { login: resetFor?.login })"
+        :action="t('users.resetTwoFactor')"
+        @confirm="update(resetFor!, { resetTwoFactor: true })"
+      />
 
       <AppDialog v-model="createOpen" :title="t('users.add')" :action="t('users.add')" :error="formError" @submit="create">
         <AppFormGroup v-slot="field" :label="t('users.login')" required>

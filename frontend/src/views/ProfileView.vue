@@ -9,6 +9,7 @@ import {
   type Identity,
   type Language,
   type SignInOptions,
+  type TwoFactorStatus,
   type ViewerField,
   type WebDAVAlbum,
 } from '../api/client'
@@ -19,6 +20,8 @@ import ChangePasswordDialog from '../components/ChangePasswordDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CopyField from '../components/CopyField.vue'
 import FolderAlbumDialog from '../components/FolderAlbumDialog.vue'
+import TwoFactorDisableDialog from '../components/TwoFactorDisableDialog.vue'
+import TwoFactorSetupDialog from '../components/TwoFactorSetupDialog.vue'
 import { formatDate, languages, t } from '../i18n'
 import { apiError } from '../i18n/apiErrors'
 import { gridSizes } from '../lib/timeline'
@@ -199,7 +202,26 @@ function showLinkOutcome() {
   }
 }
 
+const twoFactor = ref<TwoFactorStatus | null>(null)
+const twoFactorSetup = ref(false)
+const twoFactorDisable = ref(false)
+
+async function loadTwoFactor() {
+  const { data } = await api.GET('/me/2fa')
+  twoFactor.value = data ?? null
+}
+
+// The user's own flag follows too, as the administrators' list and the sign-in read it.
+async function twoFactorChanged() {
+  await loadTwoFactor()
+  const { data } = await api.GET('/me')
+  if (data) {
+    auth.user = data
+  }
+}
+
 onMounted(() => {
+  void loadTwoFactor()
   showLinkOutcome()
   void loadAppPasswords()
   void loadFolderAlbums()
@@ -308,6 +330,21 @@ onMounted(() => {
       <template v-else>
         <v-btn prepend-icon="fa-key" variant="tonal" :text="t('changePassword.title')" class="mb-6" @click="passwordDialog = true" />
         <ChangePasswordDialog v-model="passwordDialog" />
+      </template>
+
+      <template v-if="auth.user.hasPassword && twoFactor">
+        <h2 class="mb-2">{{ t('twoFactor.title') }}</h2>
+        <div class="text-medium-emphasis mb-4">{{ t('twoFactor.hint') }}</div>
+        <div v-if="!twoFactor.available && !twoFactor.enabled" class="text-medium-emphasis mb-6">{{ t('twoFactor.unavailable') }}</div>
+        <div v-else class="mb-6">
+          <div class="mb-2" data-testid="two-factor-state">
+            {{ twoFactor.enabled ? t('twoFactor.on') : t('twoFactor.off') }}<template v-if="twoFactor.enabled"> · {{ t('twoFactor.left', { count: twoFactor.recoveryCodesLeft }) }}</template>
+          </div>
+          <v-btn v-if="!twoFactor.enabled" prepend-icon="fa-user-shield" variant="tonal" :text="t('twoFactor.enable')" @click="twoFactorSetup = true" />
+          <v-btn v-else prepend-icon="fa-user-shield" variant="tonal" :text="t('twoFactor.disable')" @click="twoFactorDisable = true" />
+        </div>
+        <TwoFactorSetupDialog v-model="twoFactorSetup" @enabled="twoFactorChanged" />
+        <TwoFactorDisableDialog v-model="twoFactorDisable" @disabled="twoFactorChanged" />
       </template>
 
       <template v-if="providers.length > 0 || identities.length > 0">

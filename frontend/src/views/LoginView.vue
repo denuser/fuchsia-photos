@@ -34,14 +34,37 @@ const password = ref('')
 const error = ref(providerError())
 const submitting = ref(false)
 
+// With two-factor sign-in on, the password step returns a token and the form asks for a code.
+const token = ref('')
+const code = ref('')
+
 async function submit() {
   submitting.value = true
-  error.value = (await auth.login(login.value, password.value)) ?? ''
+  const result = await auth.login(login.value, password.value)
+  error.value = result.error ?? ''
   submitting.value = false
-  if (!error.value) {
+  if (result.token) {
+    token.value = result.token
+    password.value = ''
+  } else if (!error.value) {
     password.value = ''
     await router.push('/')
   }
+}
+
+async function submitCode() {
+  submitting.value = true
+  error.value = (await auth.loginTotp(token.value, code.value)) ?? ''
+  submitting.value = false
+  if (!error.value) {
+    await router.push('/')
+  }
+}
+
+function back() {
+  token.value = ''
+  code.value = ''
+  error.value = ''
 }
 </script>
 
@@ -51,7 +74,18 @@ async function submit() {
       <template #prepend>
         <v-avatar :image="logo" size="48" />
       </template>
-      <v-form @submit.prevent="submit">
+      <v-form v-if="token" @submit.prevent="submitCode">
+        <v-card-text>
+          <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
+          <div class="mb-4">{{ t('login.codeHint') }}</div>
+          <AppFormGroup v-slot="field" :label="t('login.code')" required>
+            <v-text-field v-bind="field" v-model="code" inputmode="text" autocomplete="one-time-code" autofocus data-testid="login-code" />
+          </AppFormGroup>
+          <v-btn type="submit" color="primary" block :text="t('login.submit')" :loading="submitting" :disabled="!code" />
+          <v-btn variant="text" block class="mt-2" :text="t('login.back')" @click="back" />
+        </v-card-text>
+      </v-form>
+      <v-form v-else @submit.prevent="submit">
         <v-card-text>
           <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
           <AppFormGroup v-slot="field" :label="t('login.login')" required>

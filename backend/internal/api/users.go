@@ -22,8 +22,10 @@ type userJSON struct {
 	Role     string `json:"role"`
 	Disabled bool   `json:"disabled"`
 	// HasPassword is false for an account made by a sign-in through a provider, until it sets one.
-	HasPassword bool      `json:"hasPassword"`
-	CreatedAt   time.Time `json:"createdAt"`
+	HasPassword bool `json:"hasPassword"`
+	// TwoFactor is true when signing in with the password asks for a code as well.
+	TwoFactor bool      `json:"twoFactor"`
+	CreatedAt time.Time `json:"createdAt"`
 	// SharedIncludesAlbums adds photos of shared albums to the user's list of shared photos.
 	SharedIncludesAlbums bool `json:"sharedIncludesAlbums"`
 	// ViewerShowsOriginals makes the viewer show original files instead of viewer previews.
@@ -56,6 +58,7 @@ func toUserJSON(u store.User) userJSON {
 		ID:                   u.ID,
 		Login:                u.Login,
 		HasPassword:          u.PasswordHash != "",
+		TwoFactor:            u.TotpEnabled,
 		Role:                 u.Role,
 		Disabled:             u.Disabled,
 		CreatedAt:            u.CreatedAt,
@@ -183,6 +186,8 @@ func (s *server) updateUser(w http.ResponseWriter, r *http.Request) {
 		Role     *string `json:"role"`
 		Disabled *bool   `json:"disabled"`
 		Password *string `json:"password"`
+		// ResetTwoFactor turns off two-factor sign-in for a user who lost the authenticator and the codes.
+		ResetTwoFactor *bool `json:"resetTwoFactor"`
 	}
 	if !readJSON(w, r, &req) {
 		return
@@ -191,6 +196,11 @@ func (s *server) updateUser(w http.ResponseWriter, r *http.Request) {
 	// An administrator cannot lock themselves out, so there is always at least one.
 	if id == currentUser(r).ID && (req.Role != nil || req.Disabled != nil) {
 		writeError(w, http.StatusConflict, "you cannot change your own role or disable yourself")
+		return
+	}
+	// Turning off one's own two-factor sign-in takes the password and a code, in the profile.
+	if id == currentUser(r).ID && req.ResetTwoFactor != nil {
+		writeError(w, http.StatusConflict, "turn off your own two-factor sign-in in the profile")
 		return
 	}
 	if req.Role != nil && !validRole(*req.Role) {
@@ -233,6 +243,12 @@ func (s *server) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Password != nil {
 		if err := s.Queries.SetUserPassword(ctx, store.SetUserPasswordParams{ID: id, PasswordHash: hash}); err != nil {
+			internalError(w, r, err)
+			return
+		}
+	}
+	if req.ResetTwoFactor != nil && *req.ResetTwoFactor {
+		if err := s.clearTwoFactor(ctx, id); err != nil {
 			internalError(w, r, err)
 			return
 		}

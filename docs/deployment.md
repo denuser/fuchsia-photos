@@ -210,6 +210,22 @@ On the administration page, **Sign-in** decides who may use a provider:
 
 An account made through a provider has no password; its login comes from the provider's username, else from the part of its email before the at sign, else from its name, with a number added when the login is taken. Linking a provider to an account that exists is done by the account's own user, signed in with the password, in the profile, so that a provider which lets anyone claim an address cannot take an account over.
 
+## Two-factor sign-in
+
+A user can ask for a code from an authenticator app (Google Authenticator, Aegis, 1Password and the like) after the password. It is off until the administrator sets `TOTP_KEY` in `.env` next to the Compose file:
+
+```sh
+openssl rand -base64 32
+```
+
+`TOTP_KEY` is at least 32 characters. The application keeps each user's secret encrypted under it, so it cannot be turned on without it, and the application refuses to start when it is set to something shorter.
+
+**Keep `TOTP_KEY` with the database backups.** A dump restored on another machine without the key cannot open the secrets. At start the application finds the users whose secret it cannot open, turns two-factor sign-in off for them, so that they are not locked out, and writes a warning with their logins. Starting without `TOTP_KEY` at all does the same for everyone, so a key lost from `.env` by mistake leaves passwords alone protecting the accounts until each user sets it up again. Changing the key has the same effect.
+
+Each user turns it on in the profile: scan the picture or type the key into the app, enter a code to confirm, and save the ten recovery codes, which are shown once. A recovery code signs in once when the app is lost. Turning it off asks for the password and a code. If both the app and the codes are lost, an administrator resets it on the users page, and the user signs in with the password alone and sets it up again.
+
+It applies to the password form only. A sign-in through a provider is not asked for a code, as the provider answers for the second factor, and WebDAV app passwords are random and can be revoked per device. After 5 wrong codes for one user the code step waits 30 seconds, then longer, as the password form does. The wait is kept in memory, so a restart clears it. An authenticator code works once, and the code of the time step that turned it on is spent, so wait for the next code when signing in right after.
+
 ## Backups
 
 | What | Where | How |

@@ -47,10 +47,55 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+        "202":
+          description: The password is right and the user has two-factor sign-in on. No session yet; POST /login/totp with the token and a code starts it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TwoFactorPending"
         "401":
           $ref: "#/components/responses/Error"
         "429":
           description: Too many wrong passwords for this login. Retry-After says how many seconds to wait
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /login/totp:
+    post:
+      operationId: loginTotp
+      summary: Finish signing in with a code of the authenticator app or a recovery code
+      description: A code works once; a recovery code works once and is then spent. Five wrong codes for a user start a delay, as for passwords.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, code]
+              properties:
+                token:
+                  description: The token the password step returned, valid for five minutes
+                  type: string
+                code:
+                  description: Six digits, or a recovery code
+                  type: string
+      responses:
+        "200":
+          description: Logged in. The session cookie is set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          description: Too many wrong codes for this user. Retry-After says how many seconds to wait
           headers:
             Retry-After:
               schema:
@@ -203,6 +248,113 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /me/2fa:
+    get:
+      operationId: getTwoFactor
+      summary: Whether two-factor sign-in is on for the current user and can be turned on
+      responses:
+        "200":
+          description: The state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TwoFactorStatus"
+  /me/2fa/setup:
+    post:
+      operationId: setupTwoFactor
+      summary: Make a secret for an authenticator app
+      description: Sign-in does not change until /me/2fa/enable gets a correct code. Starting again replaces an unconfirmed secret.
+      responses:
+        "200":
+          description: The secret, as text, as an otpauth address and as a QR picture
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secret, uri, qr]
+                properties:
+                  secret:
+                    type: string
+                  uri:
+                    type: string
+                  qr:
+                    description: A PNG data address
+                    type: string
+        "409":
+          description: Two-factor sign-in is already on, the server has no TOTP_KEY, or the account has no password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /me/2fa/enable:
+    post:
+      operationId: enableTwoFactor
+      summary: Turn two-factor sign-in on with a correct code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+      responses:
+        "200":
+          description: It is on. The recovery codes are shown only here
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recoveryCodes]
+                properties:
+                  recoveryCodes:
+                    type: array
+                    items:
+                      type: string
+        "401":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "429":
+          description: Too many wrong codes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /me/2fa/disable:
+    post:
+      operationId: disableTwoFactor
+      summary: Turn two-factor sign-in off, with the password and a code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, code]
+              properties:
+                password:
+                  type: string
+                code:
+                  description: Six digits, or a recovery code
+                  type: string
+      responses:
+        "204":
+          description: It is off, and the secret and the recovery codes are gone
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "429":
+          description: Too many wrong codes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /me/identities:
     get:
       operationId: listIdentities
@@ -430,6 +582,9 @@ paths:
                   type: boolean
                 password:
                   type: string
+                resetTwoFactor:
+                  description: Turn two-factor sign-in off for a user who lost the authenticator and the recovery codes
+                  type: boolean
       responses:
         "200":
           description: The changed user
@@ -2292,9 +2447,29 @@ components:
     Role:
       type: string
       enum: [admin, user]
+    TwoFactorPending:
+      type: object
+      required: [twoFactor, token]
+      properties:
+        twoFactor:
+          type: boolean
+        token:
+          type: string
+    TwoFactorStatus:
+      type: object
+      required: [available, enabled, recoveryCodesLeft]
+      properties:
+        available:
+          description: False when the server has no TOTP_KEY, so it cannot be turned on
+          type: boolean
+        enabled:
+          type: boolean
+        recoveryCodesLeft:
+          type: integer
+          format: int64
     User:
       type: object
-      required: [id, login, role, disabled, hasPassword, createdAt, sharedIncludesAlbums, viewerShowsOriginals, viewerHiddenFields, navigationHiddenOnPhones, gridSquares, gridSize, timelineIncludesShared, language]
+      required: [id, login, role, disabled, hasPassword, twoFactor, createdAt, sharedIncludesAlbums, viewerShowsOriginals, viewerHiddenFields, navigationHiddenOnPhones, gridSquares, gridSize, timelineIncludesShared, language]
       properties:
         id:
           type: integer
@@ -2307,6 +2482,9 @@ components:
           type: boolean
         hasPassword:
           description: False for an account made by a sign-in through a provider, until it sets a password
+          type: boolean
+        twoFactor:
+          description: Whether signing in with the password asks for a code as well
           type: boolean
         createdAt:
           type: string

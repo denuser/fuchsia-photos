@@ -7,7 +7,7 @@ import (
 
 func setenv(t *testing.T, env map[string]string) {
 	t.Helper()
-	for _, name := range []string{"PUBLIC_URL", "SESSION_SECRET"} {
+	for _, name := range []string{"PUBLIC_URL", "SESSION_SECRET", "TOTP_KEY"} {
 		t.Setenv(name, "")
 	}
 	for n := 1; n <= maxOIDCProviders; n++ {
@@ -76,5 +76,21 @@ func TestLoadOIDCNeedsItsSettings(t *testing.T) {
 	setenv(t, nil)
 	if _, err := Load(); err != nil {
 		t.Errorf("no providers: %v", err)
+	}
+}
+
+func TestLoadTOTPKey(t *testing.T) {
+	setenv(t, map[string]string{"TOTP_KEY": strings.Repeat("k", 32)})
+	if cfg, err := Load(); err != nil || cfg.TOTPKey != strings.Repeat("k", 32) {
+		t.Errorf("key = %q, error = %v", cfg.TOTPKey, err)
+	}
+	setenv(t, map[string]string{"TOTP_KEY": "short"})
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "TOTP_KEY") {
+		t.Errorf("error = %v, want one that names TOTP_KEY", err)
+	}
+	// Without it two-factor sign-in is off, which is not an error.
+	setenv(t, nil)
+	if cfg, err := Load(); err != nil || cfg.TOTPKey != "" {
+		t.Errorf("no key: %q, %v", cfg.TOTPKey, err)
 	}
 }

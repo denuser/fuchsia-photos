@@ -23,9 +23,23 @@ export const useAuthStore = defineStore('auth', () => {
     loaded.value = true
   }
 
-  // Returns an error message, or null on success.
-  async function login(login: string, password: string): Promise<string | null> {
+  // The password step. Returns an error message, or null on success; with two-factor sign-in on, success
+  // is not a session yet, and the token it returns goes to loginTotp with a code.
+  async function login(login: string, password: string): Promise<{ error: string | null; token?: string }> {
     const { data, error } = await api.POST('/login', { body: { login, password } })
+    if (error) {
+      return { error: apiError(error) }
+    }
+    if ('token' in data) {
+      return { error: null, token: data.token }
+    }
+    user.value = data
+    return { error: null }
+  }
+
+  // The code step. Returns an error message, or null on success.
+  async function loginTotp(token: string, code: string): Promise<string | null> {
+    const { data, error } = await api.POST('/login/totp', { body: { token, code } })
     if (error) {
       return apiError(error)
     }
@@ -42,5 +56,5 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
   }
 
-  return { user, isAdmin, load, login, logout, clear }
+  return { user, isAdmin, load, login, loginTotp, logout, clear }
 })

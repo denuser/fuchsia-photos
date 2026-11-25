@@ -20,9 +20,11 @@ const props = withDefaults(
     loading?: boolean
     disabled?: boolean
     form?: boolean
+    // Stays open on a click outside and on Escape, and has no Cancel: for content that cannot be shown again.
+    persistent?: boolean
     maxWidth?: number | string
   }>(),
-  { action: undefined, cancel: undefined, error: '', form: true, maxWidth: 420 },
+  { action: undefined, cancel: undefined, error: '', form: true, persistent: false, maxWidth: 420 },
 )
 const emit = defineEmits<{ submit: [] }>()
 
@@ -36,7 +38,7 @@ function onClick() {
 </script>
 
 <template>
-  <v-dialog v-model="open" :max-width="maxWidth">
+  <v-dialog v-model="open" :max-width="maxWidth" :persistent="persistent">
     <v-card :title="title">
       <component :is="asForm ? VForm : 'div'" @submit.prevent="emit('submit')">
         <v-card-text>
@@ -54,7 +56,7 @@ function onClick() {
             :disabled="disabled"
             @click="onClick"
           />
-          <v-btn variant="text" color="primary" :text="cancel ?? t('common.cancel')" @click="open = false" />
+          <v-btn v-if="!persistent" variant="text" color="primary" :text="cancel ?? t('common.cancel')" @click="open = false" />
         </v-card-actions>
       </component>
     </v-card>

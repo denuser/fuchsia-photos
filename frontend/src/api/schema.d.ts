@@ -38,6 +38,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/login/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish signing in with a code of the authenticator app or a recovery code
+         * @description A code works once; a recovery code works once and is then spent. Five wrong codes for a user start a delay, as for passwords.
+         */
+        post: operations["loginTotp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/options": {
         parameters: {
             query?: never;
@@ -135,6 +155,77 @@ export interface paths {
         put?: never;
         /** Change the current user's password and end their other sessions */
         post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/2fa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether two-factor sign-in is on for the current user and can be turned on */
+        get: operations["getTwoFactor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/2fa/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make a secret for an authenticator app
+         * @description Sign-in does not change until /me/2fa/enable gets a correct code. Starting again replaces an unconfirmed secret.
+         */
+        post: operations["setupTwoFactor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/2fa/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turn two-factor sign-in on with a correct code */
+        post: operations["enableTwoFactor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/2fa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turn two-factor sign-in off, with the password and a code */
+        post: operations["disableTwoFactor"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1545,6 +1636,17 @@ export interface components {
         };
         /** @enum {string} */
         Role: "admin" | "user";
+        TwoFactorPending: {
+            twoFactor: boolean;
+            token: string;
+        };
+        TwoFactorStatus: {
+            /** @description False when the server has no TOTP_KEY, so it cannot be turned on */
+            available: boolean;
+            enabled: boolean;
+            /** Format: int64 */
+            recoveryCodesLeft: number;
+        };
         User: {
             /** Format: int64 */
             id: number;
@@ -1553,6 +1655,8 @@ export interface components {
             disabled: boolean;
             /** @description False for an account made by a sign-in through a provider, until it sets a password */
             hasPassword: boolean;
+            /** @description Whether signing in with the password asks for a code as well */
+            twoFactor: boolean;
             /** Format: date-time */
             createdAt: string;
             /** @description Whether the user's list of shared photos includes the photos of shared albums */
@@ -2018,8 +2122,57 @@ export interface operations {
                     "application/json": components["schemas"]["User"];
                 };
             };
+            /** @description The password is right and the user has two-factor sign-in on. No session yet; POST /login/totp with the token and a code starts it */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwoFactorPending"];
+                };
+            };
             401: components["responses"]["Error"];
             /** @description Too many wrong passwords for this login. Retry-After says how many seconds to wait */
+            429: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    loginTotp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The token the password step returned, valid for five minutes */
+                    token: string;
+                    /** @description Six digits, or a recovery code */
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Logged in. The session cookie is set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            401: components["responses"]["Error"];
+            /** @description Too many wrong codes for this user. Retry-After says how many seconds to wait */
             429: {
                 headers: {
                     "Retry-After"?: number;
@@ -2198,6 +2351,137 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             403: components["responses"]["Error"];
+        };
+    };
+    getTwoFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwoFactorStatus"];
+                };
+            };
+        };
+    };
+    setupTwoFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The secret, as text, as an otpauth address and as a QR picture */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        secret: string;
+                        uri: string;
+                        /** @description A PNG data address */
+                        qr: string;
+                    };
+                };
+            };
+            /** @description Two-factor sign-in is already on, the server has no TOTP_KEY, or the account has no password */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    enableTwoFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description It is on. The recovery codes are shown only here */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        recoveryCodes: string[];
+                    };
+                };
+            };
+            401: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            /** @description Too many wrong codes */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    disableTwoFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    password: string;
+                    /** @description Six digits, or a recovery code */
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description It is off, and the secret and the recovery codes are gone */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            /** @description Too many wrong codes */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     listIdentities: {
@@ -2485,6 +2769,8 @@ export interface operations {
                     role?: components["schemas"]["Role"];
                     disabled?: boolean;
                     password?: string;
+                    /** @description Turn two-factor sign-in off for a user who lost the authenticator and the recovery codes */
+                    resetTwoFactor?: boolean;
                 };
             };
         };

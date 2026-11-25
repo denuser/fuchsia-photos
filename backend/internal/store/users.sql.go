@@ -10,7 +10,7 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (login, password_hash, role) VALUES ($1, $2, $3) RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email
+INSERT INTO users (login, password_hash, role) VALUES ($1, $2, $3) RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step
 `
 
 type CreateUserParams struct {
@@ -38,12 +38,15 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Language,
 		&i.GridSize,
 		&i.Email,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email FROM users WHERE id = $1
+SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
@@ -65,12 +68,15 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.Language,
 		&i.GridSize,
 		&i.Email,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
 
 const getUserByLogin = `-- name: GetUserByLogin :one
-SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email FROM users WHERE lower(login) = lower($1)
+SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step FROM users WHERE lower(login) = lower($1)
 `
 
 func (q *Queries) GetUserByLogin(ctx context.Context, login string) (User, error) {
@@ -92,6 +98,9 @@ func (q *Queries) GetUserByLogin(ctx context.Context, login string) (User, error
 		&i.Language,
 		&i.GridSize,
 		&i.Email,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
@@ -127,7 +136,7 @@ func (q *Queries) ListActiveUserLogins(ctx context.Context) ([]ListActiveUserLog
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email FROM users ORDER BY lower(login)
+SELECT id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step FROM users ORDER BY lower(login)
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -155,6 +164,9 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Language,
 			&i.GridSize,
 			&i.Email,
+			&i.TotpSecret,
+			&i.TotpEnabled,
+			&i.TotpLastStep,
 		); err != nil {
 			return nil, err
 		}
@@ -181,7 +193,7 @@ func (q *Queries) SetUserDisabled(ctx context.Context, arg SetUserDisabledParams
 }
 
 const setUserGridSize = `-- name: SetUserGridSize :one
-UPDATE users SET grid_size = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email
+UPDATE users SET grid_size = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step
 `
 
 type SetUserGridSizeParams struct {
@@ -208,12 +220,15 @@ func (q *Queries) SetUserGridSize(ctx context.Context, arg SetUserGridSizeParams
 		&i.Language,
 		&i.GridSize,
 		&i.Email,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
 
 const setUserGridSquares = `-- name: SetUserGridSquares :one
-UPDATE users SET grid_squares = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email
+UPDATE users SET grid_squares = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step
 `
 
 type SetUserGridSquaresParams struct {
@@ -240,12 +255,15 @@ func (q *Queries) SetUserGridSquares(ctx context.Context, arg SetUserGridSquares
 		&i.Language,
 		&i.GridSize,
 		&i.Email,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
 
 const setUserLanguage = `-- name: SetUserLanguage :one
-UPDATE users SET language = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email
+UPDATE users SET language = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step
 `
 
 type SetUserLanguageParams struct {
@@ -272,12 +290,15 @@ func (q *Queries) SetUserLanguage(ctx context.Context, arg SetUserLanguageParams
 		&i.Language,
 		&i.GridSize,
 		&i.Email,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
 
 const setUserNavigationHiddenOnPhones = `-- name: SetUserNavigationHiddenOnPhones :one
-UPDATE users SET navigation_hidden_on_phones = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email
+UPDATE users SET navigation_hidden_on_phones = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step
 `
 
 type SetUserNavigationHiddenOnPhonesParams struct {
@@ -304,6 +325,9 @@ func (q *Queries) SetUserNavigationHiddenOnPhones(ctx context.Context, arg SetUs
 		&i.Language,
 		&i.GridSize,
 		&i.Email,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
@@ -337,7 +361,7 @@ func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) error 
 }
 
 const setUserSharedIncludesAlbums = `-- name: SetUserSharedIncludesAlbums :one
-UPDATE users SET shared_includes_albums = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email
+UPDATE users SET shared_includes_albums = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step
 `
 
 type SetUserSharedIncludesAlbumsParams struct {
@@ -364,12 +388,15 @@ func (q *Queries) SetUserSharedIncludesAlbums(ctx context.Context, arg SetUserSh
 		&i.Language,
 		&i.GridSize,
 		&i.Email,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
 
 const setUserTimelineIncludesShared = `-- name: SetUserTimelineIncludesShared :one
-UPDATE users SET timeline_includes_shared = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email
+UPDATE users SET timeline_includes_shared = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step
 `
 
 type SetUserTimelineIncludesSharedParams struct {
@@ -396,12 +423,15 @@ func (q *Queries) SetUserTimelineIncludesShared(ctx context.Context, arg SetUser
 		&i.Language,
 		&i.GridSize,
 		&i.Email,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
 
 const setUserViewerHiddenFields = `-- name: SetUserViewerHiddenFields :one
-UPDATE users SET viewer_hidden_fields = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email
+UPDATE users SET viewer_hidden_fields = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step
 `
 
 type SetUserViewerHiddenFieldsParams struct {
@@ -428,12 +458,15 @@ func (q *Queries) SetUserViewerHiddenFields(ctx context.Context, arg SetUserView
 		&i.Language,
 		&i.GridSize,
 		&i.Email,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
 
 const setUserViewerShowsOriginals = `-- name: SetUserViewerShowsOriginals :one
-UPDATE users SET viewer_shows_originals = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email
+UPDATE users SET viewer_shows_originals = $1 WHERE id = $2 RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step
 `
 
 type SetUserViewerShowsOriginalsParams struct {
@@ -460,6 +493,9 @@ func (q *Queries) SetUserViewerShowsOriginals(ctx context.Context, arg SetUserVi
 		&i.Language,
 		&i.GridSize,
 		&i.Email,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpLastStep,
 	)
 	return i, err
 }

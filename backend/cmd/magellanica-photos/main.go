@@ -221,6 +221,13 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 	if err != nil {
 		return err
 	}
+	totpKey, err := auth.NewTOTPKey(cfg.TOTPKey)
+	if err != nil {
+		return err
+	}
+	if err := api.DisableUnreadableTwoFactor(ctx, store.New(pool), totpKey); err != nil {
+		return err
+	}
 	handler := api.NewHandler(api.Deps{
 		ActivityLog:              cfg.ActivityLog,
 		ActivityMaintenanceToken: cfg.ActivityMaintenanceToken,
@@ -236,6 +243,7 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		PublicURL:                cfg.PublicURL,
 		SessionSecret:            cfg.SessionSecret,
 		OIDCProviders:            cfg.OIDC,
+		TOTP:                     totpKey,
 		WebDAV:                   &webdav.Handler{Queries: store.New(pool), Ingest: ingester, Layout: layout},
 		Static:                   static,
 	})

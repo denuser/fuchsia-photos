@@ -241,6 +241,13 @@ type TakeoutEntry struct {
 	OriginalPath *string
 }
 
+type TotpRecoveryCode struct {
+	ID       int64
+	UserID   int64
+	CodeHash []byte
+	UsedAt   *time.Time
+}
+
 type User struct {
 	ID                       int64
 	Login                    string
@@ -257,6 +264,9 @@ type User struct {
 	Language                 string
 	GridSize                 string
 	Email                    string
+	TotpSecret               []byte
+	TotpEnabled              bool
+	TotpLastStep             int64
 }
 
 type UserIdentity struct {

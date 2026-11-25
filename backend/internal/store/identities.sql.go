@@ -31,7 +31,7 @@ func (q *Queries) CreateIdentity(ctx context.Context, arg CreateIdentityParams) 
 }
 
 const createIdentityUser = `-- name: CreateIdentityUser :one
-INSERT INTO users (login, password_hash, role, email) VALUES ($1, '', 'user', $2) RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email
+INSERT INTO users (login, password_hash, role, email) VALUES ($1, '', 'user', $2) RETURNING id, login, password_hash, role, disabled, created_at, shared_includes_albums, viewer_shows_originals, viewer_hidden_fields, navigation_hidden_on_phones, grid_squares, timeline_includes_shared, language, grid_size, email, totp_secret, totp_enabled, totp_last_step
 `
 
 type CreateIdentityUserParams struct {
@@ -58,6 +58,9 @@ func (q *Queries) CreateIdentityUser(ctx context.Context, arg CreateIdentityUser
 		&i.Language,
 		&i.GridSize,
 		&i.Email,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.TotpLastStep,
 	)
 	return i, err
 }
@@ -96,7 +99,7 @@ func (q *Queries) GetSignInSettings(ctx context.Context) (SignInSetting, error) 
 }
 
 const getUserByIdentity = `-- name: GetUserByIdentity :one
-SELECT u.id, u.login, u.password_hash, u.role, u.disabled, u.created_at, u.shared_includes_albums, u.viewer_shows_originals, u.viewer_hidden_fields, u.navigation_hidden_on_phones, u.grid_squares, u.timeline_includes_shared, u.language, u.grid_size, u.email FROM user_identities i JOIN users u ON u.id = i.user_id
+SELECT u.id, u.login, u.password_hash, u.role, u.disabled, u.created_at, u.shared_includes_albums, u.viewer_shows_originals, u.viewer_hidden_fields, u.navigation_hidden_on_phones, u.grid_squares, u.timeline_includes_shared, u.language, u.grid_size, u.email, u.totp_secret, u.totp_enabled, u.totp_last_step FROM user_identities i JOIN users u ON u.id = i.user_id
 WHERE i.issuer = $1 AND i.subject = $2
 `
 
@@ -128,6 +131,9 @@ func (q *Queries) GetUserByIdentity(ctx context.Context, arg GetUserByIdentityPa
 		&i.User.Language,
 		&i.User.GridSize,
 		&i.User.Email,
+		&i.User.TotpSecret,
+		&i.User.TotpEnabled,
+		&i.User.TotpLastStep,
 	)
 	return i, err
 }

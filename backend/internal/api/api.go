@@ -52,6 +52,8 @@ type Deps struct {
 	PublicURL     string
 	SessionSecret string
 	OIDCProviders []config.OIDCProvider
+	// TOTP encrypts the secrets of two-factor sign-in and signs the step between password and code.
+	TOTP auth.TOTPKey
 	// WebDAV serves the WebDAV tree under /webdav, if set.
 	WebDAV http.Handler
 	// Static serves everything outside /api/.
@@ -62,7 +64,10 @@ type server struct {
 	Deps
 	// logins slows down repeated wrong passwords for one login.
 	logins *auth.Limiter
-	oidc   []*oidcProvider
+	// codes does the same for wrong two-factor codes, per user id. It is apart from logins, whose
+	// keys are whatever a visitor types as a login.
+	codes *auth.Limiter
+	oidc  []*oidcProvider
 }
 
 // NewHandler returns the application handler.
@@ -73,7 +78,7 @@ func NewHandler(deps Deps) http.Handler {
 	if deps.Transcode == nil {
 		deps.Transcode = &transcode.Service{Queries: deps.Queries, Layout: deps.Layout}
 	}
-	s := &server{Deps: deps, logins: auth.NewLimiter()}
+	s := &server{Deps: deps, logins: auth.NewLimiter(), codes: auth.NewLimiter()}
 	for _, p := range deps.OIDCProviders {
 		s.oidc = append(s.oidc, &oidcProvider{OIDCProvider: p})
 	}
@@ -81,6 +86,7 @@ func NewHandler(deps Deps) http.Handler {
 
 	mux.HandleFunc("GET /api/v1/health", s.health)
 	mux.HandleFunc("POST /api/v1/login", s.login)
+	mux.HandleFunc("POST /api/v1/login/totp", s.loginTOTP)
 	mux.HandleFunc("POST /api/v1/logout", s.logout)
 	mux.HandleFunc("GET /api/v1/auth/options", s.listSignInOptions)
 	mux.HandleFunc("GET /api/v1/auth/oidc/{id}/login", s.oidcLogin)
@@ -89,6 +95,10 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/me", s.authenticated(s.getMe))
 	mux.HandleFunc("PATCH /api/v1/me", s.authenticated(s.updateMe))
 	mux.HandleFunc("POST /api/v1/me/password", s.authenticated(s.changePassword))
+	mux.HandleFunc("GET /api/v1/me/2fa", s.authenticated(s.getTwoFactor))
+	mux.HandleFunc("POST /api/v1/me/2fa/setup", s.authenticated(s.setupTwoFactor))
+	mux.HandleFunc("POST /api/v1/me/2fa/enable", s.authenticated(s.enableTwoFactor))
+	mux.HandleFunc("POST /api/v1/me/2fa/disable", s.authenticated(s.disableTwoFactor))
 	mux.HandleFunc("GET /api/v1/me/identities", s.authenticated(s.listIdentities))
 	mux.HandleFunc("DELETE /api/v1/me/identities/{id}", s.authenticated(s.deleteIdentity))
 	mux.HandleFunc("GET /api/v1/me/app-passwords", s.authenticated(s.listAppPasswords))

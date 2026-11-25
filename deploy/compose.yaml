@@ -35,6 +35,7 @@ services:
       # Sign-in through providers, off while these are empty. See docs/deployment.md.
       PUBLIC_URL: ${PUBLIC_URL:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
+      TOTP_KEY: ${TOTP_KEY:-}
       OIDC_1_NAME: ${OIDC_1_NAME:-}
       OIDC_1_ISSUER: ${OIDC_1_ISSUER:-}
       OIDC_1_CLIENT_ID: ${OIDC_1_CLIENT_ID:-}

@@ -43,6 +43,8 @@ type Config struct {
 	SessionSecret string
 	// OIDC lists the providers people may sign in with.
 	OIDC []OIDCProvider
+	// TOTPKey encrypts the secrets of two-factor sign-in. Without it two-factor sign-in cannot be turned on.
+	TOTPKey string
 }
 
 // OIDCProvider is one OpenID Connect provider, set by OIDC_<n>_* variables with n from 1.
@@ -82,6 +84,10 @@ func Load() (Config, error) {
 	}
 	cfg.PublicURL = strings.TrimRight(os.Getenv("PUBLIC_URL"), "/")
 	cfg.SessionSecret = os.Getenv("SESSION_SECRET")
+	cfg.TOTPKey = os.Getenv("TOTP_KEY")
+	if cfg.TOTPKey != "" && len(cfg.TOTPKey) < 32 {
+		return Config{}, errors.New("TOTP_KEY must be at least 32 characters, such as the output of: openssl rand -base64 32")
+	}
 	for n := 1; n <= maxOIDCProviders; n++ {
 		prefix := "OIDC_" + strconv.Itoa(n) + "_"
 		issuer := os.Getenv(prefix + "ISSUER")
