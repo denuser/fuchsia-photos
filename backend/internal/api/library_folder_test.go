@@ -173,3 +173,48 @@ func TestUploadOfAPhotoWhoseLibraryFileIsAway(t *testing.T) {
 		t.Errorf("rows of the folder = %+v, want none: the file's row ended with its source", files)
 	}
 }
+
+// A photo whose file a scan found away, and that its owner restored from the trash, is not in the
+// trash when the file is uploaded again. The upload must still become its original.
+func TestUploadOfARestoredPhotoWhoseLibraryFileIsAway(t *testing.T) {
+	folders := t.TempDir()
+	e := setupWith(t, func(d *Deps) { d.Layout.Folders = folders })
+	e.addUser("anna", "user")
+	anna := e.loggedIn("anna")
+	ctx := context.Background()
+
+	res := anna.upload("landscape.jpg")
+	wantStatus(t, res, http.StatusCreated)
+	id := decode[uploadResult](t, res).Photo.ID
+	photo, _ := e.queries.GetPhoto(ctx, id)
+	if err := os.Remove(e.layout.Original(photo.OwnerID, photo.Sha256, photo.Mime)); err != nil {
+		t.Fatal(err)
+	}
+	folder, err := e.queries.CreateLibraryFolder(ctx, store.CreateLibraryFolderParams{Path: "lightroom", OwnerID: photo.OwnerID, ScanInterval: 600})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `UPDATE photos SET source_path = 'lightroom/a.jpg' WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.queries.InsertPhotoFile(ctx, store.InsertPhotoFileParams{FolderID: folder.ID, Path: "a.jpg", PhotoID: &id, State: "source", Size: 1, Mtime: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pool.Exec(ctx, `UPDATE photo_files SET missing_since = now()`); err != nil {
+		t.Fatal(err)
+	}
+
+	res = anna.upload("landscape.jpg")
+	wantStatus(t, res, http.StatusOK)
+	if got := decode[uploadResult](t, res); !got.Duplicate || got.Restored {
+		t.Fatalf("upload = %+v, want a duplicate of a photo that was not in the trash", got)
+	}
+	wantStatus(t, anna.get(fmt.Sprintf("/api/v1/photos/%d/original", id)), http.StatusOK)
+	after, _ := e.queries.GetPhoto(ctx, id)
+	if after.SourcePath != nil {
+		t.Errorf("source path = %v, want none: the upload is the original now", *after.SourcePath)
+	}
+	if files, _ := e.queries.ListPhotoFiles(ctx, folder.ID); len(files) != 0 {
+		t.Errorf("rows = %+v, want none", files)
+	}
+}

@@ -107,8 +107,18 @@ func (s *Server) getHardware(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	hw.Folders = s.Folders != ""
+	hw.Folders = s.readsFolders()
 	writeJSON(w, http.StatusOK, hw)
+}
+
+// readsFolders tells whether the library folders mount is there, so that an application is told so
+// only by a service that can read them: one rebuilt but started without the mount must not say it.
+func (s *Server) readsFolders() bool {
+	if s.Folders == "" {
+		return false
+	}
+	info, err := os.Stat(s.Folders)
+	return err == nil && info.IsDir()
 }
 
 func (s *Server) transcode(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +134,14 @@ func (s *Server) transcode(w http.ResponseWriter, r *http.Request) {
 	}
 	if inFolders {
 		if err := (storage.Layout{Folders: s.Folders}).CheckSource(req.In); err != nil {
-			writeError(w, http.StatusBadRequest, "the video is not a regular file under the library folders: "+req.In)
+			if errors.Is(err, storage.ErrUnsafeSource) {
+				writeError(w, http.StatusBadRequest, "the video is not a regular file under the library folders: "+req.In)
+				return
+			}
+			// Not mounted or not readable: the service is set up wrong, which is not the video's
+			// fault, and no copy fails for it.
+			writeError(w, http.StatusServiceUnavailable, err.Error()+
+				"; the transcoder needs the library folders at the same path as the application, and to run as its user")
 			return
 		}
 	}

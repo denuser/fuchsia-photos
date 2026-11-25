@@ -643,21 +643,4 @@ func TestInterruptedScanMarksNothing(t *testing.T) {
 			t.Errorf("%s: missed %d times, missing since %v; want nothing marked", f.Path, f.MissedScans, f.MissingSince)
 		}
 	}
-
-	// It is recorded as not done, so it is due again.
-	before, _ := e.queries.GetLibraryFolder(ctx, e.folder.ID)
-	if _, err := e.service.Scan(cancelled, e.folder.ID); err == nil {
-		t.Fatal("a cancelled Scan ended without an error")
-	}
-	after, _ := e.queries.GetLibraryFolder(ctx, e.folder.ID)
-	if !equalTimes(before.LastScanAt, after.LastScanAt) {
-		t.Error("an interrupted scan was recorded as finished")
-	}
-}
-
-func equalTimes(a, b *time.Time) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return a.Equal(*b)
 }

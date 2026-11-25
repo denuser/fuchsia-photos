@@ -279,4 +279,25 @@ func TestLibraryFolderVideos(t *testing.T) {
 	if err := e.client.Transcode(ctx, swapped, out, video); err == nil || !strings.Contains(err.Error(), "400") {
 		t.Errorf("a link in a library folder: %v, want a bad request", err)
 	}
+
+	// A file that is not there is the setup's fault, not the video's: no copy may fail for it.
+	gone := filepath.Join(e.folders, "lightroom", "gone.mov")
+	if err := e.client.Transcode(ctx, gone, out, video); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("a missing file of a library folder: %v, want the service reported unavailable", err)
+	}
+}
+
+// A transcoder started without the library folders mount must not say it reads them, as the
+// application would then send it videos and fail their copies for good.
+func TestFoldersAreReportedOnlyWhenMounted(t *testing.T) {
+	e := setup(t, writeCopy)
+	e.server.Folders = filepath.Join(t.TempDir(), "not-mounted")
+	hw, err := e.client.Hardware(context.Background())
+	if err != nil || hw.Folders {
+		t.Errorf("hardware = %+v, %v; want folders reported as false", hw, err)
+	}
+	e.server.Folders = e.folders
+	if hw, err = e.client.Hardware(context.Background()); err != nil || !hw.Folders {
+		t.Errorf("hardware = %+v, %v; want folders reported as true once mounted", hw, err)
+	}
 }

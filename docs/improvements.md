@@ -523,6 +523,8 @@ Done in step 5 (2026-11-25): the mount `${FOLDERS_DIR:-./data/folders}:/data/fol
 
 Checked live on the development stack on 2026-11-25 with a folder of copies of the fixtures (a Playwright script under a check administrator): the entry in the account menu, adding a folder and its first scan (three photos, one duplicate, one file that is not a photo), the dialog of files in its three tabs, a file deleted from the folder and two scans (the photo in the trash), the viewer's notice with its path and the disabled download, and the refusal to remove a folder with photos. The browser test `make e2e` was not run for this. Not yet checked live: a file that comes back, an edit in place, a move, and the transcoder.
 
+Found by the advisor's third review on 2026-11-25 and fixed: an upload that took over the file of a photo was rolled back unless the photo was in the trash, which left an orphaned file in the library and a photo that stayed unavailable, as when the owner had restored the photo from the trash before uploading; and a transcoder rebuilt but started without the folders mount still said it read them, so its copies failed for good. The transcoder now says `folders: true` only when the mount is a directory, and answers "unavailable" and not "bad request" for a library file it cannot open, so no copy fails for a setup fault.
+
 Draft plan:
 
 1. Migration: `library_folders` (path, owner, scan interval, last scan) and `photo_files` (photo, folder, path, size, mtime, first scan that missed it, missing since, whether the scan put the photo in the trash). The original path function and its use in the eight places, with tests that a photo from a folder is read from there and never removed.

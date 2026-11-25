@@ -68,7 +68,7 @@ POSTGRES_PASSWORD=change-me
 SITE_ADDRESS=192.168.0.10
 IMAGE_TAG=0.4.1
 ENV
-mkdir -p data/library data/cache data/import
+mkdir -p data/library data/cache data/import data/folders
 sudo chown 1000:1000 data/library data/cache
 docker compose up -d
 docker compose exec app magellanica-photos create-admin admin

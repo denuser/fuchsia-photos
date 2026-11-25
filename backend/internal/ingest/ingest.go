@@ -432,10 +432,18 @@ func (s *Service) duplicate(ctx context.Context, tx pgx.Tx, queries *store.Queri
 	if err != nil {
 		return Result{}, fmt.Errorf("look up shown photo: %w", err)
 	}
+	// The transaction may hold a change already, as when an upload took over the file of a photo
+	// read from a library folder, so the branches that restore nothing commit too.
 	if shown.ID != photo.ID {
+		if err := tx.Commit(ctx); err != nil {
+			return Result{}, fmt.Errorf("commit: %w", err)
+		}
 		return Result{Photo: shown, Duplicate: true}, nil
 	}
 	if photo.DeletedAt == nil {
+		if err := tx.Commit(ctx); err != nil {
+			return Result{}, fmt.Errorf("commit: %w", err)
+		}
 		return Result{Photo: photo, Duplicate: true}, nil
 	}
 	restored, err := queries.RestorePhoto(ctx, photo.ID)
