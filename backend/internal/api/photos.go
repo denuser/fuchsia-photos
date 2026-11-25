@@ -72,6 +72,11 @@ type photoJSON struct {
 	// archive, given only for one photo, as the viewer loads it.
 	Favorite *bool `json:"favorite,omitempty"`
 	Archived *bool `json:"archived,omitempty"`
+	// For a photo read from a library folder, given only for one photo: whether
+	// its file cannot be read now, and, to its owner, the file's path under the
+	// folders mount.
+	FileMissing *bool   `json:"fileMissing,omitempty"`
+	SourcePath  *string `json:"sourcePath,omitempty"`
 	// The H.264 copy of what the item plays: ready, not_needed, failed, or
 	// null while no copy has been tried.
 	VideoCopy *string `json:"videoCopy"`
@@ -771,6 +776,13 @@ func (s *server) getPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out.Archived = &archived
+	if photo.SourcePath != nil {
+		missing := storage.Unavailable(photo.SourcePath, s.Layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath))
+		out.FileMissing = &missing
+		if photo.OwnerID == currentUser(r).ID {
+			out.SourcePath = photo.SourcePath
+		}
+	}
 	if photo.OwnerID == currentUser(r).ID {
 		versions, err := s.Queries.ListPhotoVersions(r.Context(), photo.ID)
 		if err != nil {
@@ -858,8 +870,10 @@ func (s *server) getMotion(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) serveFile(w http.ResponseWriter, r *http.Request, path string) {
 	file, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		// An original in a library folder whose file is away or share is not mounted.
+	if errors.Is(err, os.ErrNotExist) && (path == "" || s.Layout.Folders != "" && strings.HasPrefix(path, s.Layout.Folders+string(os.PathSeparator))) {
+		// An original in a library folder whose file is away or whose share is not mounted, or
+		// a motion with no readable source. A file missing from the library or the cache is a
+		// fault, and stays an error.
 		w.Header().Del("Cache-Control")
 		writeError(w, http.StatusNotFound, "the file is not available")
 		return

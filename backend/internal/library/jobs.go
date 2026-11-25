@@ -54,7 +54,15 @@ func (DueArgs) Kind() string { return "library_due" }
 
 // InsertOpts implements river.JobArgsWithInsertOpts.
 func (DueArgs) InsertOpts() river.InsertOpts {
-	return river.InsertOpts{MaxAttempts: 1, UniqueOpts: river.UniqueOpts{ByArgs: true}}
+	// The states are listed because the default includes completed: with no arguments
+	// to tell the runs apart, every run after the first would be dropped until River
+	// cleans out the finished one, about a day later.
+	return river.InsertOpts{MaxAttempts: 1, UniqueOpts: river.UniqueOpts{ByArgs: true, ByState: []rivertype.JobState{
+		rivertype.JobStateAvailable,
+		rivertype.JobStatePending,
+		rivertype.JobStateRunning,
+		rivertype.JobStateScheduled,
+	}}}
 }
 
 // PeriodicJob looks for folders to scan every minute; the interval of a folder

@@ -2036,6 +2036,127 @@ paths:
           description: The tag is deleted
         "404":
           $ref: "#/components/responses/Error"
+  /library-folders:
+    get:
+      operationId: listLibraryFolders
+      summary: List library folders with what each holds and how its last scan ended (administrators only)
+      responses:
+        "200":
+          description: Library folders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LibraryFolder"
+        "403":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createLibraryFolder
+      summary: Start reading a folder of the library folders mount where it is, without copying it (administrators only)
+      description: The folder's photos belong to its owner. A scan is queued at once, and then at the folder's interval. A folder may not be, hold or lie inside another library folder.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, ownerId]
+              properties:
+                path:
+                  description: A folder inside the library folders mount, not the mount itself
+                  type: string
+                ownerId:
+                  type: integer
+                  format: int64
+                scanInterval:
+                  description: Seconds between scans, from 60 to a week. The default is 600
+                  type: integer
+      responses:
+        "201":
+          description: The new folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryFolder"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /library-folders/available:
+    get:
+      operationId: listAvailableLibraryFolders
+      summary: List the folders of the library folders mount, three levels deep, that no library folder covers (administrators only)
+      responses:
+        "200":
+          description: Relative paths of folders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        "403":
+          $ref: "#/components/responses/Error"
+  /library-folders/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      operationId: updateLibraryFolder
+      summary: Change the scan interval of a library folder (administrators only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scanInterval]
+              properties:
+                scanInterval:
+                  description: Seconds between scans, from 60 to a week
+                  type: integer
+      responses:
+        "200":
+          description: The folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryFolder"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteLibraryFolder
+      summary: Stop reading a library folder (administrators only)
+      description: Only a folder with no photos can be removed, as no scan would look at the files of the photos that were left. The folder's files are never touched.
+      responses:
+        "204":
+          description: The folder is removed
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /library-folders/{id}/scan:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      operationId: scanLibraryFolder
+      summary: Scan a library folder now (administrators only)
+      description: A folder that waits for a scan or is being scanned is not queued again
+      responses:
+        "202":
+          description: The scan is queued
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /imports:
     get:
       operationId: listImports
@@ -2630,6 +2751,84 @@ components:
         finishedAt:
           type: [string, "null"]
           format: date-time
+    LibraryFolder:
+      description: A folder of the library folders mount whose photos are read where they are
+      type: object
+      required: [id, path, ownerId, scanInterval, lastScanAt, lastError, lastResult, photos, missing, duplicates]
+      properties:
+        id:
+          type: integer
+          format: int64
+        path:
+          description: Relative to the library folders mount
+          type: string
+        ownerId:
+          type: integer
+          format: int64
+        scanInterval:
+          description: Seconds between scans
+          type: integer
+        lastScanAt:
+          type: [string, "null"]
+          format: date-time
+        lastError:
+          description: Why the last scan stopped, such as an empty folder or an unmounted share. Null when it ended normally
+          type: [string, "null"]
+        lastResult:
+          description: What the last scan found. Null before the first scan
+          oneOf:
+            - $ref: "#/components/schemas/LibraryScanResult"
+            - type: "null"
+        photos:
+          description: Photos read from the folder
+          type: integer
+          format: int64
+        missing:
+          description: Of them, the photos whose file is away
+          type: integer
+          format: int64
+        duplicates:
+          description: Files skipped because the owner has their content already
+          type: integer
+          format: int64
+    LibraryScanResult:
+      type: object
+      required: [listed, added, moved, duplicates, inTrash, purged, unsupported, waiting, failed, changed, replaced, conflicts, returned, missing, trashed]
+      properties:
+        listed:
+          type: integer
+        added:
+          type: integer
+        moved:
+          type: integer
+        duplicates:
+          type: integer
+        inTrash:
+          type: integer
+        purged:
+          type: integer
+        unsupported:
+          type: integer
+        waiting:
+          description: Files too new to be complete, read by a later scan
+          type: integer
+        failed:
+          type: integer
+        changed:
+          type: integer
+        replaced:
+          description: Files whose photo was processed again for new content
+          type: integer
+        conflicts:
+          description: Files that held the content of another photo and were left as they are
+          type: integer
+        returned:
+          type: integer
+        missing:
+          type: integer
+        trashed:
+          description: Photos the scan moved to the trash because their file stayed away
+          type: integer
     ImportKind:
       description: What a scan reads, photos of a folder or Google Takeout exports in it. The default is folder
       type: string
@@ -2947,6 +3146,12 @@ components:
         archived:
           description: Whether the photo is in the current user's archive. Only GET /photos/{id} gives it
           type: boolean
+        fileMissing:
+          description: For a photo read from a library folder, whether its file cannot be read now, because it is away or the folder is not mounted. Only GET /photos/{id} gives it; the original, the video and the motion then answer 404
+          type: boolean
+        sourcePath:
+          description: For a photo read from a library folder, the path of its file under the library folders mount. Only GET /photos/{id} gives it, and only to the photo's owner
+          type: string
         versions:
           description: The files hidden right under the photo, such as the original of an edited copy. Only GET /photos/{id} gives them, and only to the photo's owner; a hidden file is opened through its own id
           type: array

@@ -1347,6 +1347,89 @@ export interface paths {
         patch: operations["renameTag"];
         trace?: never;
     };
+    "/library-folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List library folders with what each holds and how its last scan ended (administrators only) */
+        get: operations["listLibraryFolders"];
+        put?: never;
+        /**
+         * Start reading a folder of the library folders mount where it is, without copying it (administrators only)
+         * @description The folder's photos belong to its owner. A scan is queued at once, and then at the folder's interval. A folder may not be, hold or lie inside another library folder.
+         */
+        post: operations["createLibraryFolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library-folders/available": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the folders of the library folders mount, three levels deep, that no library folder covers (administrators only) */
+        get: operations["listAvailableLibraryFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library-folders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop reading a library folder (administrators only)
+         * @description Only a folder with no photos can be removed, as no scan would look at the files of the photos that were left. The folder's files are never touched.
+         */
+        delete: operations["deleteLibraryFolder"];
+        options?: never;
+        head?: never;
+        /** Change the scan interval of a library folder (administrators only) */
+        patch: operations["updateLibraryFolder"];
+        trace?: never;
+    };
+    "/library-folders/{id}/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan a library folder now (administrators only)
+         * @description A folder that waits for a scan or is being scanned is not queued again
+         */
+        post: operations["scanLibraryFolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/imports": {
         parameters: {
             query?: never;
@@ -1740,6 +1823,59 @@ export interface components {
             /** Format: date-time */
             finishedAt: string | null;
         };
+        /** @description A folder of the library folders mount whose photos are read where they are */
+        LibraryFolder: {
+            /** Format: int64 */
+            id: number;
+            /** @description Relative to the library folders mount */
+            path: string;
+            /** Format: int64 */
+            ownerId: number;
+            /** @description Seconds between scans */
+            scanInterval: number;
+            /** Format: date-time */
+            lastScanAt: string | null;
+            /** @description Why the last scan stopped, such as an empty folder or an unmounted share. Null when it ended normally */
+            lastError: string | null;
+            /** @description What the last scan found. Null before the first scan */
+            lastResult: components["schemas"]["LibraryScanResult"] | null;
+            /**
+             * Format: int64
+             * @description Photos read from the folder
+             */
+            photos: number;
+            /**
+             * Format: int64
+             * @description Of them, the photos whose file is away
+             */
+            missing: number;
+            /**
+             * Format: int64
+             * @description Files skipped because the owner has their content already
+             */
+            duplicates: number;
+        };
+        LibraryScanResult: {
+            listed: number;
+            added: number;
+            moved: number;
+            duplicates: number;
+            inTrash: number;
+            purged: number;
+            unsupported: number;
+            /** @description Files too new to be complete, read by a later scan */
+            waiting: number;
+            failed: number;
+            changed: number;
+            /** @description Files whose photo was processed again for new content */
+            replaced: number;
+            /** @description Files that held the content of another photo and were left as they are */
+            conflicts: number;
+            returned: number;
+            missing: number;
+            /** @description Photos the scan moved to the trash because their file stayed away */
+            trashed: number;
+        };
         /**
          * @description What a scan reads, photos of a folder or Google Takeout exports in it. The default is folder
          * @enum {string}
@@ -1940,6 +2076,10 @@ export interface components {
             favorite?: boolean;
             /** @description Whether the photo is in the current user's archive. Only GET /photos/{id} gives it */
             archived?: boolean;
+            /** @description For a photo read from a library folder, whether its file cannot be read now, because it is away or the folder is not mounted. Only GET /photos/{id} gives it; the original, the video and the motion then answer 404 */
+            fileMissing?: boolean;
+            /** @description For a photo read from a library folder, the path of its file under the library folders mount. Only GET /photos/{id} gives it, and only to the photo's owner */
+            sourcePath?: string;
             /** @description The files hidden right under the photo, such as the original of an edited copy. Only GET /photos/{id} gives them, and only to the photo's owner; a hidden file is opened through its own id */
             versions?: components["schemas"]["PhotoVersion"][];
             /**
@@ -4469,6 +4609,159 @@ export interface operations {
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    listLibraryFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Library folders */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryFolder"][];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    createLibraryFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description A folder inside the library folders mount, not the mount itself */
+                    path: string;
+                    /** Format: int64 */
+                    ownerId: number;
+                    /** @description Seconds between scans, from 60 to a week. The default is 600 */
+                    scanInterval?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description The new folder */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryFolder"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listAvailableLibraryFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Relative paths of folders */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    deleteLibraryFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The folder is removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    updateLibraryFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Seconds between scans, from 60 to a week */
+                    scanInterval: number;
+                };
+            };
+        };
+        responses: {
+            /** @description The folder */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryFolder"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    scanLibraryFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scan is queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     listImports: {

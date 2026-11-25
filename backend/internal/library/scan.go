@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -528,6 +529,22 @@ func (r *scanRun) missing(ctx context.Context, rows []store.PhotoFile) error {
 			return fmt.Errorf("forget files: %w", err)
 		}
 	}
+	// A file that is away is not lost if the same content lies at another path of the
+	// owner's library folders: the copy takes its place.
+	var lost []int64
+	for _, row := range rows {
+		if !slices.Contains(away, row.ID) {
+			continue
+		}
+		promoted, err := r.promoteCopy(ctx, row)
+		if err != nil {
+			return err
+		}
+		if !promoted {
+			lost = append(lost, row.ID)
+		}
+	}
+	away = lost
 	if len(away) == 0 {
 		return nil
 	}
@@ -640,4 +657,61 @@ func (s *Service) CheckPath(ctx context.Context, path string) error {
 		}
 	}
 	return nil
+}
+
+// promoteCopy gives a photo whose file is away the file of a copy that is still there, in
+// this folder or in another of the owner's: the photo keeps its place and nothing goes to the
+// trash. The row of the file that went is dropped first, as a photo has one source.
+func (r *scanRun) promoteCopy(ctx context.Context, row store.PhotoFile) (bool, error) {
+	if row.PhotoID == nil {
+		return false, nil
+	}
+	photo, err := r.queries.GetPhoto(ctx, *row.PhotoID)
+	if err != nil {
+		return false, fmt.Errorf("look up photo: %w", err)
+	}
+	if photo.PurgedAt != nil {
+		return false, nil
+	}
+	copies, err := r.queries.ListDuplicateFilesOfPhoto(ctx, row.PhotoID)
+	if err != nil {
+		return false, fmt.Errorf("look up copies: %w", err)
+	}
+	for _, c := range copies {
+		if c.FolderID == r.folder.ID {
+			if !r.seen[c.Path] {
+				continue
+			}
+		} else if _, err := r.root.Lstat(c.FolderPath + "/" + c.Path); err != nil {
+			continue
+		}
+		source := c.FolderPath + "/" + c.Path
+		tx, err := r.Ingest.Pool.Begin(ctx)
+		if err != nil {
+			return false, fmt.Errorf("begin transaction: %w", err)
+		}
+		q := store.New(tx)
+		err = q.DeletePhotoFiles(ctx, []int64{row.ID})
+		if err == nil {
+			err = q.PromotePhotoFile(ctx, c.ID)
+		}
+		if err == nil {
+			err = q.SetPhotoSourcePath(ctx, store.SetPhotoSourcePathParams{ID: photo.ID, SourcePath: &source})
+		}
+		if err == nil {
+			err = tx.Commit(ctx)
+		}
+		tx.Rollback(ctx)
+		if err != nil {
+			return false, fmt.Errorf("promote copy: %w", err)
+		}
+		r.result.Moved++
+		if row.TrashedByScan {
+			if err := r.restore(ctx, photo.ID); err != nil {
+				return true, err
+			}
+		}
+		return true, nil
+	}
+	return false, nil
 }

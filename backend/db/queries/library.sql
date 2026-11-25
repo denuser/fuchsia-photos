@@ -107,3 +107,17 @@ DELETE FROM photo_embedding_failures f WHERE f.photo_id = @id;
 
 -- name: UpdatePhotoFileStat :exec
 UPDATE photo_files SET size = @size, mtime = @mtime WHERE id = @id;
+
+-- The copies of a photo's file that the scans skipped as duplicates, with the folder each lies in.
+-- name: ListDuplicateFilesOfPhoto :many
+SELECT f.*, l.path AS folder_path
+FROM photo_files f
+JOIN library_folders l ON l.id = f.folder_id
+WHERE f.photo_id = @photo_id AND f.state = 'duplicate'
+ORDER BY f.id;
+
+-- A copy takes over as the photo's file, once the file it was a copy of is gone.
+-- name: PromotePhotoFile :exec
+UPDATE photo_files
+SET state = 'source', missed_scans = 0, missing_since = NULL, trashed_by_scan = false
+WHERE id = @id;

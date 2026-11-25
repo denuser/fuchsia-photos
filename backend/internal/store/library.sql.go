@@ -182,6 +182,63 @@ func (q *Queries) InsertPhotoFile(ctx context.Context, arg InsertPhotoFileParams
 	return i, err
 }
 
+const listDuplicateFilesOfPhoto = `-- name: ListDuplicateFilesOfPhoto :many
+SELECT f.id, f.folder_id, f.path, f.photo_id, f.state, f.size, f.mtime, f.missed_scans, f.missing_since, f.trashed_by_scan, f.created_at, l.path AS folder_path
+FROM photo_files f
+JOIN library_folders l ON l.id = f.folder_id
+WHERE f.photo_id = $1 AND f.state = 'duplicate'
+ORDER BY f.id
+`
+
+type ListDuplicateFilesOfPhotoRow struct {
+	ID            int64
+	FolderID      int64
+	Path          string
+	PhotoID       *int64
+	State         string
+	Size          int64
+	Mtime         time.Time
+	MissedScans   int32
+	MissingSince  *time.Time
+	TrashedByScan bool
+	CreatedAt     time.Time
+	FolderPath    string
+}
+
+// The copies of a photo's file that the scans skipped as duplicates, with the folder each lies in.
+func (q *Queries) ListDuplicateFilesOfPhoto(ctx context.Context, photoID *int64) ([]ListDuplicateFilesOfPhotoRow, error) {
+	rows, err := q.db.Query(ctx, listDuplicateFilesOfPhoto, photoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDuplicateFilesOfPhotoRow
+	for rows.Next() {
+		var i ListDuplicateFilesOfPhotoRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FolderID,
+			&i.Path,
+			&i.PhotoID,
+			&i.State,
+			&i.Size,
+			&i.Mtime,
+			&i.MissedScans,
+			&i.MissingSince,
+			&i.TrashedByScan,
+			&i.CreatedAt,
+			&i.FolderPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLibraryFolders = `-- name: ListLibraryFolders :many
 SELECT id, path, owner_id, scan_interval, last_scan_at, created_at, last_result, last_error FROM library_folders ORDER BY path
 `
@@ -366,6 +423,18 @@ func (q *Queries) MovePhotoFile(ctx context.Context, arg MovePhotoFileParams) er
 		arg.Mtime,
 		arg.ID,
 	)
+	return err
+}
+
+const promotePhotoFile = `-- name: PromotePhotoFile :exec
+UPDATE photo_files
+SET state = 'source', missed_scans = 0, missing_since = NULL, trashed_by_scan = false
+WHERE id = $1
+`
+
+// A copy takes over as the photo's file, once the file it was a copy of is gone.
+func (q *Queries) PromotePhotoFile(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, promotePhotoFile, id)
 	return err
 }
 

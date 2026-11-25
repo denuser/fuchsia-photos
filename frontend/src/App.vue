@@ -175,6 +175,7 @@ window.addEventListener('beforeunload', (event) => {
           <v-list-item v-if="auth.isAdmin" to="/users" prepend-icon="fa-users" :title="t('users.title')" />
           <v-list-item v-if="auth.isAdmin" to="/activity" prepend-icon="fa-clock-rotate-left" :title="t('activity.title')" />
           <v-list-item v-if="auth.isAdmin" to="/import" prepend-icon="fa-file-import" :title="t('import.title')" />
+          <v-list-item v-if="auth.isAdmin" to="/library-folders" prepend-icon="fa-folder-open" :title="t('library.title')" />
           <v-list-item v-if="auth.isAdmin" to="/admin" prepend-icon="fa-gear" :title="t('admin.title')" />
           <v-list-item to="/profile" prepend-icon="fa-user-gear" :title="t('nav.profile')" />
           <v-list-item prepend-icon="fa-right-from-bracket" :title="t('nav.logout')" @click="logout" />

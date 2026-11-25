@@ -454,3 +454,68 @@ func TestScanRecordsHowItEnded(t *testing.T) {
 		t.Errorf("last error = %v, want the reason the scan stopped", folder.LastError)
 	}
 }
+
+// The file of a photo goes, but an identical copy is still there: the copy takes
+// its place and the photo is not trashed.
+func TestScanPromotesACopyWhenTheSourceGoes(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	e.put("one.jpg", "landscape.jpg")
+	e.put("copy of one.jpg", "landscape.jpg")
+	e.scan()
+	photo := e.photoAt("one.jpg")
+
+	if err := os.Remove(filepath.Join(e.layout.Folders, "lightroom", "one.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		e.scan()
+	}
+	got, _ := e.queries.GetPhoto(ctx, photo.ID)
+	if got.DeletedAt != nil {
+		t.Fatal("the photo went to the trash although a copy of its file is still there")
+	}
+	if got.SourcePath == nil || *got.SourcePath != "lightroom/copy of one.jpg" {
+		t.Errorf("source path = %v, want the copy", got.SourcePath)
+	}
+	files, _ := e.queries.ListPhotoFiles(ctx, e.folder.ID)
+	if len(files) != 1 || files[0].State != "source" || files[0].Path != "copy of one.jpg" {
+		t.Errorf("rows = %+v, want the copy as the one source", files)
+	}
+}
+
+// An owner moves files from one library folder to another: the photos stay.
+func TestScanFollowsAFileToAnotherFolder(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	other, err := e.queries.CreateLibraryFolder(ctx, store.CreateLibraryFolderParams{Path: "archive", OwnerID: e.owner, ScanInterval: 600})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(e.layout.Folders, "archive"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	e.put("a.jpg", "landscape.jpg")
+	e.put("b.jpg", "rotated.jpg")
+	e.scan()
+	photo := e.photoAt("a.jpg")
+
+	data, _ := os.ReadFile(filepath.Join(fixtures, "landscape.jpg"))
+	if err := os.WriteFile(filepath.Join(e.layout.Folders, "archive", "a.jpg"), data, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(e.layout.Folders, "lightroom", "a.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	// The new place is seen first, as a copy; then the old one is found empty.
+	if _, err := e.service.Scan(ctx, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		e.scan()
+	}
+	got, _ := e.queries.GetPhoto(ctx, photo.ID)
+	if got.DeletedAt != nil || got.SourcePath == nil || *got.SourcePath != "archive/a.jpg" {
+		t.Errorf("photo = trashed %v, source %v; want it kept and read from the archive folder", got.DeletedAt != nil, got.SourcePath)
+	}
+}

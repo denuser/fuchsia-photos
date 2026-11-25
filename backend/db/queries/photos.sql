@@ -259,6 +259,9 @@ SET status = 'ready',
     -- The video of a Live Photo is its motion too, and an edited copy plays
     -- the motion of its original.
     has_motion = @has_motion OR photo_has_linked_motion(p.id),
+    -- 1 when previews written at the same paths replace earlier ones, so that the
+    -- address of a preview changes in the same update that makes the photo ready.
+    preview_version = p.preview_version + @bump_version::int,
     updated_at = now()
 WHERE p.id = @id AND p.purged_at IS NULL;
 

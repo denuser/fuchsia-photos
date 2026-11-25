@@ -53,6 +53,17 @@ const favorite = ref<boolean | null>(null)
 // Whether the photo is in the user's archive, which the photo's own address
 // tells too.
 const archived = ref<boolean | null>(null)
+// What the photo's own address tells about a file in a library folder: whether
+// it cannot be read now, and, to the owner, its path. A photo stored in the
+// library has no entry.
+const libraryFiles = ref(new Map<number, { missing: boolean; path: string | null }>())
+const libraryFile = computed(() => libraryFiles.value.get(shown.value.id))
+
+function noteLibraryFile(photo: Photo) {
+  if (photo.fileMissing !== undefined) {
+    libraryFiles.value.set(photo.id, { missing: photo.fileMissing, path: photo.sourcePath ?? null })
+  }
+}
 
 watch(
   () => props.photo.id,
@@ -62,12 +73,14 @@ watch(
     raw.value = null
     favorite.value = null
     archived.value = null
+    libraryFiles.value = new Map()
     const { data } = await api.GET('/photos/{id}', { params: { path: { id } } })
     if (!data || id !== props.photo.id) {
       return
     }
     favorite.value = data.favorite ?? null
     archived.value = data.archived ?? null
+    noteLibraryFile(data)
     const editedVersion = data.versions?.find((v) => v.kind === 'edited')
     if (editedVersion) {
       const { data: photo } = await api.GET('/photos/{id}', { params: { path: { id: editedVersion.id } } })
@@ -75,6 +88,9 @@ watch(
         return
       }
       original.value = photo ?? null
+      if (photo) {
+        noteLibraryFile(photo)
+      }
     }
     const rawVersion = data.versions?.find((v) => v.kind === 'raw')
       ?? original.value?.versions?.find((v) => v.kind === 'raw')
@@ -82,6 +98,7 @@ watch(
       const { data: photo } = await api.GET('/photos/{id}', { params: { path: { id: rawVersion.id } } })
       if (photo && id === props.photo.id) {
         raw.value = photo
+        noteLibraryFile(photo)
       }
     }
   },
@@ -206,7 +223,7 @@ const details = computed(() => {
   const date = new Date(shown.value.takenAt ?? shown.value.createdAt)
   const owner = shown.value.ownerId === auth.user?.id ? null : users.login(shown.value.ownerId)
   const duration = shown.value.duration !== null && formatDuration(shown.value.duration)
-  return [selectedVersion.value === 'edited' && t('viewer.originalVersion'), rawFormats.get(shown.value.mime), owner && t('viewer.sharedBy', { owner }), formatDateTime(date), shown.value.width && `${shown.value.width} × ${shown.value.height}`, duration]
+  return [selectedVersion.value === 'edited' && t('viewer.originalVersion'), rawFormats.get(shown.value.mime), owner && t('viewer.sharedBy', { owner }), libraryFile.value?.path && t('viewer.inFolder', { path: libraryFile.value.path }), formatDateTime(date), shown.value.width && `${shown.value.width} × ${shown.value.height}`, duration]
     .filter(Boolean)
     .join(' · ')
 })
@@ -1049,7 +1066,16 @@ onBeforeUnmount(() => {
         />
       </template>
       <v-btn v-if="canManage" icon="fa-trash-can" variant="text" :aria-label="t('browser.moveToTrash')" @click="emit('trash', photo)" />
-      <v-btn :href="originalUrl(shown.id)" icon="fa-download" variant="text" :aria-label="t('viewer.download')" />
+      <v-btn
+        v-if="libraryFile?.missing"
+        icon="fa-download"
+        variant="text"
+        disabled
+        :aria-label="t('viewer.fileMissing')"
+        :title="t('viewer.fileMissing')"
+        data-testid="viewer-download-missing"
+      />
+      <v-btn v-else :href="originalUrl(shown.id)" icon="fa-download" variant="text" :aria-label="t('viewer.download')" />
       <v-btn icon="fa-xmark" variant="text" :aria-label="t('common.close')" @click="emit('close')" />
     </div>
 
@@ -1062,7 +1088,8 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="motionFailed" class="notice" role="status">
+    <div v-if="libraryFile?.missing" class="notice" role="status" data-testid="file-missing">{{ t('viewer.fileMissing') }}</div>
+    <div v-else-if="motionFailed" class="notice" role="status">
       {{ t(copyComing ? 'viewer.motionCopyComing' : 'viewer.motionUnsupported') }}
     </div>
 

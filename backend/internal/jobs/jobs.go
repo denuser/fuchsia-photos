@@ -77,14 +77,9 @@ func (w *processPhotoWorker) Work(ctx context.Context, job *river.Job[ProcessPho
 		return nil // Its original is gone.
 	}
 
-	err = w.process(ctx, photo)
-	if err == nil && photo.PreviewFormat != nil {
-		// A photo with previews is processed again because its file changed. The
-		// previews are written at the same paths, so their address must change.
-		if err := w.queries.BumpPreviewVersion(ctx, photo.ID); err != nil {
-			return fmt.Errorf("update photo: %w", err)
-		}
-	}
+	// A photo with previews is processed again because its file changed. The previews are
+	// written at the same paths, so their address must change with them.
+	err = w.process(ctx, photo, photo.PreviewFormat != nil)
 	if errors.Is(err, errOriginalUnavailable) {
 		// The file is in a library folder that is not readable now. The photo is not at
 		// fault: wait for the file, unless the photo is in the trash, which a scan
@@ -105,7 +100,7 @@ func (w *processPhotoWorker) Work(ctx context.Context, job *river.Job[ProcessPho
 	return err
 }
 
-func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) error {
+func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo, replacesPreviews bool) error {
 	path := w.layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath)
 	if storage.Unavailable(photo.SourcePath, path) {
 		return errOriginalUnavailable
@@ -175,6 +170,10 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) err
 		}
 	}
 
+	bump := int32(0)
+	if replacesPreviews {
+		bump = 1
+	}
 	w32, h32 := int32(width), int32(height)
 	err = w.queries.MarkPhotoReady(ctx, store.MarkPhotoReadyParams{
 		ID:            photo.ID,
@@ -186,6 +185,7 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) err
 		Duration:      duration,
 		Hdr:           hdr,
 		HasMotion:     hasMotion,
+		BumpVersion:   bump,
 	})
 	if err != nil {
 		return fmt.Errorf("update photo: %w", err)
@@ -528,7 +528,7 @@ func (w *renderPreviewsWorker) Work(ctx context.Context, job *river.Job[RenderPr
 		return nil // Processing makes its previews, or it has none.
 	}
 
-	err = w.process.process(ctx, photo)
+	err = w.process.process(ctx, photo, false)
 	if errors.Is(err, errOriginalUnavailable) {
 		return nil // The next run finds it again.
 	}

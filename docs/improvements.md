@@ -22,7 +22,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 16 | [Ten interface languages](#16-ten-interface-languages) | Done | Check date fields and fonts in Chinese, Japanese and Korean |
 | 17 | [RAW photos from cameras](#17-raw-photos-from-cameras) | Done, released in 0.1.0 | NAS checks 2, 3, 4, 6 and 7 |
 | 18 | [Lightroom XMP sidecars](#18-lightroom-xmp-sidecars) | Draft plan | Open questions 2 to 4; builds on 19 |
-| 19 | [Library folders indexed in place](#19-library-folders-indexed-in-place) | In progress: steps 1 to 3 done | Steps 4 to 7: the scheduled job and page, deployment, the NAS check, docs |
+| 19 | [Library folders indexed in place](#19-library-folders-indexed-in-place) | In progress: steps 1 to 4 done | Steps 5 to 7: deployment, the NAS check, docs; and the open questions on skipped files |
 | 20 | [Safer RAW decoding](#20-safer-raw-decoding) | Done, released in 0.1.1 | |
 | 21 | [Map](#21-map) | Done, released in 0.2.0 | Check the map on a phone and with a larger library |
 | 22 | [Demo activity log](#22-demo-activity-log) | Implemented | Deploy and enable on the public demo |
@@ -481,7 +481,7 @@ Pairing keeps the file name (decided on 2026-11-21): a pair needs the same base 
 
 ## 19. Library folders indexed in place
 
-**Status:** planned on 2026-11-21; steps 1 to 3 of the draft plan done on 2026-11-25 on the branch `library-folders`: migration 00042, `Layout.OriginalOf` and the nine readers of an original; the scan itself in `backend/internal/library` (`Service.Scan`, `ingest.ImportInPlace`); and changed files (`ingest.ReplaceInPlace`) with jobs that wait for an unreadable original. Tests drive the scan; no job or page starts it yet.
+**Status:** planned on 2026-11-21; steps 1 to 4 of the draft plan done on 2026-11-25 on the branch `library-folders`: migration 00042, `Layout.OriginalOf` and the nine readers of an original; the scan itself in `backend/internal/library` (`Service.Scan`, `ingest.ImportInPlace`); changed files (`ingest.ReplaceInPlace`) with jobs that wait for an unreadable original; and the schedule, the API (`/library-folders`), the administration page and the viewer's notice.
 
 RAW files that Lightroom works on are kept in a share on the NAS, and the application is to show them without copying them into its library (decided on 2026-11-21, see improvement 18). Today every source goes through `Ingest`, which moves the file to `originals/<owner>/<hash>` (`storage.Layout.Original`), and a folder scan copies, hashes every file on every run and is started by hand. This improvement adds a second kind of folder: a library folder, read where it is, rescanned on a schedule, with the files allowed to change, move and disappear. It is the base for improvement 18: the sidecars, the pairs with Lightroom's exports and their re-publishing all happen in such a folder.
 
@@ -506,6 +506,12 @@ Design:
 11. **Interface.** An administration page for library folders: path, owner, last scan, counts of photos, missing, skipped and failed files, the scan button. The viewer's details name the file's path in the folder, and a missing file shows a notice instead of the download.
 
 Done in step 3, as built: a changed file is read again only when its size or modification time differ and its modification time is older than the stable interval. The same hash only updates the row; a hash that is another photo of the owner is reported as a conflict and the row is brought up to date so that it is reported once; a purged photo stays purged. A photo that takes a new hash stays `ready` and keeps its previews until processing replaces them, then its preview version goes up, as the previews are written at the same paths. A processing job that finds the original unreadable snoozes for 15 minutes, or ends if the photo is in the trash; the scan queues it again when the file comes back. The other jobs skip such a photo, and the original, motion and video routes answer 404.
+
+Done in step 4, as built (2026-11-25): migration 00043 keeps how the last scan ended (`last_result`, `last_error`) on the folder, for the page. A periodic job (`library_due`, every minute) queues `library_scan` for each folder whose interval has passed, on the queue `library` with one worker; both jobs list their unique states explicitly, as River's default includes completed jobs, which would drop every periodic run after the first for about a day (a test covers it). The API is `GET/POST /library-folders`, `PATCH/DELETE /library-folders/{id}`, `POST /library-folders/{id}/scan` and `GET /library-folders/available`, for administrators; a folder with photos is not removed, and folders may not overlap. The page is `/library-folders`, in the account menu. The viewer shows a file's path to its owner and a notice and a disabled download when the file is not available.
+
+Found by the advisor's review on 2026-11-25 and fixed in the same step: a photo whose file went away was moved to the trash even when an identical copy was still in a library folder. Now the scan promotes the copy to the photo's source, in the same folder or in another of the owner's, in one transaction, and trashes only a photo with no copy left. The preview version of a reprocessed photo goes up in the same update that makes it ready, not after it.
+
+Left open, as the 2026-11-21 design asks for more than is built: the folder page does not list skipped files (purged ones, conflicts, failures); `.xmp` files are skipped, not recorded for improvement 18; and unsupported files such as PSD and TIFF are opened again by every scan, as only files that became photos or duplicates have a row.
 
 Draft plan:
 

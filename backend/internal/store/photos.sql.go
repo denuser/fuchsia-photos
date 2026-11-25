@@ -1856,8 +1856,11 @@ SET status = 'ready',
     -- The video of a Live Photo is its motion too, and an edited copy plays
     -- the motion of its original.
     has_motion = $8 OR photo_has_linked_motion(p.id),
+    -- 1 when previews written at the same paths replace earlier ones, so that the
+    -- address of a preview changes in the same update that makes the photo ready.
+    preview_version = p.preview_version + $9::int,
     updated_at = now()
-WHERE p.id = $9 AND p.purged_at IS NULL
+WHERE p.id = $10 AND p.purged_at IS NULL
 `
 
 type MarkPhotoReadyParams struct {
@@ -1869,6 +1872,7 @@ type MarkPhotoReadyParams struct {
 	Duration      *float64
 	Hdr           *bool
 	HasMotion     bool
+	BumpVersion   int32
 	ID            int64
 }
 
@@ -1882,6 +1886,7 @@ func (q *Queries) MarkPhotoReady(ctx context.Context, arg MarkPhotoReadyParams) 
 		arg.Duration,
 		arg.Hdr,
 		arg.HasMotion,
+		arg.BumpVersion,
 		arg.ID,
 	)
 	return err
