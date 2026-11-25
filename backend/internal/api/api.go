@@ -21,6 +21,7 @@ import (
 	"github.com/magellanica-app/magellanica-photos/backend/internal/config"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/ingest"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/jobs"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/library"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/ml"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/scan"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
@@ -43,6 +44,7 @@ type Deps struct {
 	Queries *store.Queries
 	Ingest  *ingest.Service
 	Scan    *scan.Service
+	Library *library.Service
 	Layout  storage.Layout
 	// ML embeds search texts. Its monitor tells whether the service is up.
 	ML *ml.Service
@@ -198,6 +200,12 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/imports/folders", s.admin(s.listImportFolders))
 	mux.HandleFunc("GET /api/v1/imports/{id}", s.admin(s.getImport))
 	mux.HandleFunc("POST /api/v1/imports/{id}/stop", s.admin(s.stopImport))
+	mux.HandleFunc("GET /api/v1/library-folders", s.admin(s.listLibraryFolders))
+	mux.HandleFunc("POST /api/v1/library-folders", s.admin(s.createLibraryFolder))
+	mux.HandleFunc("GET /api/v1/library-folders/available", s.admin(s.listAvailableLibraryFolders))
+	mux.HandleFunc("PATCH /api/v1/library-folders/{id}", s.admin(s.updateLibraryFolder))
+	mux.HandleFunc("DELETE /api/v1/library-folders/{id}", s.admin(s.deleteLibraryFolder))
+	mux.HandleFunc("POST /api/v1/library-folders/{id}/scan", s.admin(s.scanLibraryFolder))
 
 	mux.HandleFunc("GET /api/v1/settings/previews", s.admin(s.getPreviewSettings))
 	mux.HandleFunc("PUT /api/v1/settings/previews", s.admin(s.updatePreviewSettings))

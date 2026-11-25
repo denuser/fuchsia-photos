@@ -24,6 +24,7 @@ import (
 	"github.com/magellanica-app/magellanica-photos/backend/internal/config"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/ingest"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/jobs"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/library"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/media"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/metadata"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/ml"
@@ -162,6 +163,7 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 
 	ingester := &ingest.Service{Pool: pool, Layout: layout}
 	scanner := &scan.Service{Ingest: ingester, Dir: cfg.ImportDir, Stable: cfg.ImportStable}
+	libraries := &library.Service{Ingest: ingester, Stable: cfg.ImportStable}
 	var mlClient *ml.Client
 	if cfg.MLURL != "" {
 		mlClient = ml.NewClient(cfg.MLURL, cfg.MLToken)
@@ -179,14 +181,16 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		Workers:  cfg.Workers,
 		Register: func(workers *river.Workers) {
 			scanner.Register(workers)
+			libraries.Register(workers)
 			embedder.Register(workers)
 			copies.Register(workers)
 		},
 		Queues: map[string]river.QueueConfig{
 			ml.QueueML:      {MaxWorkers: 1},
+			library.Queue:   {MaxWorkers: 1},
 			transcode.Queue: {MaxWorkers: 1},
 		},
-		PeriodicJobs: []*river.PeriodicJob{ml.PeriodicJob(), transcode.PeriodicJob()},
+		PeriodicJobs: []*river.PeriodicJob{ml.PeriodicJob(), transcode.PeriodicJob(), library.PeriodicJob()},
 		Processed:    copies.Processed,
 	})
 	if err != nil {
@@ -236,6 +240,7 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		Queries:                  store.New(pool),
 		Ingest:                   ingester,
 		Scan:                     scanner,
+		Library:                  libraries,
 		Layout:                   layout,
 		ML:                       embedder,
 		Transcode:                copies,

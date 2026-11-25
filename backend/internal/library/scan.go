@@ -6,6 +6,7 @@ package library
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -43,6 +44,8 @@ var (
 	// ErrFolderMissing means the folder is not a folder inside the folders mount,
 	// as when the share is not mounted.
 	ErrFolderMissing = errors.New("the library folder is not there")
+	// ErrOverlap means the folder is, holds or lies inside another library folder.
+	ErrOverlap = errors.New("the folder overlaps another library folder")
 	// ErrEmpty means the folder lists no files although it had some, which a
 	// share that is not mounted looks like. Nothing is marked missing.
 	ErrEmpty = errors.New("the library folder is empty, though it held files")
@@ -56,24 +59,32 @@ type Service struct {
 	Stable time.Duration
 }
 
-// Result counts what a scan found.
+// Result counts what a scan found. Listed is the number of files the scan
+// considered. Added are new photos; Moved are files found under a new path;
+// Duplicates repeat a photo the owner already has, and InTrash and Purged repeat
+// one in the trash or deleted permanently. Unsupported files are not photos or
+// videos; Waiting ones are too new to be complete; Failed ones could not be read.
+// Changed files are known files whose size or modification time differ: Replaced
+// ones held new content and their photo is processed again, Conflicts held the
+// content of another photo and were left as they are. Returned files were away and
+// are back; Missing ones were not found; Trashed are the photos the scan moved to
+// the trash for it.
 type Result struct {
-	// Listed is the number of files the scan considered.
-	Listed int
-	// Added are new photos; Moved are files found under a new path; Duplicates
-	// repeat a photo the owner already has, and InTrash and Purged repeat one
-	// in the trash or deleted permanently.
-	Added, Moved, Duplicates, InTrash, Purged int
-	// Unsupported files are not photos or videos; Waiting ones are too new to be
-	// complete; Failed ones could not be read.
-	Unsupported, Waiting, Failed int
-	// Changed files are known files whose size or modification time differ.
-	// Replaced ones held new content and their photo is processed again;
-	// Conflicts held the content of another photo, and were left as they are.
-	Changed, Replaced, Conflicts int
-	// Returned files were away and are back; Missing ones were not found; Trashed
-	// are the photos the scan moved to the trash for it.
-	Returned, Missing, Trashed int
+	Listed      int `json:"listed"`
+	Added       int `json:"added"`
+	Moved       int `json:"moved"`
+	Duplicates  int `json:"duplicates"`
+	InTrash     int `json:"inTrash"`
+	Purged      int `json:"purged"`
+	Unsupported int `json:"unsupported"`
+	Waiting     int `json:"waiting"`
+	Failed      int `json:"failed"`
+	Changed     int `json:"changed"`
+	Replaced    int `json:"replaced"`
+	Conflicts   int `json:"conflicts"`
+	Returned    int `json:"returned"`
+	Missing     int `json:"missing"`
+	Trashed     int `json:"trashed"`
 }
 
 type listed struct {
@@ -106,13 +117,31 @@ func (s *Service) Scan(ctx context.Context, folderID int64) (Result, error) {
 		return Result{}, fmt.Errorf("look up folder: %w", err)
 	}
 	run := &scanRun{Service: s, queries: queries, folder: folder, seen: map[string]bool{}, moved: map[int64]bool{}}
-	if err := run.scan(ctx); err != nil {
-		return run.result, err
+	err = run.scan(ctx)
+	// The page shows how the last scan ended. A scan stopped by a restart is not
+	// recorded, so that it is due again at once.
+	if ctx.Err() == nil {
+		if recordErr := run.recordScan(context.WithoutCancel(ctx), err); recordErr != nil && err == nil {
+			err = recordErr
+		}
 	}
-	if err := queries.FinishLibraryScan(ctx, folderID); err != nil {
-		return run.result, fmt.Errorf("record scan: %w", err)
+	return run.result, err
+}
+
+func (r *scanRun) recordScan(ctx context.Context, scanErr error) error {
+	params := store.FinishLibraryScanParams{ID: r.folder.ID}
+	if scanErr != nil {
+		params.LastError = new(scanErr.Error())
 	}
-	return run.result, nil
+	result, err := json.Marshal(r.result)
+	if err != nil {
+		return fmt.Errorf("record scan: %w", err)
+	}
+	params.LastResult = result
+	if err := r.queries.FinishLibraryScan(ctx, params); err != nil {
+		return fmt.Errorf("record scan: %w", err)
+	}
+	return nil
 }
 
 type scanRun struct {
@@ -547,4 +576,68 @@ func (r *scanRun) trash(ctx context.Context, row store.PhotoFile) (bool, error) 
 		return false, fmt.Errorf("look up photo: %w", err)
 	}
 	return after.DeletedAt != nil, nil
+}
+
+const (
+	maxFolderDepth = 3
+	maxFolders     = 1000
+)
+
+// Folders lists the folders of the folders mount that can be chosen as library
+// folders, without the mount itself.
+func (s *Service) Folders() ([]string, error) {
+	root, err := os.OpenRoot(s.Ingest.Layout.Folders)
+	if err != nil {
+		return nil, fmt.Errorf("open folders mount: %w", err)
+	}
+	defer root.Close()
+
+	folders := []string{}
+	err = fs.WalkDir(root.FS(), ".", func(p string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			if p == "." {
+				return err
+			}
+			return fs.SkipDir
+		}
+		if p == "." || !entry.IsDir() {
+			return nil
+		}
+		if skipped(entry.Name()) || !utf8.ValidString(p) {
+			return fs.SkipDir
+		}
+		folders = append(folders, p)
+		if len(folders) >= maxFolders {
+			return fs.SkipAll
+		}
+		if strings.Count(p, "/")+1 >= maxFolderDepth {
+			return fs.SkipDir
+		}
+		return nil
+	})
+	return folders, err
+}
+
+// CheckPath tells whether path is a folder inside the folders mount that a library folder may
+// have: it exists, is not a link, and holds or is held by no other library folder.
+func (s *Service) CheckPath(ctx context.Context, path string) error {
+	root, err := os.OpenRoot(s.Ingest.Layout.Folders)
+	if err != nil {
+		return fmt.Errorf("open folders mount: %w", err)
+	}
+	defer root.Close()
+	info, err := root.Lstat(path)
+	if err != nil || !info.IsDir() {
+		return ErrFolderMissing
+	}
+	existing, err := store.New(s.Ingest.Pool).ListLibraryFolders(ctx)
+	if err != nil {
+		return fmt.Errorf("list folders: %w", err)
+	}
+	for _, f := range existing {
+		if f.Path == path || strings.HasPrefix(f.Path, path+"/") || strings.HasPrefix(path, f.Path+"/") {
+			return ErrOverlap
+		}
+	}
+	return nil
 }

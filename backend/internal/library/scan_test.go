@@ -419,3 +419,38 @@ func TestScanKeepsAPurgedPhotoPurged(t *testing.T) {
 		t.Errorf("rescan = %+v", res)
 	}
 }
+
+func TestScanRecordsHowItEnded(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	due := func() int {
+		folders, err := e.queries.ListLibraryFoldersDue(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(folders)
+	}
+	if due() != 1 {
+		t.Fatal("a folder never scanned is not due")
+	}
+	e.put("a.jpg", "landscape.jpg")
+	e.scan()
+	if due() != 0 {
+		t.Error("a folder just scanned is due again")
+	}
+	folder, _ := e.queries.GetLibraryFolder(ctx, e.folder.ID)
+	if folder.LastScanAt == nil || folder.LastError != nil || !bytes.Contains(folder.LastResult, []byte(`"added": 1`)) {
+		t.Errorf("recorded = %v, %v, %s", folder.LastScanAt, folder.LastError, folder.LastResult)
+	}
+
+	if err := os.Remove(filepath.Join(e.layout.Folders, "lightroom", "a.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.service.Scan(ctx, e.folder.ID); !errors.Is(err, ErrEmpty) {
+		t.Fatalf("err = %v", err)
+	}
+	folder, _ = e.queries.GetLibraryFolder(ctx, e.folder.ID)
+	if folder.LastError == nil || *folder.LastError != ErrEmpty.Error() {
+		t.Errorf("last error = %v, want the reason the scan stopped", folder.LastError)
+	}
+}

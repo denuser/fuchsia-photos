@@ -126,6 +126,8 @@ type LibraryFolder struct {
 	ScanInterval int32
 	LastScanAt   *time.Time
 	CreatedAt    time.Time
+	LastResult   []byte
+	LastError    *string
 }
 
 type MetadataSetting struct {

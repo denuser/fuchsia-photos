@@ -10,7 +10,38 @@ SELECT * FROM library_folders WHERE id = @id;
 SELECT * FROM library_folders ORDER BY path;
 
 -- name: FinishLibraryScan :exec
-UPDATE library_folders SET last_scan_at = now() WHERE id = @id;
+UPDATE library_folders
+SET last_scan_at = now(), last_result = sqlc.narg(last_result), last_error = sqlc.narg(last_error)
+WHERE id = @id;
+
+-- Folders whose interval since the last scan has passed.
+-- name: ListLibraryFoldersDue :many
+SELECT * FROM library_folders
+WHERE last_scan_at IS NULL OR last_scan_at + make_interval(secs => scan_interval) <= now()
+ORDER BY id;
+
+-- name: SetLibraryFolderInterval :one
+UPDATE library_folders SET scan_interval = @scan_interval WHERE id = @id RETURNING *;
+
+-- name: DeleteLibraryFolder :exec
+DELETE FROM library_folders WHERE id = @id;
+
+-- Photos that are read from the folder and not deleted permanently.
+-- name: CountLibraryFolderPhotos :one
+SELECT count(*)
+FROM photo_files f
+JOIN photos p ON p.id = f.photo_id
+WHERE f.folder_id = @folder_id AND f.state = 'source' AND p.purged_at IS NULL;
+
+-- What each folder holds, for the administration page: photos read from it, files
+-- that are away, and files skipped as duplicates.
+-- name: SummarizeLibraryFolders :many
+SELECT f.folder_id,
+       count(*) FILTER (WHERE f.state = 'source')::bigint AS photos,
+       count(*) FILTER (WHERE f.state = 'source' AND f.missing_since IS NOT NULL)::bigint AS missing,
+       count(*) FILTER (WHERE f.state = 'duplicate')::bigint AS duplicates
+FROM photo_files f
+GROUP BY f.folder_id;
 
 -- name: ListPhotoFiles :many
 SELECT * FROM photo_files WHERE folder_id = @folder_id ORDER BY path;

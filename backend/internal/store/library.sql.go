@@ -10,10 +10,25 @@ import (
 	"time"
 )
 
+const countLibraryFolderPhotos = `-- name: CountLibraryFolderPhotos :one
+SELECT count(*)
+FROM photo_files f
+JOIN photos p ON p.id = f.photo_id
+WHERE f.folder_id = $1 AND f.state = 'source' AND p.purged_at IS NULL
+`
+
+// Photos that are read from the folder and not deleted permanently.
+func (q *Queries) CountLibraryFolderPhotos(ctx context.Context, folderID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countLibraryFolderPhotos, folderID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createLibraryFolder = `-- name: CreateLibraryFolder :one
 INSERT INTO library_folders (path, owner_id, scan_interval)
 VALUES ($1, $2, $3)
-RETURNING id, path, owner_id, scan_interval, last_scan_at, created_at
+RETURNING id, path, owner_id, scan_interval, last_scan_at, created_at, last_result, last_error
 `
 
 type CreateLibraryFolderParams struct {
@@ -32,8 +47,19 @@ func (q *Queries) CreateLibraryFolder(ctx context.Context, arg CreateLibraryFold
 		&i.ScanInterval,
 		&i.LastScanAt,
 		&i.CreatedAt,
+		&i.LastResult,
+		&i.LastError,
 	)
 	return i, err
+}
+
+const deleteLibraryFolder = `-- name: DeleteLibraryFolder :exec
+DELETE FROM library_folders WHERE id = $1
+`
+
+func (q *Queries) DeleteLibraryFolder(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteLibraryFolder, id)
+	return err
 }
 
 const deletePhotoFiles = `-- name: DeletePhotoFiles :exec
@@ -46,11 +72,19 @@ func (q *Queries) DeletePhotoFiles(ctx context.Context, ids []int64) error {
 }
 
 const finishLibraryScan = `-- name: FinishLibraryScan :exec
-UPDATE library_folders SET last_scan_at = now() WHERE id = $1
+UPDATE library_folders
+SET last_scan_at = now(), last_result = $1, last_error = $2
+WHERE id = $3
 `
 
-func (q *Queries) FinishLibraryScan(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, finishLibraryScan, id)
+type FinishLibraryScanParams struct {
+	LastResult []byte
+	LastError  *string
+	ID         int64
+}
+
+func (q *Queries) FinishLibraryScan(ctx context.Context, arg FinishLibraryScanParams) error {
+	_, err := q.db.Exec(ctx, finishLibraryScan, arg.LastResult, arg.LastError, arg.ID)
 	return err
 }
 
@@ -65,7 +99,7 @@ func (q *Queries) ForgetPhotoEmbedding(ctx context.Context, id int64) error {
 }
 
 const getLibraryFolder = `-- name: GetLibraryFolder :one
-SELECT id, path, owner_id, scan_interval, last_scan_at, created_at FROM library_folders WHERE id = $1
+SELECT id, path, owner_id, scan_interval, last_scan_at, created_at, last_result, last_error FROM library_folders WHERE id = $1
 `
 
 func (q *Queries) GetLibraryFolder(ctx context.Context, id int64) (LibraryFolder, error) {
@@ -78,6 +112,8 @@ func (q *Queries) GetLibraryFolder(ctx context.Context, id int64) (LibraryFolder
 		&i.ScanInterval,
 		&i.LastScanAt,
 		&i.CreatedAt,
+		&i.LastResult,
+		&i.LastError,
 	)
 	return i, err
 }
@@ -147,7 +183,7 @@ func (q *Queries) InsertPhotoFile(ctx context.Context, arg InsertPhotoFileParams
 }
 
 const listLibraryFolders = `-- name: ListLibraryFolders :many
-SELECT id, path, owner_id, scan_interval, last_scan_at, created_at FROM library_folders ORDER BY path
+SELECT id, path, owner_id, scan_interval, last_scan_at, created_at, last_result, last_error FROM library_folders ORDER BY path
 `
 
 func (q *Queries) ListLibraryFolders(ctx context.Context) ([]LibraryFolder, error) {
@@ -166,6 +202,44 @@ func (q *Queries) ListLibraryFolders(ctx context.Context) ([]LibraryFolder, erro
 			&i.ScanInterval,
 			&i.LastScanAt,
 			&i.CreatedAt,
+			&i.LastResult,
+			&i.LastError,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLibraryFoldersDue = `-- name: ListLibraryFoldersDue :many
+SELECT id, path, owner_id, scan_interval, last_scan_at, created_at, last_result, last_error FROM library_folders
+WHERE last_scan_at IS NULL OR last_scan_at + make_interval(secs => scan_interval) <= now()
+ORDER BY id
+`
+
+// Folders whose interval since the last scan has passed.
+func (q *Queries) ListLibraryFoldersDue(ctx context.Context) ([]LibraryFolder, error) {
+	rows, err := q.db.Query(ctx, listLibraryFoldersDue)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LibraryFolder
+	for rows.Next() {
+		var i LibraryFolder
+		if err := rows.Scan(
+			&i.ID,
+			&i.Path,
+			&i.OwnerID,
+			&i.ScanInterval,
+			&i.LastScanAt,
+			&i.CreatedAt,
+			&i.LastResult,
+			&i.LastError,
 		); err != nil {
 			return nil, err
 		}
@@ -377,6 +451,31 @@ func (q *Queries) SeePhotoFile(ctx context.Context, id int64) error {
 	return err
 }
 
+const setLibraryFolderInterval = `-- name: SetLibraryFolderInterval :one
+UPDATE library_folders SET scan_interval = $1 WHERE id = $2 RETURNING id, path, owner_id, scan_interval, last_scan_at, created_at, last_result, last_error
+`
+
+type SetLibraryFolderIntervalParams struct {
+	ScanInterval int32
+	ID           int64
+}
+
+func (q *Queries) SetLibraryFolderInterval(ctx context.Context, arg SetLibraryFolderIntervalParams) (LibraryFolder, error) {
+	row := q.db.QueryRow(ctx, setLibraryFolderInterval, arg.ScanInterval, arg.ID)
+	var i LibraryFolder
+	err := row.Scan(
+		&i.ID,
+		&i.Path,
+		&i.OwnerID,
+		&i.ScanInterval,
+		&i.LastScanAt,
+		&i.CreatedAt,
+		&i.LastResult,
+		&i.LastError,
+	)
+	return i, err
+}
+
 const setPhotoSourcePath = `-- name: SetPhotoSourcePath :exec
 UPDATE photos SET source_path = $1, updated_at = now() WHERE id = $2
 `
@@ -389,6 +488,49 @@ type SetPhotoSourcePathParams struct {
 func (q *Queries) SetPhotoSourcePath(ctx context.Context, arg SetPhotoSourcePathParams) error {
 	_, err := q.db.Exec(ctx, setPhotoSourcePath, arg.SourcePath, arg.ID)
 	return err
+}
+
+const summarizeLibraryFolders = `-- name: SummarizeLibraryFolders :many
+SELECT f.folder_id,
+       count(*) FILTER (WHERE f.state = 'source')::bigint AS photos,
+       count(*) FILTER (WHERE f.state = 'source' AND f.missing_since IS NOT NULL)::bigint AS missing,
+       count(*) FILTER (WHERE f.state = 'duplicate')::bigint AS duplicates
+FROM photo_files f
+GROUP BY f.folder_id
+`
+
+type SummarizeLibraryFoldersRow struct {
+	FolderID   int64
+	Photos     int64
+	Missing    int64
+	Duplicates int64
+}
+
+// What each folder holds, for the administration page: photos read from it, files
+// that are away, and files skipped as duplicates.
+func (q *Queries) SummarizeLibraryFolders(ctx context.Context) ([]SummarizeLibraryFoldersRow, error) {
+	rows, err := q.db.Query(ctx, summarizeLibraryFolders)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SummarizeLibraryFoldersRow
+	for rows.Next() {
+		var i SummarizeLibraryFoldersRow
+		if err := rows.Scan(
+			&i.FolderID,
+			&i.Photos,
+			&i.Missing,
+			&i.Duplicates,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updatePhotoFileStat = `-- name: UpdatePhotoFileStat :exec
