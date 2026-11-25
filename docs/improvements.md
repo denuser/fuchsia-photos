@@ -28,6 +28,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 22 | [Demo activity log](#22-demo-activity-log) | Implemented | Deploy and enable on the public demo |
 | 23 | [Sign in with OIDC](#23-sign-in-with-oidc) | Built; checked with Google on 2026-11-25 | Apple and Yandex ID |
 | 24 | [Two-factor sign-in (TOTP)](#24-two-factor-sign-in-totp) | Built; checked with an authenticator app on 2026-11-25 | The browser test does not cover it |
+| 25 | [Near-duplicates and bursts](#25-near-duplicates-and-bursts) | Plan decided, nothing built | Step 0: calibration on real data; then the candidates job and the review page |
 
 ## 1. Administration page
 
@@ -694,3 +695,46 @@ Checked against the code on 2026-11-24: password sign-in has no rate limit today
 4. **Sign-in.** A correct password returns a pending token valid for five minutes instead of a session; `POST /auth/totp` with that token and a code starts the session through the shared function of improvement 23. A code is accepted once per time step, with one step of clock drift.
 5. **Turning off and loss.** Turning it off asks for the password and a code. An administrator can reset a user's 2FA on the users page, which is the recovery when the codes are lost. Changing the password keeps 2FA.
 6. **Interface and tests.** A step on the sign-in page, a section in the profile, strings in all ten languages. Backend tests for the pending token's expiry, a reused code, a recovery code used twice, the rate limit, the administrator's reset, and a sign-in by OIDC that skips the step.
+
+## 25. Near-duplicates and bursts
+
+**Status:** plan decided on 2026-11-25 (see below), reviewed once. Nothing is built; the first step is the calibration.
+
+What exists today: exact duplicates (`UNIQUE (owner_id, sha256)`, so an upload of the same bytes adds nothing); "similar photos" in the viewer (`SearchSimilarPhotos`: the nearest vectors the viewer can see, no threshold, no ML service needed); `photo_links`, which hides a file under another photo (`live`, `edited`, `raw`). What is missing: telling that two different files are the same shot (a resized or re-saved copy, a copy from a messenger, an edit made elsewhere) and grouping the frames of a burst, which Immich, PhotoPrism (stacks) and Ente have in some form (see the comparison in `promotion.md`; the competitors' columns come from memory).
+
+Facts checked against the code on 2026-11-25:
+- Vectors are `halfvec` of any size per photo and model (`photo_embeddings`), searched by an exact scan; an HNSW index is added only when it gets slow (`architecture.md`). A pass over a library, one nearest-neighbour query per photo, is quadratic with an exact scan. Cost on the NAS is not measured. The column has no dimension, so an HNSW index would be a partial expression index per model (`(embedding::halfvec(N)) WHERE model = …`), and a filter by owner on top of an approximate search loses recall.
+- The EXIF of every photo is kept whole in `photos.exif`, including `DateTimeOriginal`, `SubSecTimeOriginal`, `Make` and `Model`; RAW pairing already compares them (`ListRAWVersionCandidates`). No burst tag is read anywhere (`BurstUUID` of Apple's maker notes, Google's burst file names are not looked at), and the development library has none.
+- `photo_links.hidden_id` is the primary key, so a file hides under one photo only. `live` and `raw` are each unique per shown photo (`photo_links_live_key`, `photo_links_one_raw`, migrations 00028 and 00035); `edited` is not. `kind` has a CHECK list, so a new kind needs a migration. The trash, restore and purge follow links with recursive queries, so every file hidden under a photo goes to the trash with it, out of it and away for good. That is right for a Live Photo video or a RAW and wrong for a burst, where a person trashes single frames.
+- A scan of a library folder counts the file of a permanently deleted photo as `Purged` and does not import it again (`library/scan.go`), but the application cannot remove the file itself on the read-only mount: "remove the duplicate" there means the trash and then a purge of the record.
+- SigLIP vectors are semantic: a burst frame, a re-saved copy and "the same spot, another shot" all sit close, so one cosine threshold may not separate them.
+
+The plan, with the choices still open:
+
+0. **Calibration.** Before any threshold: for pairs from the development library (2,111 photos, 14 users), the owner's Photos library and Takeout exports, list the distances of pairs a person calls "the same shot", "a burst frame" and "the same place, another shot", and read where they separate, for each signal under question 3. The pairs need labels by a person; contact sheets at rising distances, as `sheet.mjs` makes for the demo library, can collect them. It needs `make ml` started by the owner, and the Photos library is read through an APFS clone with consent each time. The threshold is a setting on the administration page with a default from this.
+1. **Candidates.** A periodic job after embedding, for photos not checked yet, in the owner's library only, leaving out hidden photos, the trash and videos (a poster of a video is not a photo; videos are out of the first step) as `SearchSimilarPhotos` does, so a pair already linked as `edited` or `raw` is not offered again. A burst is narrower: the same `Make` and `Model` and a capture time within a few seconds, with the sub-second tags where they exist. A duplicate has no time limit. The "checked" state is kept per photo and signal, and cleared when the photo is embedded again or its file changes.
+2. **Groups.** Matching is not transitive (A near B, B near C, A not near C): a group is a connected component, or each photo has an anchor, decided with question 2.
+3. **Resolving.** Moves the albums, tags, favorites, shares, description and public-link entries of the removed photos to the kept one, or leaves them (question 6). A pair marked "not the same" is stored by photo ids, not by model, so a change of `ML_MODEL` or an edited library file does not bring it back.
+4. **Interface and tests.** Backend tests with a fake set of vectors, as for the text search; the interface is checked by hand on the development stack.
+
+Decided on 2026-11-25:
+- **Order:** the review page for near-duplicates comes first, then bursts on the same candidates job (question 1).
+- **Storage of groups:** a separate stack table (stack, photo, cover), not a new kind in `photo_links`, so the trash, restore and purge stay as they are and a single frame can be trashed or a new cover chosen (question 2). The timeline does not collapse stacks in the first step; the review page is the only place a group shows.
+- **Signal:** both a perceptual hash of the grid preview (dHash, computed in processing on libvips, no ML service) and the SigLIP vector, each with its own threshold found in step 0 (question 3).
+- **Burst grouping only proposes:** the owner confirms; nothing is hidden or deleted without the owner (question 4).
+
+Defaults for the rest, which hold unless the owner says otherwise:
+- A burst may be proposed without the ML service, from time and camera and the hash, since it is only a proposal (question 5).
+- Resolving a duplicate moves the albums, tags, favorites and shares of the removed photos to the kept one (question 6).
+- Videos are out of the first step, and a recipient of a shared photo sees no stack, as stacks are not in the timeline yet (question 7).
+- HNSW is added after a measurement on the NAS (question 8).
+
+Questions that were asked (kept for the record):
+1. Which first: a review page for near-duplicates, or stacked bursts in the timeline?
+2. Representation of a burst: (a) a new kind in `photo_links`, or (b) a separate stack table, or a review page only.
+3. Signal: SigLIP vectors, a perceptual hash, or both.
+4. Automatic grouping of bursts with an unstack button, or only a proposal.
+5. Whether the burst check may run without the ML service.
+6. Whether albums, tags, favorites and shares move to the kept photo.
+7. Whether a recipient sees the owner's stack collapsed, and whether videos are in scope.
+8. An HNSW index now, or after a measurement on the NAS.
