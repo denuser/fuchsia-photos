@@ -238,7 +238,7 @@ func (q *Queries) GetLinkAbove(ctx context.Context, id int64) (GetLinkAboveRow, 
 }
 
 const getLivePhotoVideo = `-- name: GetLivePhotoVideo :one
-SELECT v.id, v.owner_id, v.sha256, v.mime, v.size, v.width, v.height, v.taken_at, v.exif, v.status, v.error, v.visibility, v.created_at, v.deleted_at, v.original_name, v.preview_format, v.sort_at, v.updated_at, v.purged_at, v.camera, v.lens, v.preview_version, v.duration, v.has_motion, v.content_identifier, v.video_copy, v.imported_latitude, v.imported_longitude, v.description, v.hdr, v.has_raw, v.latitude, v.longitude
+SELECT v.id, v.owner_id, v.sha256, v.mime, v.size, v.width, v.height, v.taken_at, v.exif, v.status, v.error, v.visibility, v.created_at, v.deleted_at, v.original_name, v.preview_format, v.sort_at, v.updated_at, v.purged_at, v.camera, v.lens, v.preview_version, v.duration, v.has_motion, v.content_identifier, v.video_copy, v.imported_latitude, v.imported_longitude, v.description, v.hdr, v.has_raw, v.latitude, v.longitude, v.source_path
 FROM photo_links l
 JOIN photos v ON v.id = l.hidden_id
 WHERE l.shown_id = $1 AND l.kind = 'live' AND v.purged_at IS NULL
@@ -282,12 +282,13 @@ func (q *Queries) GetLivePhotoVideo(ctx context.Context, photoID int64) (Photo, 
 		&i.HasRaw,
 		&i.Latitude,
 		&i.Longitude,
+		&i.SourcePath,
 	)
 	return i, err
 }
 
 const getPhoto = `-- name: GetPhoto :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude FROM photos WHERE id = $1
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path FROM photos WHERE id = $1
 `
 
 func (q *Queries) GetPhoto(ctx context.Context, id int64) (Photo, error) {
@@ -327,12 +328,13 @@ func (q *Queries) GetPhoto(ctx context.Context, id int64) (Photo, error) {
 		&i.HasRaw,
 		&i.Latitude,
 		&i.Longitude,
+		&i.SourcePath,
 	)
 	return i, err
 }
 
 const getPhotoByHash = `-- name: GetPhotoByHash :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude FROM photos WHERE owner_id = $1 AND sha256 = $2
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path FROM photos WHERE owner_id = $1 AND sha256 = $2
 `
 
 type GetPhotoByHashParams struct {
@@ -377,6 +379,7 @@ func (q *Queries) GetPhotoByHash(ctx context.Context, arg GetPhotoByHashParams) 
 		&i.HasRaw,
 		&i.Latitude,
 		&i.Longitude,
+		&i.SourcePath,
 	)
 	return i, err
 }
@@ -387,7 +390,7 @@ WITH RECURSIVE up AS (
     UNION ALL
     SELECT l.shown_id, up.depth + 1 FROM photo_links l JOIN up ON l.hidden_id = up.id WHERE up.depth < 16
 )
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude FROM photos p JOIN up ON up.id = p.id ORDER BY up.depth DESC LIMIT 1
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path FROM photos p JOIN up ON up.id = p.id ORDER BY up.depth DESC LIMIT 1
 `
 
 // The photo shown at the top of the chain a photo is hidden in, or the photo
@@ -429,12 +432,13 @@ func (q *Queries) GetShownPhoto(ctx context.Context, id int64) (Photo, error) {
 		&i.HasRaw,
 		&i.Latitude,
 		&i.Longitude,
+		&i.SourcePath,
 	)
 	return i, err
 }
 
 const getTrashedPhoto = `-- name: GetTrashedPhoto :one
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude FROM photos
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path FROM photos
 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL AND purged_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = photos.id)
 `
@@ -482,12 +486,13 @@ func (q *Queries) GetTrashedPhoto(ctx context.Context, arg GetTrashedPhotoParams
 		&i.HasRaw,
 		&i.Latitude,
 		&i.Longitude,
+		&i.SourcePath,
 	)
 	return i, err
 }
 
 const getVisiblePhoto = `-- name: GetVisiblePhoto :one
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path
 FROM photos p
 WHERE p.id = $1
   AND p.purged_at IS NULL
@@ -543,6 +548,7 @@ func (q *Queries) GetVisiblePhoto(ctx context.Context, arg GetVisiblePhotoParams
 		&i.HasRaw,
 		&i.Latitude,
 		&i.Longitude,
+		&i.SourcePath,
 	)
 	return i, err
 }
@@ -550,7 +556,7 @@ func (q *Queries) GetVisiblePhoto(ctx context.Context, arg GetVisiblePhotoParams
 const insertPhoto = `-- name: InsertPhoto :one
 INSERT INTO photos (owner_id, sha256, mime, size, original_name)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path
 `
 
 type InsertPhotoParams struct {
@@ -604,6 +610,7 @@ func (q *Queries) InsertPhoto(ctx context.Context, arg InsertPhotoParams) (Photo
 		&i.HasRaw,
 		&i.Latitude,
 		&i.Longitude,
+		&i.SourcePath,
 	)
 	return i, err
 }
@@ -728,7 +735,7 @@ func (q *Queries) ListCameras(ctx context.Context, arg ListCamerasParams) ([]Lis
 }
 
 const listChangedPhotos = `-- name: ListChangedPhotos :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, l.kind AS hidden_kind
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, l.kind AS hidden_kind
 FROM photos p
 LEFT JOIN photo_links l ON l.hidden_id = p.id
 WHERE p.owner_id = $1 AND p.updated_at > $2 AND p.purged_at IS NULL
@@ -792,6 +799,7 @@ func (q *Queries) ListChangedPhotos(ctx context.Context, arg ListChangedPhotosPa
 			&i.Photo.HasRaw,
 			&i.Photo.Latitude,
 			&i.Photo.Longitude,
+			&i.Photo.SourcePath,
 			&i.HiddenKind,
 		); err != nil {
 			return nil, err
@@ -810,7 +818,7 @@ WITH RECURSIVE chain AS (
     UNION
     SELECT l.hidden_id FROM photo_links l JOIN chain c ON l.shown_id = c.id
 )
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude FROM photos p WHERE p.id IN (SELECT id FROM chain) AND p.purged_at IS NULL ORDER BY p.id
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path FROM photos p WHERE p.id IN (SELECT id FROM chain) AND p.purged_at IS NULL ORDER BY p.id
 `
 
 // The photos hidden under a photo, the whole chain down, that are not purged.
@@ -857,6 +865,7 @@ func (q *Queries) ListHiddenVersions(ctx context.Context, photoID int64) ([]Phot
 			&i.HasRaw,
 			&i.Latitude,
 			&i.Longitude,
+			&i.SourcePath,
 		); err != nil {
 			return nil, err
 		}
@@ -1181,7 +1190,7 @@ func (q *Queries) ListMapClusters(ctx context.Context, arg ListMapClustersParams
 }
 
 const listMemories = `-- name: ListMemories :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path
 FROM photos p
 JOIN (SELECT unnest($1::timestamptz[]) AS from_time, unnest($2::timestamptz[]) AS to_time) w
   ON p.sort_at >= w.from_time AND p.sort_at < w.to_time
@@ -1251,6 +1260,7 @@ func (q *Queries) ListMemories(ctx context.Context, arg ListMemoriesParams) ([]P
 			&i.HasRaw,
 			&i.Latitude,
 			&i.Longitude,
+			&i.SourcePath,
 		); err != nil {
 			return nil, err
 		}
@@ -1263,7 +1273,8 @@ func (q *Queries) ListMemories(ctx context.Context, arg ListMemoriesParams) ([]P
 }
 
 const listMotionSources = `-- name: ListMotionSources :many
-SELECT c.id AS photo_id, v.owner_id AS video_owner_id, v.sha256 AS video_sha256, v.mime AS video_mime
+SELECT c.id AS photo_id, v.owner_id AS video_owner_id, v.sha256 AS video_sha256, v.mime AS video_mime,
+       v.source_path AS video_source_path
 FROM (
     SELECT $1::bigint AS id, 0 AS rank
     UNION ALL
@@ -1278,10 +1289,11 @@ ORDER BY c.rank
 `
 
 type ListMotionSourcesRow struct {
-	PhotoID      int64
-	VideoOwnerID *int64
-	VideoSha256  []byte
-	VideoMime    *string
+	PhotoID         int64
+	VideoOwnerID    *int64
+	VideoSha256     []byte
+	VideoMime       *string
+	VideoSourcePath *string
 }
 
 // Where the motion of a photo may come from, in order: the photo itself and
@@ -1302,6 +1314,7 @@ func (q *Queries) ListMotionSources(ctx context.Context, photoID int64) ([]ListM
 			&i.VideoOwnerID,
 			&i.VideoSha256,
 			&i.VideoMime,
+			&i.VideoSourcePath,
 		); err != nil {
 			return nil, err
 		}
@@ -1389,7 +1402,7 @@ func (q *Queries) ListPhotosMissingCopy(ctx context.Context, arg ListPhotosMissi
 }
 
 const listPhotosMissingMotion = `-- name: ListPhotosMissingMotion :many
-SELECT id, owner_id, sha256, mime, exif
+SELECT id, owner_id, sha256, mime, exif, source_path
 FROM photos
 WHERE status = 'ready'
   AND purged_at IS NULL
@@ -1408,11 +1421,12 @@ type ListPhotosMissingMotionParams struct {
 }
 
 type ListPhotosMissingMotionRow struct {
-	ID      int64
-	OwnerID int64
-	Sha256  []byte
-	Mime    string
-	Exif    []byte
+	ID         int64
+	OwnerID    int64
+	Sha256     []byte
+	Mime       string
+	Exif       []byte
+	SourcePath *string
 }
 
 // Photos processed before motion photos were supported, whose stored tags
@@ -1432,6 +1446,7 @@ func (q *Queries) ListPhotosMissingMotion(ctx context.Context, arg ListPhotosMis
 			&i.Sha256,
 			&i.Mime,
 			&i.Exif,
+			&i.SourcePath,
 		); err != nil {
 			return nil, err
 		}
@@ -1468,7 +1483,7 @@ func (q *Queries) ListReadyPhotoIDs(ctx context.Context) ([]int64, error) {
 }
 
 const listTimeline = `-- name: ListTimeline :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path
 FROM photos p
 WHERE (p.owner_id = $1
        OR ($2::boolean AND p.status = 'ready'
@@ -1602,6 +1617,7 @@ func (q *Queries) ListTimeline(ctx context.Context, arg ListTimelineParams) ([]P
 			&i.HasRaw,
 			&i.Latitude,
 			&i.Longitude,
+			&i.SourcePath,
 		); err != nil {
 			return nil, err
 		}
@@ -1614,7 +1630,7 @@ func (q *Queries) ListTimeline(ctx context.Context, arg ListTimelineParams) ([]P
 }
 
 const listTrash = `-- name: ListTrash :many
-SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude
+SELECT id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path
 FROM photos
 WHERE owner_id = $1
   AND deleted_at IS NOT NULL
@@ -1681,6 +1697,7 @@ func (q *Queries) ListTrash(ctx context.Context, arg ListTrashParams) ([]Photo, 
 			&i.HasRaw,
 			&i.Latitude,
 			&i.Longitude,
+			&i.SourcePath,
 		); err != nil {
 			return nil, err
 		}
@@ -1729,7 +1746,7 @@ func (q *Queries) ListTrashedPhotoIDs(ctx context.Context, arg ListTrashedPhotoI
 }
 
 const listVideosMissingHDR = `-- name: ListVideosMissingHDR :many
-SELECT id, owner_id, sha256, mime
+SELECT id, owner_id, sha256, mime, source_path
 FROM photos
 WHERE status = 'ready'
   AND purged_at IS NULL
@@ -1746,10 +1763,11 @@ type ListVideosMissingHDRParams struct {
 }
 
 type ListVideosMissingHDRRow struct {
-	ID      int64
-	OwnerID int64
-	Sha256  []byte
-	Mime    string
+	ID         int64
+	OwnerID    int64
+	Sha256     []byte
+	Mime       string
+	SourcePath *string
 }
 
 // Videos processed before HDR was recorded, for the backfill_video_hdr job.
@@ -1767,6 +1785,7 @@ func (q *Queries) ListVideosMissingHDR(ctx context.Context, arg ListVideosMissin
 			&i.OwnerID,
 			&i.Sha256,
 			&i.Mime,
+			&i.SourcePath,
 		); err != nil {
 			return nil, err
 		}
@@ -1991,7 +2010,7 @@ SET purged_at = now(),
     video_copy = NULL
 WHERE id = $1 AND purged_at IS NULL
   AND EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = photos.id)
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path
 `
 
 // Purges a photo hidden under another one with the photo above it, like
@@ -2034,6 +2053,7 @@ func (q *Queries) PurgeHiddenPhoto(ctx context.Context, id int64) (Photo, error)
 		&i.HasRaw,
 		&i.Latitude,
 		&i.Longitude,
+		&i.SourcePath,
 	)
 	return i, err
 }
@@ -2054,7 +2074,7 @@ SET purged_at = now(),
     has_motion = false,
     video_copy = NULL
 WHERE id = $1 AND owner_id = $2 AND deleted_at IS NOT NULL AND purged_at IS NULL
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path
 `
 
 type PurgePhotoParams struct {
@@ -2100,6 +2120,7 @@ func (q *Queries) PurgePhoto(ctx context.Context, arg PurgePhotoParams) (Photo, 
 		&i.HasRaw,
 		&i.Latitude,
 		&i.Longitude,
+		&i.SourcePath,
 	)
 	return i, err
 }
@@ -2188,7 +2209,7 @@ versions_restored AS (
 UPDATE photos p
 SET deleted_at = NULL, updated_at = now()
 WHERE p.id = $1 AND p.purged_at IS NULL
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path
 `
 
 func (q *Queries) RestorePhoto(ctx context.Context, id int64) (Photo, error) {
@@ -2228,6 +2249,7 @@ func (q *Queries) RestorePhoto(ctx context.Context, id int64) (Photo, error) {
 		&i.HasRaw,
 		&i.Latitude,
 		&i.Longitude,
+		&i.SourcePath,
 	)
 	return i, err
 }
@@ -2296,7 +2318,7 @@ const setPhotoDescription = `-- name: SetPhotoDescription :one
 UPDATE photos
 SET description = clean_description($1::text), updated_at = now()
 WHERE id = $2 AND owner_id = $3 AND purged_at IS NULL
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path
 `
 
 type SetPhotoDescriptionParams struct {
@@ -2344,6 +2366,7 @@ func (q *Queries) SetPhotoDescription(ctx context.Context, arg SetPhotoDescripti
 		&i.HasRaw,
 		&i.Latitude,
 		&i.Longitude,
+		&i.SourcePath,
 	)
 	return i, err
 }

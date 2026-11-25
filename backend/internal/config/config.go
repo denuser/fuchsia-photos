@@ -19,6 +19,7 @@ type Config struct {
 	DatabaseURL              string
 	LibraryDir               string
 	CacheDir                 string
+	FoldersDir               string
 	ImportDir                string
 	ImportStable             time.Duration
 	Workers                  int
@@ -68,6 +69,7 @@ func Load() (Config, error) {
 		DatabaseURL:              os.Getenv("DATABASE_URL"),
 		LibraryDir:               getenv("LIBRARY_DIR", "/data/library"),
 		CacheDir:                 getenv("CACHE_DIR", "/data/cache"),
+		FoldersDir:               getenv("FOLDERS_DIR", "/data/folders"),
 		ImportDir:                getenv("IMPORT_DIR", "/data/import"),
 		CookieSecure:             os.Getenv("COOKIE_INSECURE") != "true",
 		MLURL:                    os.Getenv("ML_URL"),

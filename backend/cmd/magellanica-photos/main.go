@@ -136,7 +136,7 @@ func createAdmin(ctx context.Context, pool *pgxpool.Pool, login string) error {
 }
 
 func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
-	layout := storage.Layout{Library: cfg.LibraryDir, Cache: cfg.CacheDir}
+	layout := storage.Layout{Library: cfg.LibraryDir, Cache: cfg.CacheDir, Folders: cfg.FoldersDir}
 	if err := layout.Ensure(); err != nil {
 		return err
 	}

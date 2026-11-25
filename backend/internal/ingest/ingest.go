@@ -265,6 +265,10 @@ func (s *Service) Purge(ctx context.Context, ownerID, photoID int64) error {
 	// The record goes only if the file does. A commit that fails after this leaves
 	// the photo in the trash without its original, and purging it again finishes the job.
 	for _, p := range purged {
+		if p.SourcePath != nil {
+			// A file in a library folder belongs to its owner; the folder is mounted read-only.
+			continue
+		}
 		err = os.Remove(s.Layout.Original(p.OwnerID, p.Sha256, p.Mime))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("remove original: %w", err)

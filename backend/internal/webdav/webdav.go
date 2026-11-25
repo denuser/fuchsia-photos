@@ -317,7 +317,7 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request, fs *fileSystem) {
 		internalError(w, r, err)
 		return
 	}
-	file, err := os.Open(h.Layout.Original(photo.OwnerID, photo.Sha256, photo.Mime))
+	file, err := os.Open(h.Layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath))
 	if os.IsNotExist(err) {
 		http.NotFound(w, r)
 		return

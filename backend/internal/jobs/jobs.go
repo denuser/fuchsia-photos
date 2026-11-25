@@ -84,7 +84,7 @@ func (w *processPhotoWorker) Work(ctx context.Context, job *river.Job[ProcessPho
 }
 
 func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) error {
-	path := w.layout.Original(photo.OwnerID, photo.Sha256, photo.Mime)
+	path := w.layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath)
 	video := storage.IsVideo(photo.Mime)
 
 	meta, err := w.metadata.Read(path, video)
@@ -568,7 +568,7 @@ func (w *backfillMotionWorker) Work(ctx context.Context, _ *river.Job[BackfillMo
 		}
 		for _, photo := range photos {
 			after = photo.ID
-			path := layout.Original(photo.OwnerID, photo.Sha256, photo.Mime)
+			path := layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath)
 			if !w.process.extractMotion(ctx, photo.ID, path, metadata.MotionTag(photo.Exif)) {
 				continue
 			}
@@ -616,7 +616,7 @@ func (w *backfillVideoHDRWorker) Work(ctx context.Context, _ *river.Job[Backfill
 		}
 		for _, v := range videos {
 			after = v.ID
-			video, err := media.ProbeVideo(ctx, w.layout.Original(v.OwnerID, v.Sha256, v.Mime))
+			video, err := media.ProbeVideo(ctx, w.layout.OriginalOf(v.OwnerID, v.Sha256, v.Mime, v.SourcePath))
 			if err != nil {
 				if media.ToolMissing(err) || ctx.Err() != nil {
 					return err

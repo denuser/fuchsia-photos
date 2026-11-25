@@ -382,7 +382,7 @@ WHERE id = @id AND status = 'ready' AND purged_at IS NULL;
 -- Photos processed before motion photos were supported, whose stored tags
 -- name an embedded video that was never extracted.
 -- name: ListPhotosMissingMotion :many
-SELECT id, owner_id, sha256, mime, exif
+SELECT id, owner_id, sha256, mime, exif, source_path
 FROM photos
 WHERE status = 'ready'
   AND purged_at IS NULL
@@ -396,7 +396,7 @@ LIMIT @max_rows;
 
 -- Videos processed before HDR was recorded, for the backfill_video_hdr job.
 -- name: ListVideosMissingHDR :many
-SELECT id, owner_id, sha256, mime
+SELECT id, owner_id, sha256, mime, source_path
 FROM photos
 WHERE status = 'ready'
   AND purged_at IS NULL
@@ -434,7 +434,8 @@ WHERE l.shown_id = @photo_id AND l.kind = 'live' AND v.purged_at IS NULL;
 -- of its Live Photo if it has one. A photo without such a video plays the
 -- motion extracted from it.
 -- name: ListMotionSources :many
-SELECT c.id AS photo_id, v.owner_id AS video_owner_id, v.sha256 AS video_sha256, v.mime AS video_mime
+SELECT c.id AS photo_id, v.owner_id AS video_owner_id, v.sha256 AS video_sha256, v.mime AS video_mime,
+       v.source_path AS video_source_path
 FROM (
     SELECT @photo_id::bigint AS id, 0 AS rank
     UNION ALL

@@ -28,6 +28,9 @@ var extensions = map[string]string{
 type Layout struct {
 	Library string
 	Cache   string
+	// Folders is the read-only mount of library folders. A photo whose
+	// original is there has a source path relative to it.
+	Folders string
 }
 
 // Ensure creates the folders that must exist before any file is written.
@@ -50,6 +53,16 @@ func (l Layout) TempDir() string {
 func (l Layout) Original(ownerID int64, sha256 []byte, mime string) string {
 	sum := hex.EncodeToString(sha256)
 	return filepath.Join(l.Library, "originals", fmt.Sprint(ownerID), sum[:2], sum+extension(mime))
+}
+
+// OriginalOf returns the path of a photo's original: its file in a library
+// folder when it has one, else the copy in the library. sourcePath is the
+// photo's source path, nil for a photo stored in the library.
+func (l Layout) OriginalOf(ownerID int64, sha256 []byte, mime string, sourcePath *string) string {
+	if sourcePath != nil {
+		return filepath.Join(l.Folders, filepath.FromSlash(*sourcePath))
+	}
+	return l.Original(ownerID, sha256, mime)
 }
 
 func extension(mime string) string {

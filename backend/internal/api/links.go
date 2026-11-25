@@ -346,7 +346,7 @@ func (s *server) getPublicVideo(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not a video")
 		return
 	}
-	path := s.Layout.Original(photo.OwnerID, photo.Sha256, photo.Mime)
+	path := s.Layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath)
 	if photo.VideoCopy != nil && *photo.VideoCopy == transcode.CopyReady {
 		path = s.Layout.Copy(photo.ID)
 	}

@@ -119,6 +119,15 @@ type ImportedMetadatum struct {
 	Longitude  *float64
 }
 
+type LibraryFolder struct {
+	ID           int64
+	Path         string
+	OwnerID      int64
+	ScanInterval int32
+	LastScanAt   *time.Time
+	CreatedAt    time.Time
+}
+
 type MetadataSetting struct {
 	ID           int16
 	ShowLocation bool
@@ -158,6 +167,7 @@ type Photo struct {
 	HasRaw            bool
 	Latitude          *float64
 	Longitude         *float64
+	SourcePath        *string
 }
 
 type PhotoArchive struct {
@@ -185,6 +195,20 @@ type PhotoFavorite struct {
 	UserID    int64
 	PhotoID   int64
 	CreatedAt time.Time
+}
+
+type PhotoFile struct {
+	ID            int64
+	FolderID      int64
+	Path          string
+	PhotoID       *int64
+	State         string
+	Size          int64
+	Mtime         time.Time
+	MissedScans   int32
+	MissingSince  *time.Time
+	TrashedByScan bool
+	CreatedAt     time.Time
 }
 
 type PhotoLink struct {
