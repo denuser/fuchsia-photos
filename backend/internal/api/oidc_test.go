@@ -441,3 +441,53 @@ func mustURL(t *testing.T, raw string) *url.URL {
 	}
 	return u
 }
+
+func TestOIDCFirstPassword(t *testing.T) {
+	fp := newFakeProvider(t)
+	e := setupOIDC(t, fp)
+	e.allowSignIn(true)
+	claims := map[string]any{"sub": "s1", "email": "ann@example.org", "email_verified": true, "preferred_username": "ann"}
+	setPassword := func(b *browser, password string) *http.Response {
+		return b.json(http.MethodPost, "/api/v1/me/password", map[string]string{"newPassword": password})
+	}
+
+	wantStatus(t, e.browserNoRedirects().get("/api/v1/auth/oidc/1/login?password=1"), http.StatusUnauthorized)
+	// An account with a password has no use for it.
+	e.addUser("boris", auth.RoleUser)
+	boris := e.loggedIn("boris")
+	wantStatus(t, boris.get("/api/v1/auth/oidc/1/login?password=1"), http.StatusConflict)
+
+	ann := e.browserNoRedirects()
+	fp.signIn(t, ann, claims)
+	if decode[userJSON](t, ann.get("/api/v1/me")).HasPassword {
+		t.Fatal("an account made by a provider has a password")
+	}
+	// Without the proof a session alone does not set a first password.
+	wantStatus(t, setPassword(ann, "a first password"), http.StatusForbidden)
+
+	// A sign-in at the provider that is too old is not a proof, and neither is another account's.
+	fp.claims = map[string]any{"sub": "s1", "auth_time": time.Now().Add(-time.Hour).Unix()}
+	if loc := fp.finish(t, ann, fp.start(t, ann, "?password=1")); loc != "/profile?error=oidc_expired" {
+		t.Errorf("an old sign-in: redirected to %q", loc)
+	}
+	fp.claims = map[string]any{"sub": "someone else"}
+	if loc := fp.finish(t, ann, fp.start(t, ann, "?password=1")); loc != "/profile?error=oidc_wrong_account" {
+		t.Errorf("another account: redirected to %q", loc)
+	}
+	wantStatus(t, setPassword(ann, "a first password"), http.StatusForbidden)
+
+	// The right account, signed in just now.
+	fp.claims = map[string]any{"sub": "s1", "auth_time": time.Now().Unix()}
+	if loc := fp.finish(t, ann, fp.start(t, ann, "?password=1")); loc != "/profile?setPassword=1" {
+		t.Fatalf("the proof: redirected to %q", loc)
+	}
+	wantStatus(t, setPassword(ann, "short"), http.StatusBadRequest)
+	wantStatus(t, setPassword(ann, "a first password"), http.StatusNoContent)
+	if !decode[userJSON](t, ann.get("/api/v1/me")).HasPassword {
+		t.Error("the account has no password after setting one")
+	}
+	wantStatus(t, e.browser().json(http.MethodPost, "/api/v1/login", map[string]string{"login": "ann", "password": "a first password"}), http.StatusOK)
+
+	// The grant was spent: with a password, changing it needs the current one again.
+	wantStatus(t, setPassword(ann, "another password"), http.StatusForbidden)
+}

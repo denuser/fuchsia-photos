@@ -31,6 +31,7 @@ const known: Known[] = [
   [/^not found$/, () => t('apiErrors.notFound')],
   [/^administrators only$/, () => t('apiErrors.adminsOnly')],
   [/^too many attempts, try again later$/, () => t('apiErrors.tooManyAttempts')],
+  [/^confirm with your provider first$/, () => t('apiErrors.confirmWithProvider')],
   [/^wrong code$/, () => t('apiErrors.wrongCode')],
   [/^the sign-in has expired, enter the password again$/, () => t('apiErrors.signInExpired')],
   [/^this is the only way to sign in to the account$/, () => t('apiErrors.onlyWayIn')],

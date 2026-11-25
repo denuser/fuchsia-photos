@@ -210,6 +210,8 @@ On the administration page, **Sign-in** decides who may use a provider:
 
 An account made through a provider has no password; its login comes from the provider's username, else from the part of its email before the at sign, else from its name, with a number added when the login is taken. Linking a provider to an account that exists is done by the account's own user, signed in with the password, in the profile, so that a provider which lets anyone claim an address cannot take an account over.
 
+An account made through a provider can set a first password in its profile, so that it has a way in when the provider is down and can turn on two-factor sign-in. The profile sends the user to the provider to sign in again, and a password is accepted for five minutes after the provider confirms it is the same account that is linked here. Providers that ignore the request to ask again (the application sends `prompt=login` and `max_age=0`, and checks `auth_time` when the provider sends it) count the existing sign-in, so for them this proves only that the session and the provider's own session belong to the same person.
+
 ## Two-factor sign-in
 
 A user can ask for a code from an authenticator app (Google Authenticator, Aegis, 1Password and the like) after the password. It is off until the administrator sets `TOTP_KEY` in `.env` next to the Compose file:

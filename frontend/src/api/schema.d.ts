@@ -153,7 +153,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Change the current user's password and end their other sessions */
+        /**
+         * Change the current user's password and end their other sessions
+         * @description An account with no password, made by a sign-in through a provider, sets its first one with no current password, within five minutes of signing in again at the provider (/auth/oidc/{id}/login?password=1). Without that proof the answer is 403.
+         */
         post: operations["changePassword"];
         delete?: never;
         options?: never;
@@ -2209,6 +2212,8 @@ export interface operations {
             query?: {
                 /** @description With 1, links the provider's identity to the account of the current session */
                 link?: "1";
+                /** @description With 1, asks the provider to sign the user of the current session in again, as the proof that lets an account with no password set its first one. The return sets a short-lived cookie that POST /me/password takes in place of the current password, and goes to /profile?setPassword=1 */
+                password?: "1";
             };
             header?: never;
             path: {
@@ -2227,6 +2232,15 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            /** @description With password=1, the account already has a password */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     finishOIDCSignIn: {
@@ -2336,7 +2350,8 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    currentPassword: string;
+                    /** @description Required unless the account has no password */
+                    currentPassword?: string;
                     newPassword: string;
                 };
             };

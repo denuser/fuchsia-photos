@@ -26,7 +26,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 20 | [Safer RAW decoding](#20-safer-raw-decoding) | Done, released in 0.1.1 | |
 | 21 | [Map](#21-map) | Done, released in 0.2.0 | Check the map on a phone and with a larger library |
 | 22 | [Demo activity log](#22-demo-activity-log) | Implemented | Deploy and enable on the public demo |
-| 23 | [Sign in with OIDC](#23-sign-in-with-oidc) | Built; not yet checked with a real provider | A check with Google; setting a first password for an account made by a provider; Apple and Yandex after it |
+| 23 | [Sign in with OIDC](#23-sign-in-with-oidc) | Built; not yet checked with a real provider | A check with Google; Apple and Yandex after it |
 | 24 | [Two-factor sign-in (TOTP)](#24-two-factor-sign-in-totp) | Built; not yet checked with a real authenticator app | A check by hand with an authenticator app; the browser test does not cover it |
 
 ## 1. Administration page
@@ -592,7 +592,7 @@ Decided on 2026-11-23: keep web login and upload events in PostgreSQL across dem
 
 ## 23. Sign in with OIDC
 
-**Status:** built on 2026-11-24: configuration, the flow, linking, account creation, the settings and the identities API, with tests on a fake provider, and the interface: provider buttons on the sign-in page, linked providers in the profile, the sign-in settings on the administration page, in all ten languages. The browser test does not cover it, as it would need a provider. Not done: a check with Google, a way for an account made by a provider to set its first password, Apple and Yandex ID.
+**Status:** built on 2026-11-24: configuration, the flow, linking, account creation, the settings and the identities API, with tests on a fake provider, and the interface: provider buttons on the sign-in page, linked providers in the profile, the sign-in settings on the administration page, in all ten languages. The browser test does not cover it, as it would need a provider. A first password for an account made by a provider is built on 2026-11-25 (see below). Not done: a check with Google, Apple and Yandex ID.
 
 Single sign-on through OpenID Connect providers: Google, and self-hosted ones (Authelia, Authentik, Keycloak), as Immich and PhotoPrism have; then Apple and Yandex ID as later steps. Today only a login and an argon2id password exist (`internal/auth`, `internal/api/session.go`), with sessions in HttpOnly `SameSite=Lax` cookies.
 
@@ -617,6 +617,11 @@ Built on 2026-11-24, with these differences from the plan below:
 - All sign-ins start their session in `startSession` and record a `login` event in the journal of improvement 22 with the outcome (a rejected return records `rejected`, a failure `error`); a link to an account records none.
 - A user created by a provider has an empty password hash, which no password matches. Such a user cannot yet set a password: changing it asks for the current one. The profile hides the password button for such an account (`hasPassword` on the user).
 - A provider with a private certificate authority is not accepted yet.
+
+A first password for an account made by a provider, built on 2026-11-25 (the plan above left it open):
+- The profile links to `GET /api/v1/auth/oidc/{id}/login?password=1`. It needs a session and an account with no password (409 otherwise), sends the provider `prompt=login` and `max_age=0`, and keeps `SetPassword` in the signed state cookie.
+- On return, the identity must be one linked to the signed-in account (`wrong_account` otherwise), and `auth_time`, when the provider sends it, must be under five minutes old (`expired`). Google is not known to honour `prompt=login`; the existing session then counts, which proves the same person holds both sessions, not that the password was typed again. Not checked with a real provider.
+- The return sets a cookie signed with `SESSION_SECRET` under its own purpose, valid five minutes, for the path `/api/v1/me/password` only. `POST /me/password` takes it in place of the current password, and only when the account has no password. The cookie is cleared after a password is set.
 
 The plan:
 

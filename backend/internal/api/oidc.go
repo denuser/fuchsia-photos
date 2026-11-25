@@ -78,12 +78,18 @@ type oidcState struct {
 	Verifier string `json:"v"`
 	// LinkUser is the user who links the identity to their account, or zero for a sign-in.
 	LinkUser int64 `json:"l,omitempty"`
-	Expires  int64 `json:"e"`
+	// SetPassword makes the return a proof, for LinkUser, that they just signed in at the
+	// provider, so that an account with no password may set one.
+	SetPassword bool  `json:"w,omitempty"`
+	Expires     int64 `json:"e"`
 }
 
-func (s *server) sign(payload string) string {
+func (s *server) sign(payload string) string { return s.signFor("oidc-state:", payload) }
+
+// signFor signs a payload for one purpose, so a value made for one cannot pass for another.
+func (s *server) signFor(purpose, payload string) string {
 	mac := hmac.New(sha256.New, []byte(s.SessionSecret))
-	mac.Write([]byte("oidc-state:" + payload))
+	mac.Write([]byte(purpose + payload))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
@@ -184,7 +190,9 @@ func (s *server) oidcLogin(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(oidcLifetime).Unix(),
 	}
 	// A link starts from a session, which has no event of its own to record.
-	link := r.URL.Query().Get("link") == "1"
+	// So does setting a first password, which asks the provider to sign the user in again.
+	setPassword := r.URL.Query().Get("password") == "1"
+	link := r.URL.Query().Get("link") == "1" || setPassword
 	if link {
 		event.Action = ""
 		user, ok := s.sessionUser(r)
@@ -192,7 +200,12 @@ func (s *server) oidcLogin(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnauthorized, "not logged in")
 			return
 		}
+		if setPassword && user.PasswordHash != "" {
+			writeError(w, http.StatusConflict, "the account already has a password")
+			return
+		}
 		st.LinkUser = user.ID
+		st.SetPassword = setPassword
 	}
 	provider, err := p.discover(r.Context())
 	if err != nil {
@@ -206,7 +219,13 @@ func (s *server) oidcLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setStateCookie(w, value, int(oidcLifetime.Seconds()))
 	conf := s.oauthConfig(p, provider)
-	http.Redirect(w, r, conf.AuthCodeURL(st.State, oidc.Nonce(st.Nonce), oauth2.S256ChallengeOption(st.Verifier)), http.StatusSeeOther)
+	options := []oauth2.AuthCodeOption{oidc.Nonce(st.Nonce), oauth2.S256ChallengeOption(st.Verifier)}
+	if setPassword {
+		// Providers that honour these ask for the password again; the return checks auth_time when
+		// the provider sends it.
+		options = append(options, oauth2.SetAuthURLParam("prompt", "login"), oauth2.SetAuthURLParam("max_age", "0"))
+	}
+	http.Redirect(w, r, conf.AuthCodeURL(st.State, options...), http.StatusSeeOther)
 }
 
 func (s *server) oauthConfig(p *oidcProvider, provider *oidc.Provider) *oauth2.Config {
@@ -241,6 +260,8 @@ type oidcClaims struct {
 	EmailVerified     flexBool `json:"email_verified"`
 	PreferredUsername string   `json:"preferred_username"`
 	Name              string   `json:"name"`
+	// AuthTime is when the user last signed in at the provider, in seconds; zero when not sent.
+	AuthTime int64 `json:"auth_time"`
 }
 
 func (s *server) oidcCallback(w http.ResponseWriter, r *http.Request) {
@@ -305,6 +326,10 @@ func (s *server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	who := identity{issuer: p.Issuer, subject: idToken.Subject, claims: claims}
 
+	if st.SetPassword {
+		s.grantSetPassword(w, r, event, st.LinkUser, who)
+		return
+	}
 	if st.LinkUser != 0 {
 		s.linkIdentity(w, r, event, st.LinkUser, who)
 		return
@@ -491,6 +516,70 @@ func (s *server) linkIdentity(w http.ResponseWriter, r *http.Request, event *sto
 		return
 	}
 	http.Redirect(w, r, "/profile?linked=1", http.StatusSeeOther)
+}
+
+const (
+	setPasswordCookie   = "magellanica_set_password"
+	setPasswordLifetime = 5 * time.Minute
+	// authTimeSlack is how old a provider's auth_time may be and still count as signing in just now.
+	authTimeSlack = 5 * time.Minute
+)
+
+// grantSetPassword ends the return of a user who signed in again at a provider to set a first
+// password. The identity must be one linked to the signed-in account. The grant is a signed
+// cookie that changePassword takes instead of the current password.
+func (s *server) grantSetPassword(w http.ResponseWriter, r *http.Request, event *store.RecordActivityParams, userID int64, who identity) {
+	user, ok := s.sessionUser(r)
+	if !ok || user.ID != userID || user.PasswordHash != "" {
+		s.oidcFail(w, r, event, true, "expired", nil)
+		return
+	}
+	if who.claims.AuthTime != 0 && time.Since(time.Unix(who.claims.AuthTime, 0)) > authTimeSlack {
+		s.oidcFail(w, r, event, true, "expired", errors.New("the provider reused an old sign-in"))
+		return
+	}
+	existing, err := s.Queries.GetUserByIdentity(r.Context(), store.GetUserByIdentityParams{Issuer: who.issuer, Subject: who.subject})
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && existing.User.ID != user.ID) {
+		s.oidcFail(w, r, event, true, "wrong_account", nil)
+		return
+	}
+	if err != nil {
+		s.oidcFail(w, r, event, true, "failed", err)
+		return
+	}
+	payload := strconv.FormatInt(user.ID, 10) + "." + strconv.FormatInt(time.Now().Add(setPasswordLifetime).Unix(), 10)
+	http.SetCookie(w, &http.Cookie{
+		Name:     setPasswordCookie,
+		Value:    payload + "." + s.signFor("set-password:", payload),
+		Path:     "/api/v1/me/password",
+		MaxAge:   int(setPasswordLifetime.Seconds()),
+		HttpOnly: true,
+		Secure:   s.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.Redirect(w, r, "/profile?setPassword=1", http.StatusSeeOther)
+}
+
+// hasSetPasswordGrant reports whether the request carries a fresh grant for the user.
+func (s *server) hasSetPasswordGrant(r *http.Request, userID int64) bool {
+	cookie, err := r.Cookie(setPasswordCookie)
+	if err != nil {
+		return false
+	}
+	parts := strings.Split(cookie.Value, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	payload := parts[0] + "." + parts[1]
+	if !hmac.Equal([]byte(parts[2]), []byte(s.signFor("set-password:", payload))) {
+		return false
+	}
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || id != userID {
+		return false
+	}
+	expires, err := strconv.ParseInt(parts[1], 10, 64)
+	return err == nil && time.Now().Unix() < expires
 }
 
 // sessionUser returns the user of the request's session without ending the request.

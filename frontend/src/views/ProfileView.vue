@@ -20,6 +20,7 @@ import ChangePasswordDialog from '../components/ChangePasswordDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CopyField from '../components/CopyField.vue'
 import FolderAlbumDialog from '../components/FolderAlbumDialog.vue'
+import SetPasswordDialog from '../components/SetPasswordDialog.vue'
 import TwoFactorDisableDialog from '../components/TwoFactorDisableDialog.vue'
 import TwoFactorSetupDialog from '../components/TwoFactorSetupDialog.vue'
 import { formatDate, languages, t } from '../i18n'
@@ -188,16 +189,30 @@ async function unlinkIdentity() {
 // A link made at a provider comes back here with its outcome in the address.
 const route = useRoute()
 const router = useRouter()
-const linkErrors = ['expired', 'denied', 'unavailable', 'taken', 'failed'] as const
+const linkErrors = ['expired', 'denied', 'unavailable', 'taken', 'wrong_account', 'failed'] as const
+// Signing in again at the provider to set a first password comes back with setPassword=1.
+const setPasswordOpen = ref(false)
+
+async function passwordSet() {
+  notices.notify(t('profile.passwordSet'))
+  const { data } = await api.GET('/me')
+  if (data) {
+    auth.user = data
+  }
+}
+
 function showLinkOutcome() {
   if (route.query.linked) {
     notices.notify(t('profile.providerLinked'))
+  }
+  if (route.query.setPassword && auth.user && !auth.user.hasPassword) {
+    setPasswordOpen.value = true
   }
   const code = String(route.query.error ?? '').replace(/^oidc_/, '')
   if ((linkErrors as readonly string[]).includes(code)) {
     error.value = t(`login.oidcErrors.${code as (typeof linkErrors)[number]}`)
   }
-  if (route.query.linked || route.query.error) {
+  if (route.query.linked || route.query.error || route.query.setPassword) {
     void router.replace({ path: route.path })
   }
 }
@@ -326,7 +341,26 @@ onMounted(() => {
       />
 
       <h2 class="mb-2">{{ t('profile.password') }}</h2>
-      <div v-if="!auth.user.hasPassword" class="text-medium-emphasis mb-6">{{ t('profile.noPassword') }}</div>
+      <template v-if="!auth.user.hasPassword">
+        <div class="text-medium-emphasis mb-4">{{ t('profile.noPassword') }}</div>
+        <template v-if="providers.length > 0">
+          <div class="text-medium-emphasis mb-4">{{ t('profile.setPasswordHint') }}</div>
+          <div class="mb-6">
+            <!-- A plain link: the whole page goes to the provider, which asks for the sign-in again. -->
+            <v-btn
+              v-for="provider in providers"
+              :key="provider.id"
+              :href="`/api/v1/auth/oidc/${provider.id}/login?password=1`"
+              prepend-icon="fa-key"
+              variant="tonal"
+              class="mr-2 mb-2"
+              data-testid="set-password"
+              :text="t('profile.setPasswordVia', { name: provider.name })"
+            />
+          </div>
+        </template>
+        <SetPasswordDialog v-model="setPasswordOpen" @saved="passwordSet" />
+      </template>
       <template v-else>
         <v-btn prepend-icon="fa-key" variant="tonal" :text="t('changePassword.title')" class="mb-6" @click="passwordDialog = true" />
         <ChangePasswordDialog v-model="passwordDialog" />

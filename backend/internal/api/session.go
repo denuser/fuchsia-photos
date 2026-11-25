@@ -339,7 +339,14 @@ func (s *server) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := currentUser(r)
-	if !auth.CheckPassword(user.PasswordHash, req.CurrentPassword) {
+	if user.PasswordHash == "" {
+		// An account made by a provider has no current password. It proves who it is by having just
+		// signed in again at the provider, which left the grant cookie.
+		if !s.hasSetPasswordGrant(r, user.ID) {
+			writeError(w, http.StatusForbidden, "confirm with your provider first")
+			return
+		}
+	} else if !auth.CheckPassword(user.PasswordHash, req.CurrentPassword) {
 		writeError(w, http.StatusForbidden, "the current password is wrong")
 		return
 	}
@@ -371,5 +378,7 @@ func (s *server) changePassword(w http.ResponseWriter, r *http.Request) {
 		internalError(w, r, err)
 		return
 	}
+	// The grant is spent.
+	http.SetCookie(w, &http.Cookie{Name: setPasswordCookie, Path: "/api/v1/me/password", MaxAge: -1, HttpOnly: true, Secure: s.CookieSecure, SameSite: http.SameSiteLaxMode})
 	w.WriteHeader(http.StatusNoContent)
 }

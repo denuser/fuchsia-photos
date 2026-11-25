@@ -133,11 +133,27 @@ paths:
           schema:
             type: string
             enum: ["1"]
+        - name: password
+          in: query
+          description: >-
+            With 1, asks the provider to sign the user of the current session in again, as the proof
+            that lets an account with no password set its first one. The return sets a short-lived
+            cookie that POST /me/password takes in place of the current password, and goes to
+            /profile?setPassword=1
+          schema:
+            type: string
+            enum: ["1"]
       responses:
         "303":
           description: Redirect to the provider, or to the sign-in page with an error
         "401":
           $ref: "#/components/responses/Error"
+        "409":
+          description: With password=1, the account already has a password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/Error"
   /auth/oidc/{id}/callback:
@@ -229,15 +245,20 @@ paths:
     post:
       operationId: changePassword
       summary: Change the current user's password and end their other sessions
+      description: >-
+        An account with no password, made by a sign-in through a provider, sets its first one with no
+        current password, within five minutes of signing in again at the provider
+        (/auth/oidc/{id}/login?password=1). Without that proof the answer is 403.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [currentPassword, newPassword]
+              required: [newPassword]
               properties:
                 currentPassword:
+                  description: Required unless the account has no password
                   type: string
                 newPassword:
                   type: string
