@@ -54,6 +54,16 @@ func (q *Queries) FinishLibraryScan(ctx context.Context, id int64) error {
 	return err
 }
 
+const forgetPhotoEmbedding = `-- name: ForgetPhotoEmbedding :exec
+WITH embedding_removed AS (DELETE FROM photo_embeddings e WHERE e.photo_id = $1)
+DELETE FROM photo_embedding_failures f WHERE f.photo_id = $1
+`
+
+func (q *Queries) ForgetPhotoEmbedding(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, forgetPhotoEmbedding, id)
+	return err
+}
+
 const getLibraryFolder = `-- name: GetLibraryFolder :one
 SELECT id, path, owner_id, scan_interval, last_scan_at, created_at FROM library_folders WHERE id = $1
 `
@@ -285,6 +295,76 @@ func (q *Queries) MovePhotoFile(ctx context.Context, arg MovePhotoFileParams) er
 	return err
 }
 
+const replacePhotoFile = `-- name: ReplacePhotoFile :one
+UPDATE photos
+SET sha256 = $1,
+    mime = $2,
+    size = $3,
+    error = NULL,
+    has_motion = false,
+    video_copy = NULL,
+    updated_at = now()
+WHERE id = $4 AND purged_at IS NULL
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path
+`
+
+type ReplacePhotoFileParams struct {
+	Sha256 []byte
+	Mime   string
+	Size   int64
+	ID     int64
+}
+
+// The file of a photo changed in place: the photo keeps its id, its albums, tags and
+// shares, and takes the new hash. Processing makes the rest again, so the photo
+// keeps what it shows until then.
+func (q *Queries) ReplacePhotoFile(ctx context.Context, arg ReplacePhotoFileParams) (Photo, error) {
+	row := q.db.QueryRow(ctx, replacePhotoFile,
+		arg.Sha256,
+		arg.Mime,
+		arg.Size,
+		arg.ID,
+	)
+	var i Photo
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Sha256,
+		&i.Mime,
+		&i.Size,
+		&i.Width,
+		&i.Height,
+		&i.TakenAt,
+		&i.Exif,
+		&i.Status,
+		&i.Error,
+		&i.Visibility,
+		&i.CreatedAt,
+		&i.DeletedAt,
+		&i.OriginalName,
+		&i.PreviewFormat,
+		&i.SortAt,
+		&i.UpdatedAt,
+		&i.PurgedAt,
+		&i.Camera,
+		&i.Lens,
+		&i.PreviewVersion,
+		&i.Duration,
+		&i.HasMotion,
+		&i.ContentIdentifier,
+		&i.VideoCopy,
+		&i.ImportedLatitude,
+		&i.ImportedLongitude,
+		&i.Description,
+		&i.Hdr,
+		&i.HasRaw,
+		&i.Latitude,
+		&i.Longitude,
+		&i.SourcePath,
+	)
+	return i, err
+}
+
 const seePhotoFile = `-- name: SeePhotoFile :exec
 UPDATE photo_files
 SET missed_scans = 0, missing_since = NULL, trashed_by_scan = false
@@ -308,5 +388,20 @@ type SetPhotoSourcePathParams struct {
 
 func (q *Queries) SetPhotoSourcePath(ctx context.Context, arg SetPhotoSourcePathParams) error {
 	_, err := q.db.Exec(ctx, setPhotoSourcePath, arg.SourcePath, arg.ID)
+	return err
+}
+
+const updatePhotoFileStat = `-- name: UpdatePhotoFileStat :exec
+UPDATE photo_files SET size = $1, mtime = $2 WHERE id = $3
+`
+
+type UpdatePhotoFileStatParams struct {
+	Size  int64
+	Mtime time.Time
+	ID    int64
+}
+
+func (q *Queries) UpdatePhotoFileStat(ctx context.Context, arg UpdatePhotoFileStatParams) error {
+	_, err := q.db.Exec(ctx, updatePhotoFileStat, arg.Size, arg.Mtime, arg.ID)
 	return err
 }

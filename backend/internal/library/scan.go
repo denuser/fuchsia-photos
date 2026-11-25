@@ -17,8 +17,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/riverqueue/river"
 
 	"github.com/magellanica-app/magellanica-photos/backend/internal/ingest"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/jobs"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
 )
 
@@ -66,7 +68,9 @@ type Result struct {
 	// complete; Failed ones could not be read.
 	Unsupported, Waiting, Failed int
 	// Changed files are known files whose size or modification time differ.
-	Changed int
+	// Replaced ones held new content and their photo is processed again;
+	// Conflicts held the content of another photo, and were left as they are.
+	Changed, Replaced, Conflicts int
 	// Returned files were away and are back; Missing ones were not found; Trashed
 	// are the photos the scan moved to the trash for it.
 	Returned, Missing, Trashed int
@@ -264,15 +268,77 @@ func (r *scanRun) known(ctx context.Context, row store.PhotoFile, f listed) erro
 			return fmt.Errorf("record file: %w", err)
 		}
 		r.result.Returned++
-		if row.TrashedByScan && row.PhotoID != nil {
-			if err := r.restore(ctx, *row.PhotoID); err != nil {
+		if row.PhotoID != nil {
+			if err := r.returned(ctx, row, *row.PhotoID); err != nil {
 				return err
 			}
 		}
 	}
 	if changed {
-		// Reading a changed file again is the next step of the improvement.
 		r.result.Changed++
+		return r.replace(ctx, row, f)
+	}
+	return nil
+}
+
+// returned brings back a photo whose file was away: out of the trash, if the scan put it
+// there, and into processing, if the jobs skipped it while the file was unavailable.
+func (r *scanRun) returned(ctx context.Context, row store.PhotoFile, photoID int64) error {
+	if row.TrashedByScan {
+		if err := r.restore(ctx, photoID); err != nil {
+			return err
+		}
+	}
+	photo, err := r.queries.GetPhoto(ctx, photoID)
+	if err != nil {
+		return fmt.Errorf("look up photo: %w", err)
+	}
+	if photo.Status != "ready" && photo.PurgedAt == nil {
+		if _, err := r.Ingest.Jobs.Insert(ctx, jobs.ProcessPhotoArgs{PhotoID: photoID}, &river.InsertOpts{Priority: ingest.PriorityBulk}); err != nil {
+			return fmt.Errorf("queue photo: %w", err)
+		}
+	}
+	return nil
+}
+
+// replace reads a known file that changed, so that its photo follows the new content.
+func (r *scanRun) replace(ctx context.Context, row store.PhotoFile, f listed) error {
+	if row.PhotoID == nil {
+		return nil
+	}
+	if time.Since(f.mtime) < r.Stable {
+		r.result.Waiting++ // Still being written.
+		return nil
+	}
+	source := r.sourcePath(f.path)
+	file, err := r.root.Open(source)
+	if err != nil {
+		return r.failed(ctx, f, err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return r.failed(ctx, f, err)
+	}
+	if !info.Mode().IsRegular() || info.Size() != f.size || !sameTime(info.ModTime(), f.mtime) {
+		r.result.Waiting++
+		return nil
+	}
+
+	outcome, other, err := r.Ingest.ReplaceInPlace(ctx, *row.PhotoID, file, path.Base(f.path))
+	if err != nil {
+		// The photo keeps its old content, and the next scan looks at the file again.
+		return r.failed(ctx, f, err)
+	}
+	switch outcome {
+	case ingest.Replaced:
+		r.result.Replaced++
+	case ingest.Conflict:
+		r.result.Conflicts++
+		slog.Warn("library file holds the content of another photo and is left as it is", "folder", r.folder.Path, "path", f.path, "photo", *row.PhotoID, "other", other)
+	}
+	if err := r.queries.UpdatePhotoFileStat(ctx, store.UpdatePhotoFileStatParams{ID: row.ID, Size: f.size, Mtime: f.mtime}); err != nil {
+		return fmt.Errorf("record file: %w", err)
 	}
 	return nil
 }

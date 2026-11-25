@@ -858,6 +858,12 @@ func (s *server) getMotion(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) serveFile(w http.ResponseWriter, r *http.Request, path string) {
 	file, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		// An original in a library folder whose file is away or share is not mounted.
+		w.Header().Del("Cache-Control")
+		writeError(w, http.StatusNotFound, "the file is not available")
+		return
+	}
 	if err != nil {
 		w.Header().Del("Cache-Control")
 		internalError(w, r, err)

@@ -32,6 +32,12 @@ const (
 	tempFileMaxAge = 24 * time.Hour
 )
 
+// unavailableWait is how long processing waits to look again for an original that is
+// in a library folder and cannot be read.
+const unavailableWait = 15 * time.Minute
+
+var errOriginalUnavailable = errors.New("the original is in a library folder that cannot be read now")
+
 // ProcessPhotoArgs queues the processing of an ingested photo or video.
 type ProcessPhotoArgs struct {
 	PhotoID int64 `json:"photo_id"`
@@ -72,6 +78,22 @@ func (w *processPhotoWorker) Work(ctx context.Context, job *river.Job[ProcessPho
 	}
 
 	err = w.process(ctx, photo)
+	if err == nil && photo.PreviewFormat != nil {
+		// A photo with previews is processed again because its file changed. The
+		// previews are written at the same paths, so their address must change.
+		if err := w.queries.BumpPreviewVersion(ctx, photo.ID); err != nil {
+			return fmt.Errorf("update photo: %w", err)
+		}
+	}
+	if errors.Is(err, errOriginalUnavailable) {
+		// The file is in a library folder that is not readable now. The photo is not at
+		// fault: wait for the file, unless the photo is in the trash, which a scan
+		// that finds the file again brings out of it and processes.
+		if photo.DeletedAt != nil {
+			return nil
+		}
+		return river.JobSnooze(unavailableWait)
+	}
 	var unreadable *unreadableError
 	if errors.As(err, &unreadable) {
 		// Retrying cannot repair a broken file.
@@ -85,6 +107,9 @@ func (w *processPhotoWorker) Work(ctx context.Context, job *river.Job[ProcessPho
 
 func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo) error {
 	path := w.layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath)
+	if storage.Unavailable(photo.SourcePath, path) {
+		return errOriginalUnavailable
+	}
 	video := storage.IsVideo(photo.Mime)
 
 	meta, err := w.metadata.Read(path, video)
@@ -504,6 +529,9 @@ func (w *renderPreviewsWorker) Work(ctx context.Context, job *river.Job[RenderPr
 	}
 
 	err = w.process.process(ctx, photo)
+	if errors.Is(err, errOriginalUnavailable) {
+		return nil // The next run finds it again.
+	}
 	var unreadable *unreadableError
 	if errors.As(err, &unreadable) || err != nil && job.Attempt >= job.MaxAttempts {
 		// Such as an original missing after a restore: the photo shows its error.
@@ -569,6 +597,9 @@ func (w *backfillMotionWorker) Work(ctx context.Context, _ *river.Job[BackfillMo
 		for _, photo := range photos {
 			after = photo.ID
 			path := layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath)
+			if storage.Unavailable(photo.SourcePath, path) {
+				continue
+			}
 			if !w.process.extractMotion(ctx, photo.ID, path, metadata.MotionTag(photo.Exif)) {
 				continue
 			}
@@ -616,7 +647,11 @@ func (w *backfillVideoHDRWorker) Work(ctx context.Context, _ *river.Job[Backfill
 		}
 		for _, v := range videos {
 			after = v.ID
-			video, err := media.ProbeVideo(ctx, w.layout.OriginalOf(v.OwnerID, v.Sha256, v.Mime, v.SourcePath))
+			path := w.layout.OriginalOf(v.OwnerID, v.Sha256, v.Mime, v.SourcePath)
+			if storage.Unavailable(v.SourcePath, path) {
+				continue
+			}
+			video, err := media.ProbeVideo(ctx, path)
 			if err != nil {
 				if media.ToolMissing(err) || ctx.Err() != nil {
 					return err

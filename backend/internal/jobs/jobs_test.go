@@ -40,7 +40,7 @@ func setup(t *testing.T) env {
 	ctx := context.Background()
 	pool := testdb.New(t)
 
-	layout := storage.Layout{Library: t.TempDir(), Cache: t.TempDir()}
+	layout := storage.Layout{Library: t.TempDir(), Cache: t.TempDir(), Folders: t.TempDir()}
 	if err := layout.Ensure(); err != nil {
 		t.Fatal(err)
 	}

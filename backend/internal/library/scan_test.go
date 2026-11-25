@@ -317,3 +317,105 @@ func TestScanRefusesTwoAtOnce(t *testing.T) {
 		t.Fatalf("err = %v, want ErrRunning", err)
 	}
 }
+
+func (e *env) processJobs(photoID int64) int {
+	e.t.Helper()
+	var n int
+	err := e.service.Ingest.Pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM river_job WHERE kind = 'process_photo' AND (args ->> 'photo_id')::bigint = $1`, photoID).Scan(&n)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return n
+}
+
+func (e *env) photoAt(rel string) store.Photo {
+	e.t.Helper()
+	files, _ := e.queries.ListPhotoFiles(context.Background(), e.folder.ID)
+	for _, f := range files {
+		if f.Path == rel {
+			p, err := e.queries.GetPhoto(context.Background(), *f.PhotoID)
+			if err != nil {
+				e.t.Fatal(err)
+			}
+			return p
+		}
+	}
+	e.t.Fatalf("no row for %s", rel)
+	return store.Photo{}
+}
+
+func TestScanFollowsAChangedFile(t *testing.T) {
+	e := setup(t)
+	e.put("a.jpg", "landscape.jpg")
+	e.put("b.jpg", "rotated.jpg")
+	e.scan()
+	before := e.photoAt("a.jpg")
+
+	// Only the time changed: the photo stays as it is.
+	later := time.Now().Add(-time.Minute)
+	if err := os.Chtimes(filepath.Join(e.layout.Folders, "lightroom", "a.jpg"), later, later); err != nil {
+		t.Fatal(err)
+	}
+	if res := e.scan(); res.Changed != 1 || res.Replaced != 0 {
+		t.Fatalf("after a change of time = %+v", res)
+	}
+	if e.processJobs(before.ID) != 1 {
+		t.Error("a change of time queued processing again")
+	}
+	if res := e.scan(); res.Changed != 0 {
+		t.Errorf("the new time was not recorded: %+v", res)
+	}
+
+	// New content at the same path: the same photo, with the new hash and a new job.
+	e.put("a.jpg", "landscape.png")
+	res := e.scan()
+	if res.Replaced != 1 || res.Added != 0 {
+		t.Fatalf("after an edit = %+v", res)
+	}
+	after := e.photoAt("a.jpg")
+	if after.ID != before.ID || bytes.Equal(after.Sha256, before.Sha256) || after.Mime != "image/png" {
+		t.Errorf("photo = id %d mime %s, want id %d and the new hash and type", after.ID, after.Mime, before.ID)
+	}
+	if e.processJobs(before.ID) != 2 {
+		t.Error("an edit did not queue processing")
+	}
+	if res := e.scan(); res.Changed != 0 || res.Replaced != 0 {
+		t.Errorf("rescan = %+v", res)
+	}
+
+	// Content that is another photo of the owner is not merged into it.
+	e.put("a.jpg", "rotated.jpg")
+	if res := e.scan(); res.Conflicts != 1 || res.Replaced != 0 {
+		t.Fatalf("after copying another photo over it = %+v", res)
+	}
+	if got := e.photoAt("a.jpg"); !bytes.Equal(got.Sha256, after.Sha256) {
+		t.Error("the photo took the hash of another photo")
+	}
+}
+
+func TestScanKeepsAPurgedPhotoPurged(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	e.put("a.jpg", "landscape.jpg")
+	e.scan()
+	p := e.photoAt("a.jpg")
+	if err := e.queries.TrashPhotos(ctx, store.TrashPhotosParams{Ids: []int64{p.ID}, ActorID: e.owner}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.service.Ingest.Purge(ctx, e.owner, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(e.layout.Folders, "lightroom", "a.jpg")); err != nil {
+		t.Fatalf("the purge touched the folder's file: %v", err)
+	}
+	e.put("a.jpg", "rotated.jpg")
+	e.scan()
+	got, _ := e.queries.GetPhoto(ctx, p.ID)
+	if got.PurgedAt == nil || !bytes.Equal(got.Sha256, p.Sha256) {
+		t.Errorf("an edit brought back a purged photo: purged %v", got.PurgedAt)
+	}
+	if res := e.scan(); res.Changed != 0 || res.Added != 0 {
+		t.Errorf("rescan = %+v", res)
+	}
+}

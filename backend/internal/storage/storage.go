@@ -65,6 +65,17 @@ func (l Layout) OriginalOf(ownerID int64, sha256 []byte, mime string, sourcePath
 	return l.Original(ownerID, sha256, mime)
 }
 
+// Unavailable tells whether an original that lives in a library folder cannot
+// be read now, as when the share is not mounted or the file is away. An
+// original in the library is never reported: if it is gone, that is an error.
+func Unavailable(sourcePath *string, path string) bool {
+	if sourcePath == nil {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err != nil
+}
+
 func extension(mime string) string {
 	if IsRAW(mime) {
 		return rawExtensions[mime]

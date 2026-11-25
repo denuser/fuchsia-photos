@@ -376,7 +376,11 @@ func (w *worker) Work(ctx context.Context, job *river.Job[Args]) error {
 // the motion of a photo.
 func (s *Service) source(ctx context.Context, photo store.Photo) (string, error) {
 	if storage.IsVideo(photo.Mime) {
-		return s.Layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath), nil
+		path := s.Layout.OriginalOf(photo.OwnerID, photo.Sha256, photo.Mime, photo.SourcePath)
+		if storage.Unavailable(photo.SourcePath, path) {
+			return "", nil // In a library folder that cannot be read now; the copy waits.
+		}
+		return path, nil
 	}
 	if !photo.HasMotion {
 		return "", nil
@@ -394,7 +398,11 @@ func MotionSource(ctx context.Context, queries *store.Queries, layout storage.La
 	}
 	for _, source := range sources {
 		if source.VideoOwnerID != nil && source.VideoMime != nil {
-			return layout.OriginalOf(*source.VideoOwnerID, source.VideoSha256, *source.VideoMime, source.VideoSourcePath), nil
+			path := layout.OriginalOf(*source.VideoOwnerID, source.VideoSha256, *source.VideoMime, source.VideoSourcePath)
+			if storage.Unavailable(source.VideoSourcePath, path) {
+				return "", nil
+			}
+			return path, nil
 		}
 		path := layout.Motion(source.PhotoID)
 		if _, err := os.Stat(path); err == nil {

@@ -54,3 +54,25 @@ DELETE FROM photo_files WHERE id = ANY (@ids::bigint[]);
 
 -- name: SetPhotoSourcePath :exec
 UPDATE photos SET source_path = @source_path, updated_at = now() WHERE id = @id;
+
+-- The file of a photo changed in place: the photo keeps its id, its albums, tags and
+-- shares, and takes the new hash. Processing makes the rest again, so the photo
+-- keeps what it shows until then.
+-- name: ReplacePhotoFile :one
+UPDATE photos
+SET sha256 = @sha256,
+    mime = @mime,
+    size = @size,
+    error = NULL,
+    has_motion = false,
+    video_copy = NULL,
+    updated_at = now()
+WHERE id = @id AND purged_at IS NULL
+RETURNING *;
+
+-- name: ForgetPhotoEmbedding :exec
+WITH embedding_removed AS (DELETE FROM photo_embeddings e WHERE e.photo_id = @id)
+DELETE FROM photo_embedding_failures f WHERE f.photo_id = @id;
+
+-- name: UpdatePhotoFileStat :exec
+UPDATE photo_files SET size = @size, mtime = @mtime WHERE id = @id;
