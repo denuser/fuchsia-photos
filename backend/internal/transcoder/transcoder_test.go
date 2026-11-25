@@ -62,7 +62,7 @@ func TestTranscode(t *testing.T) {
 	e := setup(t, writeCopy)
 	ctx := context.Background()
 	hw, err := e.client.Hardware(ctx)
-	if err != nil || hw != intel {
+	if want := (vaapi.Hardware{Device: intel.Device, Driver: intel.Driver, Vendor: intel.Vendor, Folders: true}); err != nil || hw != want {
 		t.Fatalf("hardware = %+v, %v", hw, err)
 	}
 

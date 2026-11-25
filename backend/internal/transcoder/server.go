@@ -107,6 +107,7 @@ func (s *Server) getHardware(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
+	hw.Folders = s.Folders != ""
 	writeJSON(w, http.StatusOK, hw)
 }
 

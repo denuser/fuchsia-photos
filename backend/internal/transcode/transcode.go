@@ -136,7 +136,9 @@ func (s *Service) Check(ctx context.Context) {
 		return
 	}
 	s.mu.Lock()
-	was := s.hardware != nil
+	// Copies are queued when the transcoder first answers, and again when it learns the library
+	// folders, as the videos of those wait for it.
+	was := s.hardware != nil && (s.hardware.Folders || !hw.Folders)
 	s.hardware, s.unavailable = &hw, ""
 	s.mu.Unlock()
 	if was {
@@ -380,12 +382,30 @@ func (s *Service) source(ctx context.Context, photo store.Photo) (string, error)
 		if s.Layout.Unavailable(photo.SourcePath, path) {
 			return "", nil // In a library folder that cannot be read now; the copy waits.
 		}
-		return path, nil
+		return s.readable(path), nil
 	}
 	if !photo.HasMotion {
 		return "", nil
 	}
-	return MotionSource(ctx, s.Queries, s.Layout, photo.ID)
+	path, err := MotionSource(ctx, s.Queries, s.Layout, photo.ID)
+	if err != nil {
+		return "", err
+	}
+	return s.readable(path), nil
+}
+
+// readable leaves out a file of a library folder while the transcoder does not say it reads them: an
+// older transcoder would refuse it, and a refused copy is marked failed and never tried again.
+func (s *Service) readable(path string) string {
+	if !s.Layout.IsSource(path) {
+		return path
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.hardware == nil || !s.hardware.Folders {
+		return ""
+	}
+	return path
 }
 
 // MotionSource returns the file a photo with motion plays: the video of its

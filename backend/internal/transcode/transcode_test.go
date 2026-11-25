@@ -42,6 +42,14 @@ type fake struct {
 	fail   bool
 	// down makes the transcoder unreachable.
 	down bool
+	// folders is whether it says it reads the library folders mount, as an updated one does.
+	folders bool
+}
+
+func (f *fake) setFolders(folders bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.folders = folders
 }
 
 func (f *fake) setDown(down bool) {
@@ -56,7 +64,7 @@ func (f *fake) Hardware(context.Context) (vaapi.Hardware, error) {
 	if f.down {
 		return vaapi.Hardware{}, fmt.Errorf("%w: connection refused", transcoder.ErrUnavailable)
 	}
-	return vaapi.Hardware{Device: "/dev/dri/renderD128", Vendor: vaapi.VendorIntel}, nil
+	return vaapi.Hardware{Device: "/dev/dri/renderD128", Vendor: vaapi.VendorIntel, Folders: f.folders}, nil
 }
 
 func (f *fake) Transcode(_ context.Context, in, out string, _ vaapi.Source) error {
@@ -103,7 +111,7 @@ func setup(t *testing.T, mode string, hardware bool) env {
 		t.Fatal(err)
 	}
 
-	layout := storage.Layout{Library: t.TempDir(), Cache: t.TempDir()}
+	layout := storage.Layout{Library: t.TempDir(), Cache: t.TempDir(), Folders: t.TempDir()}
 	if err := layout.Ensure(); err != nil {
 		t.Fatal(err)
 	}
@@ -375,4 +383,50 @@ func TestTranscoderDown(t *testing.T) {
 	e.fake.setDown(false)
 	e.service.Check(ctx)
 	waitFor(t, e, video.ID, "copy", copyIs(transcode.CopyReady))
+}
+
+// The video of a library folder is left without a copy while the transcoder does not say it reads
+// the folders: an older one would refuse it, and a refused copy is marked failed for good. Once it
+// says so, the copy is made.
+func TestLibraryFolderVideoWaitsForAnUpdatedTranscoder(t *testing.T) {
+	e := setup(t, transcode.ModeUpload, true)
+	ctx := context.Background()
+	data, err := os.ReadFile(filepath.Join("..", "media", "testdata", "video.mov"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(e.layout.Folders, "lightroom", "clip.mov")
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.ingest.ImportInPlace(ctx, e.owner, file, "clip.mov", "lightroom/clip.mov")
+	file.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, e, res.Photo.ID, "processing", ready)
+	if _, err := e.service.QueueMissing(ctx); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if photo, _ := e.queries.GetPhoto(ctx, res.Photo.ID); photo.VideoCopy != nil {
+		t.Fatalf("copy = %s, want none while the transcoder does not read library folders", *photo.VideoCopy)
+	}
+	if calls := e.fake.calls(); len(calls) != 0 {
+		t.Fatalf("the transcoder was asked for %v", calls)
+	}
+
+	e.fake.setFolders(true)
+	e.service.Check(ctx)
+	waitFor(t, e, res.Photo.ID, "copy", copyIs(transcode.CopyReady))
+	if calls := e.fake.calls(); len(calls) != 1 || calls[0] != path {
+		t.Errorf("transcoded %v, want the file in the library folder", calls)
+	}
 }

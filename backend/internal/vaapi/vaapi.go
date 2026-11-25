@@ -29,6 +29,11 @@ type Hardware struct {
 	// Vendor names the maker of the graphics, such as VendorIntel, which
 	// decides how HDR is tone mapped.
 	Vendor string `json:"vendor"`
+	// Folders tells that the service reads the library folders mount, which an
+	// older service does not. The service sets it when it answers, and the
+	// application leaves videos of library folders without a copy until it is set,
+	// so that an older service does not fail their copies for good.
+	Folders bool `json:"folders"`
 }
 
 var (
