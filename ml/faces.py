@@ -15,6 +15,36 @@ MAX_FACES = 64
 DIMENSIONS = 128
 
 
+# The weights ML_FACES downloads from Hugging Face, with their licenses, into its
+# cache. A file whose hash differs is refused, so the model identifier and the
+# stored face vectors stay the same as with files supplied by hand.
+WEIGHTS = (
+    (
+        "opencv/face_detection_yunet",
+        "face_detection_yunet_2023mar.onnx",
+        "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+    ),
+    (
+        "opencv/face_recognition_sface",
+        "face_recognition_sface_2021dec.onnx",
+        "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
+    ),
+)
+
+
+def download(weights: tuple[str, str, str]) -> str:
+    from huggingface_hub import hf_hub_download
+
+    repo, filename, sha256 = weights
+    path = hf_hub_download(repo, filename)
+    hf_hub_download(repo, "LICENSE")
+    with open(path, "rb") as file:
+        digest = hashlib.file_digest(file, "sha256").hexdigest()
+    if digest != sha256:
+        raise RuntimeError(f"{repo}/{filename} has SHA-256 {digest}, expected {sha256}")
+    return path
+
+
 class InvalidPreview(ValueError):
     pass
 
@@ -40,14 +70,17 @@ class FaceInference:
 
     @classmethod
     def from_environment(cls, token: str) -> "FaceInference | None":
+        enabled = os.environ.get("ML_FACES", "").lower() in ("1", "true", "yes")
         detector = os.environ.get("ML_FACE_DETECTOR", "")
         recognizer = os.environ.get("ML_FACE_RECOGNIZER", "")
-        if not detector and not recognizer:
+        if not enabled and not detector and not recognizer:
             return None
-        if not detector or not recognizer:
-            raise RuntimeError("Set both ML_FACE_DETECTOR and ML_FACE_RECOGNIZER")
+        if bool(detector) != bool(recognizer):
+            raise RuntimeError("Set both ML_FACE_DETECTOR and ML_FACE_RECOGNIZER, or neither")
         if not token:
             raise RuntimeError("ML_TOKEN is required for face inference")
+        if not detector:
+            detector, recognizer = (download(weights) for weights in WEIGHTS)
         return cls(detector, recognizer)
 
     def analyze(self, preview: bytes | bytearray) -> list[dict]:

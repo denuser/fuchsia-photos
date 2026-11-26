@@ -28,6 +28,8 @@ Edit `deploy/.env`:
 | `BACKUP_TIME` | `03:00` | When the nightly dump runs, as `HH:MM` |
 | `BACKUP_KEEP` | `14` | How many nightly dumps are kept |
 | `TZ` | `UTC` | Time zone of `BACKUP_TIME`, for example `Europe/Moscow` |
+| `ML_URL` | empty | The ML service, for example `http://mac.local:8090`. See [Search and people](#search-and-people) |
+| `ML_TOKEN` | empty | Token the application sends to the ML service. People need it |
 | `HTTP_PORT` | `80` | HTTP port on the host |
 | `HTTPS_PORT` | `443` | HTTPS port on the host |
 
@@ -193,6 +195,20 @@ For the viewer, the server uses the camera's largest embedded JPEG if it reaches
 A full decode holds memory in proportion to the sensor: about 1.4 GB for 61 MP and 2.4 GB for 102 MP (measured on 2026-11-21). Only one runs at a time, whatever `WORKERS` is. The application container is limited to 4 GB (`MEMORY_LIMIT`), so a decode that goes wrong cannot take the NAS's memory. If the application goes over the limit, the kernel stops it, Docker starts it again, and the job queue processes the photo again. To see whether that happened, run `docker inspect <container> --format '{{.State.OOMKilled}}'`; `docker stats` shows the current use and the limit. Memory freed after a decode often stays with the process, so the use seen after an import is not a leak.
 
 A RAW and JPEG from the same owner are paired if the base name, capture time including sub-seconds, and camera make and model match. The files can come from different directories or uploads. The JPEG stays in the library view. Its owner can switch to RAW in the viewer. Both files go into and out of the trash together.
+
+## Search and people
+
+Search by description, similar photos and People need the ML service, which runs on another machine of the home network, such as a Mac or a computer with a graphics card, as described in the [development guide](development.md#ml-service). Without it the library works as before.
+
+Start the service on that machine with a token, and with `ML_FACES=1` for People:
+
+```sh
+ML_TOKEN=<token> ML_FACES=1 make ml
+```
+
+The first start downloads the models from Hugging Face, about 1.5 GB for search and 40 MB for faces. Then set `ML_URL` to the service's address, such as `http://mac.local:8090`, and `ML_TOKEN` to the same token for the application, in `.env` or in the TrueNAS YAML under `app` → `environment`, and restart it. The application finds the service within 30 seconds. The administration page shows the progress of search, and People fill in from the photos already in the library.
+
+The token travels over plain HTTP, and face vectors are biometric data, so keep the service on the home network.
 
 ## Signing in with a provider
 

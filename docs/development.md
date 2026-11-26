@@ -131,7 +131,13 @@ Once the service is up, the application finds it within 30 seconds and embeds al
 
 ### Face inference
 
-The existing ML service can optionally detect faces and compute face vectors on its host CPU. Enable it on a trusted home-network host. Install the `faces` extra and supply both local ONNX files and an `ML_TOKEN`. The service does not download face models itself.
+The existing ML service can optionally detect faces and compute face vectors on its host CPU. Enable it on a trusted home-network host with `ML_FACES=1` and an `ML_TOKEN`:
+
+```sh
+ML_TOKEN=<token> ML_FACES=1 make ml
+```
+
+`ML_FACES=1` makes `make ml` install the `faces` extra, and the service downloads both ONNX files with their licenses into the Hugging Face cache on its first start and refuses files whose SHA-256 differs from the table below. To run without internet, download the files yourself and set both paths instead; the paths take precedence over the download.
 
 | Model file | SHA-256 |
 |---|---|
@@ -141,10 +147,10 @@ The existing ML service can optionally detect faces and compute face vectors on 
 ```sh
 ML_FACE_DETECTOR=/path/to/face_detection_yunet_2023mar.onnx \
 ML_FACE_RECOGNIZER=/path/to/face_recognition_sface_2021dec.onnx \
-make ml ML_UV_ARGS='--extra faces'
+ML_TOKEN=<token> make ml ML_UV_ARGS='--extra faces'
 ```
 
-Set `ML_TOKEN` in the service environment before starting it. With both face model paths unset, `make ml` runs the existing text and image model alone. Keep the model licenses with the weights. [YuNet license](https://huggingface.co/opencv/face_detection_yunet/blob/main/LICENSE) and [SFace license](https://huggingface.co/opencv/face_recognition_sface/blob/main/LICENSE).
+Without `ML_FACES` and the paths, `make ml` runs the existing text and image model alone. Keep the model licenses with weights downloaded by hand. [YuNet license](https://huggingface.co/opencv/face_detection_yunet/blob/main/LICENSE) and [SFace license](https://huggingface.co/opencv/face_recognition_sface/blob/main/LICENSE).
 
 Authenticated `GET /health` advertises a `faces` object when face inference is enabled. The authenticated `POST /faces` accepts the raw bytes of one preview up to 16 MiB. It returns the face model identifier and a list of faces with normalized left, top, width and height coordinates and a 128-element unit vector. The identifier includes the weight hashes, OpenCV version and preprocessing revision. Frames and vectors are processed in memory. Configure the application with the same token and the home service URL. The people queue checks for eligible photos every minute, including existing photos. Each owner can browse and correct their groups under People even when the ML service is offline. See [improvement 26](improvements.md#26-people).
 
