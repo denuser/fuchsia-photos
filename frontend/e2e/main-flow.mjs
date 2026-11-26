@@ -475,7 +475,7 @@ const steps = {
     await waitFor('the saved size', () => document.querySelector('[data-testid=grid-edge] input')?.value === '300')
   },
   'an administrator opens the activity journal, which is off': async () => {
-    await page.goto(`${BASE}/activity`)
+    await page.goto(`${BASE}/logs`)
     await page.getByTestId('activity-disabled').waitFor()
     await page.getByText('The journal is empty').waitFor()
   },

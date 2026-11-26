@@ -13,6 +13,13 @@ MAX_UPLOAD_BYTES = 16 * 1024 * 1024
 MAX_IMAGE_PIXELS = 20_000_000
 MAX_FACES = 64
 DIMENSIONS = 128
+# Old film scans are grainy, flat and often black and white, so the detector is
+# unsure of faces it finds at once on a modern photo. When the first pass finds
+# nothing, the preview is retried with its contrast stretched (and enlarged if
+# small) at this lower confidence. ML_FACE_FALLBACK_SCORE overrides it; 0 or
+# a value of 0.9 and above turns the retry off.
+FALLBACK_SCORE = 0.6
+FALLBACK_UPSCALE_BELOW = 1600
 
 
 # The weights ML_FACES downloads from Hugging Face, with their licenses, into its
@@ -67,6 +74,10 @@ class FaceInference:
             detector_path, "", (320, 320), 0.9, 0.3, 5000
         )
         self._recognizer = cv2.FaceRecognizerSF.create(recognizer_path, "")
+        try:
+            self._fallback_score = float(os.environ.get("ML_FACE_FALLBACK_SCORE", FALLBACK_SCORE))
+        except ValueError:
+            self._fallback_score = FALLBACK_SCORE
 
     @classmethod
     def from_environment(cls, token: str) -> "FaceInference | None":
@@ -95,14 +106,13 @@ class FaceInference:
 
         results = []
         with self._lock:
-            self._detector.setInputSize((width, height))
-            _, detections = self._detector.detect(bgr)
+            bgr, detections = self._detect(bgr)
             if detections is None:
                 return results
             for face in sorted(detections, key=lambda row: row[-1], reverse=True)[:MAX_FACES]:
                 x, y, w, h = map(float, face[:4])
                 left, top = max(0.0, x), max(0.0, y)
-                right, bottom = min(width, x + w), min(height, y + h)
+                right, bottom = min(bgr.shape[1], x + w), min(bgr.shape[0], y + h)
                 if right <= left or bottom <= top:
                     continue
                 aligned = self._recognizer.alignCrop(bgr, face)
@@ -111,7 +121,37 @@ class FaceInference:
                 if vector.size != DIMENSIONS or not math.isfinite(norm) or norm == 0:
                     raise RuntimeError("invalid face embedding")
                 results.append({
-                    "box": [left / width, top / height, (right - left) / width, (bottom - top) / height],
+                    "box": [
+                        left / bgr.shape[1],
+                        top / bgr.shape[0],
+                        (right - left) / bgr.shape[1],
+                        (bottom - top) / bgr.shape[0],
+                    ],
                     "embedding": (vector / norm).tolist(),
                 })
         return results
+
+    def _run(self, bgr, score: float):
+        height, width = bgr.shape[:2]
+        self._detector.setScoreThreshold(score)
+        self._detector.setInputSize((width, height))
+        return self._detector.detect(bgr)[1]
+
+    def _detect(self, bgr):
+        """Return the image the faces were found on, and the detections (or None)."""
+        found = self._run(bgr, 0.9)
+        if found is not None or not 0 < self._fallback_score < 0.9:
+            return bgr, found
+        cv2 = self._cv2
+        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        lab[:, :, 0] = clahe.apply(lab[:, :, 0])
+        enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+        found = self._run(enhanced, self._fallback_score)
+        if found is not None:
+            return enhanced, found
+        height, width = enhanced.shape[:2]
+        if max(width, height) < FALLBACK_UPSCALE_BELOW:
+            enlarged = cv2.resize(enhanced, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+            return enlarged, self._run(enlarged, self._fallback_score)
+        return enhanced, None

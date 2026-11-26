@@ -1145,6 +1145,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ml/faces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The log of face scans, newest first (administrators only) */
+        get: operations["getFaceScans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/albums": {
         parameters: {
             query?: never;
@@ -2420,6 +2437,36 @@ export interface components {
             error: string;
             /** Format: date-time */
             failedAt: string;
+        };
+        FaceScans: {
+            /**
+             * Format: int64
+             * @description Photos whose preview went to the ML service and came back
+             */
+            scanned: number;
+            /**
+             * Format: int64
+             * @description Scanned photos in which at least one face was found
+             */
+            withFaces: number;
+            /**
+             * Format: int64
+             * @description Photos whose scan failed and waits for a retry
+             */
+            failing: number;
+            /** @description The latest scans, newest first, at most 50 */
+            scans: components["schemas"]["FaceScan"][];
+        };
+        FaceScan: {
+            /** Format: int64 */
+            photoId: number;
+            name: string;
+            /** Format: date-time */
+            scannedAt: string;
+            /** @description Faces found, 0 if none or the scan failed */
+            faces: number;
+            /** @description Why the scan failed, empty on success */
+            error: string;
         };
         PhotoIds: number[];
         UploadResult: {
@@ -4349,6 +4396,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MLStatus"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    getFaceScans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The totals and the latest scans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FaceScans"];
                 };
             };
             403: components["responses"]["Error"];

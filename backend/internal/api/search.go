@@ -171,3 +171,52 @@ func (s *server) getMLStatus(w http.ResponseWriter, r *http.Request) {
 		Failures: failures,
 	})
 }
+
+type faceScanJSON struct {
+	PhotoID   int64     `json:"photoId"`
+	Name      string    `json:"name"`
+	ScannedAt time.Time `json:"scannedAt"`
+	Faces     int32     `json:"faces"`
+	Error     string    `json:"error"`
+}
+
+type faceScansJSON struct {
+	Scanned   int64          `json:"scanned"`
+	WithFaces int64          `json:"withFaces"`
+	Failing   int64          `json:"failing"`
+	Scans     []faceScanJSON `json:"scans"`
+}
+
+// getFaceScans is the log of the face scans: which previews went to the ML
+// service, how many faces it found in each, and why a scan failed.
+func (s *server) getFaceScans(w http.ResponseWriter, r *http.Request) {
+	out := faceScansJSON{Scans: []faceScanJSON{}}
+	err := s.Pool.QueryRow(r.Context(), `SELECT count(*) FILTER (WHERE retry_at IS NULL),
+  count(*) FILTER (WHERE retry_at IS NULL AND EXISTS(SELECT FROM photo_faces f WHERE f.photo_id=s.photo_id)),
+  count(*) FILTER (WHERE retry_at IS NOT NULL) FROM face_scans s`).Scan(&out.Scanned, &out.WithFaces, &out.Failing)
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	rows, err := s.Pool.Query(r.Context(), `SELECT s.photo_id,p.original_name,s.scanned_at,
+  (SELECT count(*) FROM photo_faces f WHERE f.photo_id=s.photo_id)::int,coalesce(s.error,'')
+  FROM face_scans s JOIN photos p ON p.id=s.photo_id ORDER BY s.scanned_at DESC,s.photo_id DESC LIMIT 50`)
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var scan faceScanJSON
+		if err := rows.Scan(&scan.PhotoID, &scan.Name, &scan.ScannedAt, &scan.Faces, &scan.Error); err != nil {
+			internalError(w, r, err)
+			return
+		}
+		out.Scans = append(out.Scans, scan)
+	}
+	if err := rows.Err(); err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}

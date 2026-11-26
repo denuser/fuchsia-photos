@@ -79,8 +79,8 @@ func (w *FaceWorker) Work(ctx context.Context, _ *river.Job[FaceScanArgs]) error
 				return err
 			}
 			if readErr != nil {
-				_, err = tx.Exec(ctx, `INSERT INTO face_scans(photo_id,model,sha256,retry_at) VALUES($1,$2,$3,now()+interval '10 minutes')
-      ON CONFLICT(photo_id) DO UPDATE SET retry_at=excluded.retry_at,model=excluded.model WHERE face_scans.retry_at IS NOT NULL`, id, health.Faces.Model, hash)
+				_, err = tx.Exec(ctx, `INSERT INTO face_scans(photo_id,model,sha256,retry_at,error) VALUES($1,$2,$3,now()+interval '10 minutes',$4)
+      ON CONFLICT(photo_id) DO UPDATE SET retry_at=excluded.retry_at,model=excluded.model,error=excluded.error,scanned_at=now() WHERE face_scans.retry_at IS NOT NULL`, id, health.Faces.Model, hash, readErr.Error())
 				return err
 			}
 			if _, err = tx.Exec(ctx, "DELETE FROM face_scans WHERE photo_id=$1", id); err != nil {
