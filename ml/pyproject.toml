@@ -14,3 +14,6 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[project.optional-dependencies]
+faces = ["opencv-python-headless==5.1.0.95"]

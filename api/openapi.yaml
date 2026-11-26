@@ -1088,6 +1088,49 @@ paths:
                       $ref: "#/components/schemas/MemoryYear"
         "400":
           $ref: "#/components/responses/Error"
+  /people/faces/{id}/thumbnail:
+    get:
+      operationId: faceThumbnail
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer, format: int64}}
+      responses:
+        '200':
+          description: Private JPEG face thumbnail
+          content:
+            image/jpeg: {schema: {type: string, format: binary}}
+  /people:
+    get:
+      operationId: listPeople
+      summary: List private people or faces of one person, in pages of 100
+      parameters:
+        - {name: person, in: query, schema: {type: integer, format: int64}}
+        - {name: after, in: query, schema: {type: integer, format: int64}}
+      responses:
+        '200':
+          description: Groups or face occurrences in ID order
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PersonItem'}
+    post:
+      operationId: editPeople
+      summary: Correct the current user's face groups
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, person]
+              properties:
+                action: {type: string, enum: [rename, merge, move, ignore]}
+                person: {type: integer, format: int64}
+                target: {type: integer, format: int64}
+                face: {type: integer, format: int64}
+                name: {type: string}
+      responses:
+        '204': {description: Saved}
   /similar:
     get:
       operationId: listSimilar
@@ -2592,6 +2635,16 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
   schemas:
+    PersonItem:
+      type: object
+      required: [id, name, photo, version, box, face]
+      properties:
+        face: {type: integer, format: int64}
+        id: {type: integer, format: int64}
+        name: {type: string}
+        photo: {type: integer, format: int64}
+        version: {type: integer}
+        box: {type: array, minItems: 4, maxItems: 4, items: {type: number}}
     QueueStats:
       type: object
       required: [kinds, errors]

@@ -21,6 +21,16 @@ export default {
     admin: 'Administrator',
     user: 'User',
   },
+  people: {
+    title: 'People',
+    unnamed: 'Unnamed person',
+    merge: 'Merge into',
+    move: 'Move face',
+    ignore: 'Ignore face',
+    new: 'New person',
+    more: 'More',
+    empty: 'No face groups yet',
+  },
   nav: {
     account: 'Account',
     albums: 'Albums',

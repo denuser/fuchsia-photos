@@ -22,6 +22,16 @@ const zh: typeof en = {
     admin: '管理员',
     user: '用户',
   },
+  people: {
+    title: '人物',
+    unnamed: '未命名人物',
+    merge: '合并到',
+    move: '移动人脸',
+    ignore: '忽略人脸',
+    new: '新人物',
+    more: '更多',
+    empty: '暂无人脸分组',
+  },
   nav: {
     account: '账户',
     albums: '相册',

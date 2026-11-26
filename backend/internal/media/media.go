@@ -222,3 +222,30 @@ func encode(image *vips.ImageRef, settings Settings) (Preview, error) {
 	}
 	return Preview{Data: data, Width: image.Width(), Height: image.Height()}, nil
 }
+
+// FaceThumbnail renders the normalized face rectangle from an oriented viewer preview.
+func FaceThumbnail(path string, box []float32) ([]byte, error) {
+	image, err := vips.NewImageFromFile(path)
+	if err != nil {
+		return nil, err
+	}
+	defer image.Close()
+	if len(box) != 4 {
+		return nil, fmt.Errorf("invalid face rectangle")
+	}
+	width, height := image.Width(), image.Height()
+	left := min(width-1, max(0, int(box[0]*float32(width))))
+	top := min(height-1, max(0, int(box[1]*float32(height))))
+	w := min(width-left, max(1, int(box[2]*float32(width))))
+	h := min(height-top, max(1, int(box[3]*float32(height))))
+	if err = image.ExtractArea(left, top, w, h); err != nil {
+		return nil, err
+	}
+	if edge := max(w, h); edge > 160 {
+		if err = image.Resize(160/float64(edge), vips.KernelLinear); err != nil {
+			return nil, err
+		}
+	}
+	data, _, err := image.ExportJpeg(&vips.JpegExportParams{Quality: 82, StripMetadata: true})
+	return data, err
+}

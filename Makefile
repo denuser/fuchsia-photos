@@ -6,6 +6,7 @@ E2E_PASSWORD = e2e-password
 DEV_DATABASE_URL = postgres://photos:photos@localhost:5432/photos
 BENCH_OUT ?= .bench
 ML_PORT ?= 8090
+ML_UV_ARGS ?=
 # The volume keeps its old name so that existing development databases survive the
 # rename to Magellanica Photos.
 DEV_DB_VOLUME = fuchsia-photos-dev-db
@@ -81,7 +82,7 @@ dev-cert: $(DEV_TLS)/cert.pem
 # Natively rather than in Docker, which has no GPU access on macOS. Set
 # ML_TOKEN to require a token, as for a server the NAS calls over the network.
 ml:
-	cd ml && uv run uvicorn server:app --host 0.0.0.0 --port $(ML_PORT)
+	cd ml && uv run $(ML_UV_ARGS) uvicorn server:app --host 0.0.0.0 --port $(ML_PORT)
 
 $(DEV_TLS)/cert.pem:
 	mkdir -p "$(DEV_TLS)"

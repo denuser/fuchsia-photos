@@ -129,6 +129,25 @@ Text search leaves out photos less similar to the query than a threshold the ser
 
 Once the service is up, the application finds it within 30 seconds and embeds all processed photos in the background. The administration page shows the progress. The service has no automated tests during the stage 7 spike; the backend tests use a fake service.
 
+### Face inference
+
+The existing ML service can optionally detect faces and compute face vectors on its host CPU. Enable it on a trusted home-network host. Install the `faces` extra and supply both local ONNX files and an `ML_TOKEN`. The service does not download face models itself.
+
+| Model file | SHA-256 |
+|---|---|
+| [`face_detection_yunet_2023mar.onnx`](https://huggingface.co/opencv/face_detection_yunet/blob/main/face_detection_yunet_2023mar.onnx) | `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4` |
+| [`face_recognition_sface_2021dec.onnx`](https://huggingface.co/opencv/face_recognition_sface/blob/main/face_recognition_sface_2021dec.onnx) | `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79` |
+
+```sh
+ML_FACE_DETECTOR=/path/to/face_detection_yunet_2023mar.onnx \
+ML_FACE_RECOGNIZER=/path/to/face_recognition_sface_2021dec.onnx \
+make ml ML_UV_ARGS='--extra faces'
+```
+
+Set `ML_TOKEN` in the service environment before starting it. With both face model paths unset, `make ml` runs the existing text and image model alone. Keep the model licenses with the weights. [YuNet license](https://huggingface.co/opencv/face_detection_yunet/blob/main/LICENSE) and [SFace license](https://huggingface.co/opencv/face_recognition_sface/blob/main/LICENSE).
+
+Authenticated `GET /health` advertises a `faces` object when face inference is enabled. The authenticated `POST /faces` accepts the raw bytes of one preview up to 16 MiB. It returns the face model identifier and a list of faces with normalized left, top, width and height coordinates and a 128-element unit vector. The identifier includes the weight hashes, OpenCV version and preprocessing revision. Frames and vectors are processed in memory. Configure the application with the same token and the home service URL. The people queue checks for eligible photos every minute, including existing photos. Each owner can browse and correct their groups under People even when the ML service is offline. See [improvement 26](improvements.md#26-people).
+
 ## Frontend
 
 | Task | Command |

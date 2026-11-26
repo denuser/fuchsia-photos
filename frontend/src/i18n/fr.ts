@@ -22,6 +22,16 @@ const fr: typeof en = {
     admin: 'Administrateur',
     user: 'Utilisateur',
   },
+  people: {
+    title: 'Personnes',
+    unnamed: 'Sans nom',
+    merge: 'Fusionner avec',
+    move: 'Déplacer le visage',
+    ignore: 'Masquer le visage',
+    new: 'Nouvelle personne',
+    more: 'Plus',
+    empty: 'Aucun groupe de visages',
+  },
   nav: {
     account: 'Compte',
     albums: 'Albums',

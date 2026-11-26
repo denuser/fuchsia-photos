@@ -36,6 +36,7 @@ export const router = createRouter({
     { path: '/memories', component: MemoriesView },
     // Loaded when first opened, so that the map library stays out of the main bundle.
     { path: '/map', component: () => import('./views/MapView.vue') },
+    { path: '/people', component: () => import('./views/PeopleView.vue') },
     { path: '/similar', component: SimilarView },
     { path: '/archive', component: ArchiveView },
     { path: '/shared', component: SharedView },

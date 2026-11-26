@@ -22,6 +22,16 @@ const ko: typeof en = {
     admin: '관리자',
     user: '사용자',
   },
+  people: {
+    title: '인물',
+    unnamed: '이름 없는 인물',
+    merge: '병합 대상',
+    move: '얼굴 이동',
+    ignore: '얼굴 숨기기',
+    new: '새 인물',
+    more: '더 보기',
+    empty: '아직 얼굴 그룹이 없습니다',
+  },
   nav: {
     account: '계정',
     albums: '앨범',

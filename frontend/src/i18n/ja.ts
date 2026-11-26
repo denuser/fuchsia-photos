@@ -22,6 +22,16 @@ const ja: typeof en = {
     admin: '管理者',
     user: 'ユーザー',
   },
+  people: {
+    title: '人物',
+    unnamed: '名前のない人物',
+    merge: '統合先',
+    move: '顔を移動',
+    ignore: '顔を非表示',
+    new: '新しい人物',
+    more: 'もっと見る',
+    empty: '顔のグループはまだありません',
+  },
   nav: {
     account: 'アカウント',
     albums: 'アルバム',

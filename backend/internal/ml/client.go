@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"strings"
@@ -46,7 +47,59 @@ type Health struct {
 	Device     string `json:"device"`
 	// MinSimilarity is the least cosine similarity of a search match, if the
 	// service knows one for its model.
-	MinSimilarity *float64 `json:"minSimilarity"`
+	MinSimilarity *float64   `json:"minSimilarity"`
+	Faces         *FaceModel `json:"faces"`
+}
+
+// FaceModel describes the optional face inference model.
+type FaceModel struct {
+	Model      string `json:"model"`
+	Dimensions int    `json:"dimensions"`
+}
+
+// DetectedFace contains normalized left, top, width and height coordinates and
+// a unit vector in the face model's embedding space.
+type DetectedFace struct {
+	Box       []float64 `json:"box"`
+	Embedding []float32 `json:"embedding"`
+}
+
+// DetectFaces analyzes a viewer preview using the advertised face model.
+func (c *Client) DetectFaces(ctx context.Context, preview []byte, model FaceModel) ([]DetectedFace, error) {
+	if c.token == "" || model.Model == "" || model.Dimensions != 128 {
+		return nil, errors.New("ML service: face inference requires a token and a supported face model")
+	}
+	if len(preview) == 0 || len(preview) > 16<<20 {
+		return nil, errors.New("ML service: unsupported face preview size")
+	}
+	var result struct {
+		Model string         `json:"model"`
+		Faces []DetectedFace `json:"faces"`
+	}
+	if err := c.do(ctx, http.MethodPost, "/faces", "application/octet-stream", bytes.NewReader(preview), &result); err != nil {
+		return nil, err
+	}
+	if result.Model != model.Model {
+		return nil, ErrModelMismatch
+	}
+	if result.Faces == nil || len(result.Faces) > 64 {
+		return nil, errors.New("ML service: invalid face list")
+	}
+	for _, face := range result.Faces {
+		box := face.Box
+		if len(box) != 4 || box[0] < 0 || box[1] < 0 || box[2] <= 0 || box[3] <= 0 ||
+			box[0]+box[2] > 1.000001 || box[1]+box[3] > 1.000001 || len(face.Embedding) != model.Dimensions {
+			return nil, errors.New("ML service: invalid face in response")
+		}
+		var squaredNorm float64
+		for _, coordinate := range face.Embedding {
+			squaredNorm += float64(coordinate) * float64(coordinate)
+		}
+		if math.Abs(squaredNorm-1) > 0.001 {
+			return nil, errors.New("ML service: invalid face embedding norm")
+		}
+	}
+	return result.Faces, nil
 }
 
 // Health asks the service which model it runs.

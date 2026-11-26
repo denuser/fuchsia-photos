@@ -29,6 +29,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 23 | [Sign in with OIDC](#23-sign-in-with-oidc) | Built; checked with Google on 2026-11-25 | Apple and Yandex ID |
 | 24 | [Two-factor sign-in (TOTP)](#24-two-factor-sign-in-totp) | Built; checked with an authenticator app on 2026-11-25 | The browser test does not cover it |
 | 25 | [Near-duplicates and bursts](#25-near-duplicates-and-bursts) | Step 1 built; not yet checked on the development stack | Check the page on the development stack; stacks in the timeline with the profile setting; the limits as settings; the burst check without the ML service |
+| 26 | [People](#26-people) | Built | Calibrate grouping on labelled portraits and check the page on the development stack |
 
 ## 1. Administration page
 
@@ -780,3 +781,16 @@ Questions that were asked (kept for the record):
 7. Whether a recipient sees the owner's stack collapsed, and whether videos are in scope.
 8. An HNSW index now, or after a measurement on the NAS.
 9. Added after step 0: what a "group" is. The data has no line between a burst and "the same place, another shot", so a stack can be (a) only near-identical frames and copies (about 27 proposals in the owner's two libraries, precise), or (b) every shot of one scene at `vector <= 0.03` (about 274 proposals, precise, bigger and fuzzier groups), or both as two tiers, the first called duplicates and the second similar shots.
+
+## 26. People
+
+**Status:** built in the ML service, background queue, database, private API and People page. Grouping thresholds are provisional. The HTTP route was checked with real weights on one public photo and one synthetic image without faces.
+
+People is a private page of face groups from the owner's library. A group opens a photo grid, can be named or renamed, and can be merged with another group. The owner can move a face to a different or new group or ignore a wrong detection. A group represents a person the owner recognizes, with names entered by the owner.
+
+1. **Inference pilot.** The [optional endpoint](development.md#face-inference) uses [YuNet](https://huggingface.co/opencv/face_detection_yunet) for detection and [SFace](https://huggingface.co/opencv/face_recognition_sface) for face vectors, with OpenCV headless on CPU. Next, use a small labelled sample with multiple people in a frame, the same person in different conditions and similar-looking people. Record false matches, missed matches, time and peak memory on the host running the ML service before setting a threshold.
+2. **Background indexing.** Use the opt-in face capability of the existing self-hosted ML service, with a separately versioned face model and work queue. Reuse viewer previews, health polling and bounded retries. Index only ready, visible still images owned by the account. Record successful scans with zero detections and bind results to the source revision and model. Recheck eligibility and revision when committing a result after inference. Keep face data on the home network and disable the feature by default.
+3. **Grouping and corrections.** Store relative face bounds, vectors and group assignments privately, with owner-scoped lookups and mutations. Match against representative faces and create a new group when the best match is weak or the next group is too close. Serialize indexing and manual edits for each owner. Keep manual moves, merges and ignored detections across ordinary rescans; a changed source hash clears its detections. A new model applies to new photos and uses groups with vectors from that model. Existing scans retain their assignments. Trash hides detections and restore makes them visible again. Purge removes biometric data and cover references even when the photo row is retained.
+4. **Page and checks.** The page groups face occurrences by photo and shows a separate correction action for each face. Serve covers through an owner-checked route with private, non-cacheable responses. Shared albums, public links and administrator photo views never expose another account's people data. Test access across two accounts, a photo with no faces, simultaneous indexing and correction, reprocessing after a library-file edit, and trash, restore and purge. Add translations for all ten languages.
+
+Decided on 2026-11-26: run face inference in the existing optional ML service on a trusted home host. The NAS does not have to run inference.

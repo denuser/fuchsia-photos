@@ -5,15 +5,18 @@ application stores the vectors and checks permissions. See the "Machine
 learning" section of docs/architecture.md.
 """
 
+import asyncio
 import io
 import os
 import threading
 
 import torch
-from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, UploadFile
 from PIL import Image
 from pydantic import BaseModel
 from transformers import AutoModel, AutoProcessor
+
+from faces import DIMENSIONS as FACE_DIMENSIONS, MAX_UPLOAD_BYTES, FaceInference, InvalidPreview
 
 MODEL_NAME = os.environ.get("ML_MODEL", "google/siglip2-base-patch16-384")
 # Change it whenever the preprocessing below changes, so that the application
@@ -21,6 +24,8 @@ MODEL_NAME = os.environ.get("ML_MODEL", "google/siglip2-base-patch16-384")
 PREPROCESSING_VERSION = 1
 MODEL_ID = f"{MODEL_NAME}@{PREPROCESSING_VERSION}"
 TOKEN = os.environ.get("ML_TOKEN", "")
+face_inference = FaceInference.from_environment(TOKEN)
+face_request = asyncio.Lock()
 # The least cosine similarity between a search text and a photo for the photo
 # to count as a match. Absolute similarities differ between models, so each
 # needs its own. Calibrated on Russian queries against a home library on
@@ -58,7 +63,7 @@ lock = threading.Lock()
 app = FastAPI(title="Magellanica Photos ML")
 
 
-def check_token(authorization: str = Header(default="")) -> None:
+async def check_token(authorization: str = Header(default="")) -> None:
     if TOKEN and authorization != f"Bearer {TOKEN}":
         raise HTTPException(status_code=401, detail="invalid token")
 
@@ -87,8 +92,28 @@ DIMENSIONS = text_features("photo").shape[-1]
 
 
 @app.get("/health", dependencies=[Depends(check_token)])
-def health() -> dict:
-    return {"model": MODEL_ID, "dimensions": DIMENSIONS, "device": DEVICE, "minSimilarity": MIN_SIMILARITY_FOR_MODEL}
+async def health() -> dict:
+    status = {"model": MODEL_ID, "dimensions": DIMENSIONS, "device": DEVICE, "minSimilarity": MIN_SIMILARITY_FOR_MODEL}
+    if face_inference is not None:
+        status["faces"] = {"model": face_inference.model, "dimensions": FACE_DIMENSIONS}
+    return status
+
+
+@app.post("/faces", dependencies=[Depends(check_token)])
+async def detect_faces(request: Request) -> dict:
+    if face_inference is None:
+        raise HTTPException(status_code=404, detail="face inference is disabled")
+    async with face_request:
+        preview = bytearray()
+        async for chunk in request.stream():
+            if len(preview) + len(chunk) > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="preview is too large")
+            preview.extend(chunk)
+        try:
+            faces = await asyncio.to_thread(face_inference.analyze, preview)
+        except InvalidPreview as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+    return {"model": face_inference.model, "faces": faces}
 
 
 class TextRequest(BaseModel):

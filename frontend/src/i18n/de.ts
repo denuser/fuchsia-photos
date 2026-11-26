@@ -21,6 +21,16 @@ const de: typeof en = {
     admin: 'Administrator',
     user: 'Benutzer',
   },
+  people: {
+    title: 'Personen',
+    unnamed: 'Unbenannte Person',
+    merge: 'Zusammenführen mit',
+    move: 'Gesicht verschieben',
+    ignore: 'Gesicht ausblenden',
+    new: 'Neue Person',
+    more: 'Mehr',
+    empty: 'Noch keine Gesichtsgruppen',
+  },
   nav: {
     account: 'Konto',
     albums: 'Alben',
