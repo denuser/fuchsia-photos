@@ -79,7 +79,7 @@ func (w *FaceWorker) health(ctx context.Context) (Health, error) {
 	return w.Client.Health(ctx)
 }
 
-func (w *FaceWorker) isPhotoError(ctx context.Context, model FaceModel, err error) bool {
+func (w *FaceWorker) isPhotoError(err error) bool {
 	if errors.Is(err, errFacePreviewSize) {
 		return true
 	}
@@ -87,16 +87,7 @@ func (w *FaceWorker) isPhotoError(ctx context.Context, model FaceModel, err erro
 	if !errors.As(err, &response) {
 		return false
 	}
-	switch response.code {
-	case http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity:
-		return true
-	case http.StatusInternalServerError:
-		// A failed inference can be specific to one input.
-		health, healthErr := w.health(ctx)
-		return healthErr == nil && health.Faces.supported() && *health.Faces == model
-	default:
-		return false
-	}
+	return response.code == http.StatusRequestEntityTooLarge || response.code == http.StatusUnprocessableEntity
 }
 
 func (w *FaceWorker) pause(err error) {
@@ -107,9 +98,16 @@ func (w *FaceWorker) pause(err error) {
 }
 
 func (w *FaceWorker) Timeout(*river.Job[FaceScanArgs]) time.Duration { return 3 * time.Minute }
-func (w *FaceWorker) Work(ctx context.Context, _ *river.Job[FaceScanArgs]) error {
-	if w.Client == nil || w.Client.token == "" {
+func (w *FaceWorker) Work(ctx context.Context, job *river.Job[FaceScanArgs]) error {
+	processed := false
+	skip := func() error {
+		if job != nil && !processed {
+			return river.MetadataSet(ctx, "ml_skipped", true)
+		}
 		return nil
+	}
+	if w.Client == nil || w.Client.token == "" {
+		return skip()
 	}
 	health, err := w.health(ctx)
 	if ctx.Err() != nil {
@@ -120,7 +118,7 @@ func (w *FaceWorker) Work(ctx context.Context, _ *river.Job[FaceScanArgs]) error
 			err = errors.New("ML service: face model unavailable")
 		}
 		w.pause(err)
-		return nil
+		return skip()
 	}
 	deadline := time.Now().Add(time.Minute)
 	for time.Now().Before(deadline) {
@@ -142,13 +140,13 @@ func (w *FaceWorker) Work(ctx context.Context, _ *river.Job[FaceScanArgs]) error
 		if scanErr == nil {
 			faces, scanErr = w.Client.DetectFaces(ctx, data, *health.Faces)
 			if scanErr != nil {
-				photoError := ctx.Err() == nil && w.isPhotoError(ctx, *health.Faces, scanErr)
+				photoError := w.isPhotoError(scanErr)
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
 				if !photoError {
 					w.pause(scanErr)
-					return nil
+					return skip()
 				}
 			}
 		}
@@ -168,6 +166,7 @@ func (w *FaceWorker) Work(ctx context.Context, _ *river.Job[FaceScanArgs]) error
 			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT FROM face_scans WHERE photo_id=$1 AND sha256=$2 AND retry_at IS NULL)", id, hash).Scan(&complete); err != nil || complete {
 				return err
 			}
+			processed = true
 			if scanErr != nil {
 				_, err = tx.Exec(ctx, `INSERT INTO face_scans(photo_id,model,sha256,retry_at,error) VALUES($1,$2,$3,now()+interval '10 minutes',$4)
       ON CONFLICT(photo_id) DO UPDATE SET retry_at=excluded.retry_at,model=excluded.model,error=excluded.error,scanned_at=now() WHERE face_scans.retry_at IS NOT NULL`, id, health.Faces.Model, hash, scanErr.Error())

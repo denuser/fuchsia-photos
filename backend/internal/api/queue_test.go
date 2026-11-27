@@ -7,8 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+
 	"github.com/magellanica-app/magellanica-photos/backend/internal/auth"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/jobs"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/ml"
 )
 
 func TestQueue(t *testing.T) {
@@ -98,5 +102,61 @@ func TestQueueEvents(t *testing.T) {
 	second := next()
 	if len(second.Kinds) != 1 || second.Kinds[0].Kind != "process_photo" || second.Kinds[0].Waiting != 1 {
 		t.Errorf("second event = %+v, want one photo waiting", second)
+	}
+}
+
+func TestUnavailableMLJobsAreNotCounted(t *testing.T) {
+	e := setup(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	workers := river.NewWorkers()
+	(&ml.Service{}).Register(workers)
+	river.AddWorker(workers, &ml.FaceWorker{})
+	client, err := river.NewClient(riverpgxv5.New(e.pool), &river.Config{
+		Workers: workers,
+		Queues:  map[string]river.QueueConfig{"people": {MaxWorkers: 1}, ml.QueueML: {MaxWorkers: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range []river.JobArgs{ml.FaceScanArgs{}, ml.EmbedPhotosArgs{}} {
+		if _, err := client.Insert(ctx, args, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := client.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		stopCtx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stop()
+		if err := client.StopAndCancel(stopCtx); err != nil {
+			t.Error(err)
+		}
+	}()
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		var completed int
+		if err := e.pool.QueryRow(ctx, "SELECT count(*) FROM river_job WHERE kind IN ('scan_people','embed_photos') AND state='completed'").Scan(&completed); err != nil {
+			t.Fatal(err)
+		}
+		if completed == 2 {
+			break
+		}
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			t.Fatal("ML jobs did not finish")
+		}
+	}
+	stats, err := jobs.ReadQueueStats(ctx, e.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range stats.Kinds {
+		if kind.DoneHour != 0 || kind.DoneDay != 0 || kind.FailedDay != 0 {
+			t.Errorf("offline job counted: %+v", kind)
+		}
 	}
 }

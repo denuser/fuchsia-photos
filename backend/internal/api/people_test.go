@@ -126,7 +126,7 @@ func TestFaceScanStatusAndBackfill(t *testing.T) {
 
 	var mu sync.Mutex
 	var sent []string
-	offline := true
+	serviceFailure := http.StatusServiceUnavailable
 	model := ml.FaceModel{Model: "face-test", Dimensions: 128}
 	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
@@ -142,8 +142,8 @@ func TestFaceScanStatusAndBackfill(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		sent = append(sent, string(body))
-		if offline {
-			http.Error(w, "offline", http.StatusServiceUnavailable)
+		if serviceFailure != 0 {
+			http.Error(w, "offline", serviceFailure)
 			return
 		}
 		if string(body) == "rejected preview" {
@@ -169,7 +169,13 @@ func TestFaceScanStatusAndBackfill(t *testing.T) {
 		t.Fatal("face scans still report available after the service failed")
 	}
 	mu.Lock()
-	offline = false
+	serviceFailure = http.StatusInternalServerError
+	mu.Unlock()
+	monitor.Check(ctx)
+	run()
+	lookup(raw, "waiting")
+	mu.Lock()
+	serviceFailure = 0
 	mu.Unlock()
 	monitor.Check(ctx)
 	run()
@@ -184,7 +190,7 @@ func TestFaceScanStatusAndBackfill(t *testing.T) {
 	lookup(hidden, "ineligible")
 	mu.Lock()
 	defer mu.Unlock()
-	if want := []string{"standalone raw preview", "standalone raw preview", "rejected preview", "paired jpeg preview"}; !slices.Equal(sent, want) {
+	if want := []string{"standalone raw preview", "standalone raw preview", "standalone raw preview", "rejected preview", "paired jpeg preview"}; !slices.Equal(sent, want) {
 		t.Errorf("ML received %q, want %q", sent, want)
 	}
 }
