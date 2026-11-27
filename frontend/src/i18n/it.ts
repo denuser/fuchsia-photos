@@ -545,6 +545,17 @@ const it: typeof en = {
     ml: 'ML',
   },
   faceLog: {
+    service: 'Riconoscimento facciale',
+    serviceStates: {
+      available: 'Disponibile',
+      unavailable: 'Non disponibile',
+      mismatch: 'Modello facciale non supportato',
+      disabled: 'Disattivato',
+    },
+    photoId: 'ID foto',
+    lookup: 'Cerca risultato',
+    waiting: 'In attesa di analisi',
+    ineligible: 'Foto esclusa dall’analisi',
     description: 'Foto la cui anteprima è stata inviata al servizio ML per il riconoscimento dei volti, dalle più recenti. Sono mostrate le ultime 50.',
     totals: 'Analizzate: {scanned}, con volti: {withFaces}, in attesa di nuovo tentativo: {failing}',
     none: 'Nessuna analisi finora',

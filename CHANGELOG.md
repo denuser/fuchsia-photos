@@ -4,6 +4,9 @@ Changes in each release. Add changes under "Unreleased" as they are made; `make 
 
 ## Unreleased
 
+- Background search indexing and face scans are queued only when the ML service reports the corresponding model is available. An offline or unconfigured service no longer adds empty runs to the queue.
+- A service outage during face scanning leaves the photo queued for the next run. The ML log shows face recognition availability and can look up a photo's scan result by ID.
+
 - A private People page groups faces in the owner’s photos. Owners can name or merge groups, move a face and ignore an incorrect detection. Background indexing resumes when the ML host is available. The optional self-hosted ML service can detect faces and return face vectors with YuNet and SFace. It is turned on with `ML_FACES=1` and an ML token on the service, which then downloads the models and checks their hashes, and with `ML_URL` and `ML_TOKEN` on the application, now in both Compose files and `.env.example`. See [Search and people](docs/deployment.md#search-and-people).
 
 - Similar photos: a page that lists copies, edited versions and nearly identical frames (Duplicates), and other shots of the same scene (Similar shots), found from the vectors of the ML service and a hash of each preview. For a group you keep one photo and the others go to the trash with their albums, tags, favorites and shares moved to the one you keep, or you mark the group as not the same. Nothing changes without your choice, and a pair you marked is not offered again. Photos are looked at in the background after the ML service has made their vectors, and the previews of the photos already in the library are hashed in the first run. See [Similar photos](docs/architecture.md).

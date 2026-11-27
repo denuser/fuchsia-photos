@@ -147,7 +147,7 @@ func TestSearchWithoutService(t *testing.T) {
 
 	wantStatus(t, anna.get("/api/v1/ml/faces"), http.StatusForbidden)
 	scans := decode[faceScansJSON](t, e.loggedIn("root").get("/api/v1/ml/faces"))
-	if scans.Scanned != 0 || len(scans.Scans) != 0 {
+	if scans.ServiceState != ml.StateDisabled || scans.Scanned != 0 || len(scans.Scans) != 0 {
 		t.Errorf("face scans = %+v, want none", scans)
 	}
 }

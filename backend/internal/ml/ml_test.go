@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
@@ -24,6 +28,7 @@ const testModel = "test-model@1"
 type fakeService struct {
 	mu     sync.Mutex
 	model  string
+	faces  *FaceModel
 	down   bool
 	sent   map[string]int // How often each image name was sent.
 	server *httptest.Server
@@ -55,7 +60,7 @@ func (f *fakeService) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.URL.Path {
 	case "/health":
-		json.NewEncoder(w).Encode(Health{Model: f.model, Dimensions: 3, Device: "cpu"})
+		json.NewEncoder(w).Encode(Health{Model: f.model, Dimensions: 3, Device: "cpu", Faces: f.faces})
 	case "/embed/text":
 		json.NewEncoder(w).Encode(map[string]any{"model": f.model, "embedding": []float32{1, 0, 0}})
 	case "/embed/image":
@@ -122,6 +127,135 @@ func TestMonitorStates(t *testing.T) {
 	}
 	if got := NewMonitor(nil, testModel).Check(ctx).State; got != StateDisabled {
 		t.Errorf("no service: %s, want disabled", got)
+	}
+}
+
+func TestMonitorFaceAvailability(t *testing.T) {
+	fake := newFakeService(t)
+	monitor := NewMonitor(NewClient(fake.server.URL, "secret"), testModel)
+	if monitor.FacesAvailable() || NewMonitor(nil, testModel).FacesAvailable() {
+		t.Fatal("face inference must wait for a successful health check")
+	}
+
+	for _, tt := range []struct {
+		name  string
+		model string
+		faces *FaceModel
+		down  bool
+		want  bool
+	}{
+		{name: "search only", model: testModel},
+		{name: "unsupported dimensions", model: testModel, faces: &FaceModel{Model: "faces@1", Dimensions: 64}},
+		{name: "faces enabled", model: testModel, faces: &FaceModel{Model: "faces@1", Dimensions: 128}, want: true},
+		{name: "search model mismatch", model: "other@1", faces: &FaceModel{Model: "faces@1", Dimensions: 128}, want: true},
+		{name: "service goes down", down: true},
+		{name: "service comes back", model: testModel, faces: &FaceModel{Model: "faces@1", Dimensions: 128}, want: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			fake.set(func(f *fakeService) { f.model, f.faces, f.down = tt.model, tt.faces, tt.down })
+			monitor.Check(t.Context())
+			if got := monitor.FacesAvailable(); got != tt.want {
+				t.Errorf("FacesAvailable() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+
+	withoutToken := NewMonitor(NewClient(fake.server.URL, ""), testModel)
+	withoutToken.Check(t.Context())
+	if withoutToken.FacesAvailable() {
+		t.Error("face inference requires a token")
+	}
+	monitor.Failed(errors.New("embedding request failed"))
+	if monitor.Available() || !monitor.FacesAvailable() {
+		t.Error("the embedding failure should pause search and leave faces available")
+	}
+}
+
+type scheduleMarker struct{}
+
+func (scheduleMarker) Kind() string { return "ml_schedule_marker" }
+
+func TestMLPeriodicScheduling(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		configured  bool
+		down        bool
+		model       string
+		faces       bool
+		embed, scan int
+	}{
+		{name: "unconfigured"},
+		{name: "unreachable", configured: true, down: true},
+		{name: "search only", configured: true, model: testModel, embed: 1},
+		{name: "faces only with search model mismatch", configured: true, model: "other@1", faces: true, scan: 1},
+		{name: "recovered with both models", configured: true, model: testModel, faces: true, embed: 1, scan: 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := testdb.New(t)
+			fake := newFakeService(t)
+			var mlClient *Client
+			if tt.configured {
+				mlClient = NewClient(fake.server.URL, "secret")
+			}
+			monitor := NewMonitor(mlClient, testModel)
+			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+			defer cancel()
+			fake.set(func(f *fakeService) { f.down = true })
+			monitor.Check(ctx)
+			fake.set(func(f *fakeService) {
+				f.down, f.model = tt.down, tt.model
+				if tt.faces {
+					f.faces = &FaceModel{Model: "faces@1", Dimensions: 128}
+				}
+			})
+			monitor.Check(ctx)
+
+			// Run a marker in the same scheduler batch so the zero-job cases
+			// prove the scheduler had a chance to insert both ML jobs.
+			ticked := make(chan struct{}, 1)
+			workers := river.NewWorkers()
+			(&Service{}).Register(workers)
+			river.AddWorker(workers, &FaceWorker{})
+			river.AddWorker(workers, river.WorkFunc(func(context.Context, *river.Job[scheduleMarker]) error {
+				ticked <- struct{}{}
+				return nil
+			}))
+			marker := river.NewPeriodicJob(river.PeriodicInterval(time.Hour), func() (river.JobArgs, *river.InsertOpts) {
+				return scheduleMarker{}, nil
+			}, &river.PeriodicJobOpts{RunOnStart: true})
+			client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
+				Queues:       map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: 1}},
+				Workers:      workers,
+				PeriodicJobs: []*river.PeriodicJob{PeriodicJob(monitor), PeopleJob(monitor), marker},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := client.Start(ctx); err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				stopCtx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+				defer stop()
+				if err := client.StopAndCancel(stopCtx); err != nil {
+					t.Error(err)
+				}
+			}()
+			select {
+			case <-ticked:
+			case <-ctx.Done():
+				t.Fatal("scheduler did not run:", ctx.Err())
+			}
+			var embed, scan int
+			err = pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE kind='embed_photos'),
+   count(*) FILTER (WHERE kind='scan_people') FROM river_job`).Scan(&embed, &scan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if embed != tt.embed || scan != tt.scan {
+				t.Errorf("inserted embedding/face jobs = %d/%d, want %d/%d", embed, scan, tt.embed, tt.scan)
+			}
+		})
 	}
 }
 

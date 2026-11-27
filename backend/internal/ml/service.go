@@ -99,12 +99,16 @@ func (EmbedPhotosArgs) InsertOpts() river.InsertOpts {
 	}
 }
 
-// PeriodicJob starts a run every minute. Runs do nothing while the service is
-// unavailable.
-func PeriodicJob() *river.PeriodicJob {
+// PeriodicJob queues embedding every minute while the search model is available.
+func PeriodicJob(monitor *Monitor) *river.PeriodicJob {
 	return river.NewPeriodicJob(
 		river.PeriodicInterval(time.Minute),
-		func() (river.JobArgs, *river.InsertOpts) { return EmbedPhotosArgs{}, nil },
+		func() (river.JobArgs, *river.InsertOpts) {
+			if !monitor.Available() {
+				return nil, nil
+			}
+			return EmbedPhotosArgs{}, nil
+		},
 		&river.PeriodicJobOpts{RunOnStart: true},
 	)
 }

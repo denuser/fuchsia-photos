@@ -544,6 +544,17 @@ const de: typeof en = {
     ml: 'ML',
   },
   faceLog: {
+    service: 'Gesichtserkennung',
+    serviceStates: {
+      available: 'Verfügbar',
+      unavailable: 'Nicht verfügbar',
+      mismatch: 'Gesichtsmodell wird nicht unterstützt',
+      disabled: 'Deaktiviert',
+    },
+    photoId: 'Foto-ID',
+    lookup: 'Ergebnis suchen',
+    waiting: 'Scan steht aus',
+    ineligible: 'Foto kann nicht gescannt werden',
     description: 'Fotos, deren Vorschau zur Gesichtserkennung an den ML-Dienst gesendet wurde, neueste zuerst. Die letzten 50 werden angezeigt.',
     totals: 'Gescannt: {scanned}, mit Gesichtern: {withFaces}, warten auf Wiederholung: {failing}',
     none: 'Noch keine Scans',

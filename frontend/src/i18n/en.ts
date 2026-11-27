@@ -545,6 +545,17 @@ export default {
     ml: 'ML',
   },
   faceLog: {
+    service: 'Face recognition',
+    serviceStates: {
+      available: 'Available',
+      unavailable: 'Unavailable',
+      mismatch: 'Unsupported face model',
+      disabled: 'Disabled',
+    },
+    photoId: 'Photo ID',
+    lookup: 'Find scan',
+    waiting: 'Waiting for a scan',
+    ineligible: 'Ineligible for a face scan',
     description: 'Photos whose previews were sent to the ML service for face recognition, newest first. The latest 50 are shown.',
     totals: 'Scanned: {scanned}, with faces: {withFaces}, waiting for a retry: {failing}',
     none: 'No scans yet',

@@ -3,6 +3,8 @@ package ml
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"net/http"
 	"os"
 	"time"
 
@@ -21,15 +23,87 @@ func (FaceScanArgs) InsertOpts() river.InsertOpts {
 	opts.Queue = "people"
 	return opts
 }
-func PeopleJob() *river.PeriodicJob {
-	return river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return FaceScanArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true})
+
+// PeopleJob queues a scan every minute while face inference is available.
+func PeopleJob(monitor *Monitor) *river.PeriodicJob {
+	return river.NewPeriodicJob(
+		river.PeriodicInterval(time.Minute),
+		func() (river.JobArgs, *river.InsertOpts) {
+			if !monitor.FacesAvailable() {
+				return nil, nil
+			}
+			return FaceScanArgs{}, nil
+		},
+		&river.PeriodicJobOpts{RunOnStart: true},
+	)
 }
 
 type FaceWorker struct {
 	river.WorkerDefaults[FaceScanArgs]
-	Client *Client
-	Pool   *pgxpool.Pool
-	Layout storage.Layout
+	Client  *Client
+	Monitor *Monitor
+	Pool    *pgxpool.Pool
+	Layout  storage.Layout
+}
+
+const faceScanEligible = `p.status='ready' AND p.deleted_at IS NULL AND p.purged_at IS NULL
+   AND p.preview_format IS NOT NULL AND p.mime NOT LIKE 'video/%'
+   AND NOT EXISTS(SELECT FROM photo_links WHERE hidden_id=p.id)`
+
+type PhotoFaceScan struct {
+	PhotoID   int64      `json:"photoId"`
+	Name      string     `json:"name"`
+	State     string     `json:"state"`
+	ScannedAt *time.Time `json:"scannedAt"`
+	Faces     int32      `json:"faces"`
+	Error     string     `json:"error"`
+}
+
+// LookupPhotoFaceScan reports scan status for the photo's current file.
+func LookupPhotoFaceScan(ctx context.Context, pool *pgxpool.Pool, photoID int64) (PhotoFaceScan, error) {
+	var scan PhotoFaceScan
+	err := pool.QueryRow(ctx, `SELECT p.id,p.original_name,
+   CASE WHEN NOT (`+faceScanEligible+`) THEN 'ineligible'
+        WHEN s.photo_id IS NULL THEN 'waiting'
+        WHEN s.retry_at IS NOT NULL THEN 'error'
+        ELSE 'completed' END,
+   s.scanned_at,(SELECT count(*) FROM photo_faces f WHERE f.photo_id=s.photo_id)::int,coalesce(s.error,'')
+   FROM photos p LEFT JOIN face_scans s ON s.photo_id=p.id AND s.sha256=p.sha256
+   WHERE p.id=$1`, photoID).Scan(&scan.PhotoID, &scan.Name, &scan.State, &scan.ScannedAt, &scan.Faces, &scan.Error)
+	return scan, err
+}
+
+func (w *FaceWorker) health(ctx context.Context) (Health, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return w.Client.Health(ctx)
+}
+
+func (w *FaceWorker) isPhotoError(ctx context.Context, model FaceModel, err error) bool {
+	if errors.Is(err, errFacePreviewSize) {
+		return true
+	}
+	var response *httpError
+	if !errors.As(err, &response) {
+		return false
+	}
+	switch response.code {
+	case http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity:
+		return true
+	case http.StatusInternalServerError:
+		// A failed inference can be specific to one input.
+		health, healthErr := w.health(ctx)
+		return healthErr == nil && health.Faces.supported() && *health.Faces == model
+	default:
+		return false
+	}
+}
+
+func (w *FaceWorker) pause(err error) {
+	if w.Monitor != nil {
+		w.Monitor.faceFailed()
+	}
+	slog.Warn("pause face scans", "error", err)
 }
 
 func (w *FaceWorker) Timeout(*river.Job[FaceScanArgs]) time.Duration { return 3 * time.Minute }
@@ -37,8 +111,15 @@ func (w *FaceWorker) Work(ctx context.Context, _ *river.Job[FaceScanArgs]) error
 	if w.Client == nil || w.Client.token == "" {
 		return nil
 	}
-	health, err := w.Client.Health(ctx)
-	if err != nil || health.Faces == nil {
+	health, err := w.health(ctx)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err != nil || !health.Faces.supported() {
+		if err == nil {
+			err = errors.New("ML service: face model unavailable")
+		}
+		w.pause(err)
 		return nil
 	}
 	deadline := time.Now().Add(time.Minute)
@@ -47,8 +128,7 @@ func (w *FaceWorker) Work(ctx context.Context, _ *river.Job[FaceScanArgs]) error
 		var hash []byte
 		var format string
 		err = w.Pool.QueryRow(ctx, `SELECT p.id,p.owner_id,p.sha256,p.preview_format FROM photos p
-   WHERE p.status='ready' AND p.deleted_at IS NULL AND p.purged_at IS NULL AND p.preview_format IS NOT NULL
-   AND p.mime NOT LIKE 'video/%' AND NOT EXISTS(SELECT FROM photo_links WHERE hidden_id=p.id)
+   WHERE `+faceScanEligible+`
    AND NOT EXISTS(SELECT FROM face_scans s WHERE s.photo_id=p.id AND s.sha256=p.sha256
    AND (s.retry_at IS NULL OR (s.model=$1 AND s.retry_at>now()))) ORDER BY p.id LIMIT 1`, health.Faces.Model).Scan(&id, &owner, &hash, &format)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -57,17 +137,27 @@ func (w *FaceWorker) Work(ctx context.Context, _ *river.Job[FaceScanArgs]) error
 		if err != nil {
 			return err
 		}
-		data, readErr := os.ReadFile(w.Layout.Preview(id, storage.PreviewViewer, format))
+		data, scanErr := os.ReadFile(w.Layout.Preview(id, storage.PreviewViewer, format))
 		var faces []DetectedFace
-		if readErr == nil {
-			faces, readErr = w.Client.DetectFaces(ctx, data, *health.Faces)
+		if scanErr == nil {
+			faces, scanErr = w.Client.DetectFaces(ctx, data, *health.Faces)
+			if scanErr != nil {
+				photoError := ctx.Err() == nil && w.isPhotoError(ctx, *health.Faces, scanErr)
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				if !photoError {
+					w.pause(scanErr)
+					return nil
+				}
+			}
 		}
 		err = pgx.BeginFunc(ctx, w.Pool, func(tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", owner); err != nil {
 				return err
 			}
 			var current int64
-			err := tx.QueryRow(ctx, `SELECT id FROM photos WHERE id=$1 AND owner_id=$2 AND sha256=$3 AND status='ready' AND deleted_at IS NULL AND purged_at IS NULL AND NOT EXISTS(SELECT FROM photo_links WHERE hidden_id=$1) FOR UPDATE`, id, owner, hash).Scan(&current)
+			err := tx.QueryRow(ctx, `SELECT p.id FROM photos p WHERE p.id=$1 AND p.owner_id=$2 AND p.sha256=$3 AND `+faceScanEligible+` FOR UPDATE`, id, owner, hash).Scan(&current)
 			if errors.Is(err, pgx.ErrNoRows) {
 				return nil
 			}
@@ -78,9 +168,9 @@ func (w *FaceWorker) Work(ctx context.Context, _ *river.Job[FaceScanArgs]) error
 			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT FROM face_scans WHERE photo_id=$1 AND sha256=$2 AND retry_at IS NULL)", id, hash).Scan(&complete); err != nil || complete {
 				return err
 			}
-			if readErr != nil {
+			if scanErr != nil {
 				_, err = tx.Exec(ctx, `INSERT INTO face_scans(photo_id,model,sha256,retry_at,error) VALUES($1,$2,$3,now()+interval '10 minutes',$4)
-      ON CONFLICT(photo_id) DO UPDATE SET retry_at=excluded.retry_at,model=excluded.model,error=excluded.error,scanned_at=now() WHERE face_scans.retry_at IS NOT NULL`, id, health.Faces.Model, hash, readErr.Error())
+      ON CONFLICT(photo_id) DO UPDATE SET retry_at=excluded.retry_at,model=excluded.model,error=excluded.error,scanned_at=now() WHERE face_scans.retry_at IS NOT NULL`, id, health.Faces.Model, hash, scanErr.Error())
 				return err
 			}
 			if _, err = tx.Exec(ctx, "DELETE FROM face_scans WHERE photo_id=$1", id); err != nil {
@@ -112,9 +202,6 @@ func (w *FaceWorker) Work(ctx context.Context, _ *river.Job[FaceScanArgs]) error
 		})
 		if err != nil {
 			return err
-		}
-		if readErr != nil {
-			return readErr
 		}
 	}
 	return nil

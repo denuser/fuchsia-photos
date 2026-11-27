@@ -17,8 +17,7 @@ const (
 	StateUnavailable State = "unavailable"
 	// StateAvailable means the service answers with the configured model.
 	StateAvailable State = "available"
-	// StateMismatch means the service answers with another model. Its vectors
-	// could not be compared with the stored ones, so nothing uses it.
+	// StateMismatch means the service answers with an incompatible model.
 	StateMismatch State = "mismatch"
 )
 
@@ -43,6 +42,7 @@ type Monitor struct {
 
 	mu          sync.Mutex
 	status      Status
+	faceState   State
 	onAvailable func()
 }
 
@@ -52,11 +52,16 @@ func NewMonitor(client *Client, model string) *Monitor {
 	if client == nil {
 		state = StateDisabled
 	}
+	faceState := state
+	if client != nil && client.token == "" {
+		faceState = StateDisabled
+	}
 	return &Monitor{
-		client:   client,
-		model:    model,
-		interval: 30 * time.Second,
-		status:   Status{State: state, Model: model},
+		client:    client,
+		model:     model,
+		interval:  30 * time.Second,
+		status:    Status{State: state, Model: model},
+		faceState: faceState,
 	}
 }
 
@@ -78,6 +83,19 @@ func (m *Monitor) Status() Status {
 // the last time it was asked.
 func (m *Monitor) Available() bool {
 	return m.Status().State == StateAvailable
+}
+
+// FacesAvailable reports whether the last health check advertised a supported
+// face model. Face inference can run independently of the search model.
+func (m *Monitor) FacesAvailable() bool {
+	return m.FaceState() == StateAvailable
+}
+
+// FaceState is the last known state of face inference, independent of search.
+func (m *Monitor) FaceState() State {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.faceState
 }
 
 // Run checks the service at once and then at the interval, until ctx ends.
@@ -121,24 +139,41 @@ func (m *Monitor) Check(ctx context.Context) Status {
 		next.ServiceModel = health.Model
 		next.Device = health.Device
 	}
-	m.set(next)
+	faceState := StateUnavailable
+	switch {
+	case m.client.token == "", err == nil && health.Faces == nil:
+		faceState = StateDisabled
+	case err == nil && health.Faces.supported():
+		faceState = StateAvailable
+	case err == nil:
+		faceState = StateMismatch
+	}
+	m.set(next, &faceState)
 	return next
 }
 
-// Failed records that a call to the service failed, so that nothing else
-// calls it until the next check succeeds.
+// Failed pauses search and embedding until the next successful health check.
 func (m *Monitor) Failed(err error) {
 	if m.client == nil {
 		return
 	}
 	now := time.Now()
-	m.set(Status{State: StateUnavailable, Model: m.model, Error: err.Error(), CheckedAt: &now})
+	m.set(Status{State: StateUnavailable, Model: m.model, Error: err.Error(), CheckedAt: &now}, nil)
 }
 
-func (m *Monitor) set(next Status) {
+func (m *Monitor) faceFailed() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.faceState = StateUnavailable
+}
+
+func (m *Monitor) set(next Status, faceState *State) {
 	m.mu.Lock()
 	previous := m.status.State
 	m.status = next
+	if faceState != nil {
+		m.faceState = *faceState
+	}
 	onAvailable := m.onAvailable
 	m.mu.Unlock()
 

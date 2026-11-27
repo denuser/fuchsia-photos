@@ -8,6 +8,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/magellanica-app/magellanica-photos/backend/internal/ml"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/store"
 )
@@ -181,16 +183,17 @@ type faceScanJSON struct {
 }
 
 type faceScansJSON struct {
-	Scanned   int64          `json:"scanned"`
-	WithFaces int64          `json:"withFaces"`
-	Failing   int64          `json:"failing"`
-	Scans     []faceScanJSON `json:"scans"`
+	ServiceState ml.State       `json:"serviceState"`
+	Scanned      int64          `json:"scanned"`
+	WithFaces    int64          `json:"withFaces"`
+	Failing      int64          `json:"failing"`
+	Scans        []faceScanJSON `json:"scans"`
 }
 
 // getFaceScans is the log of the face scans: which previews went to the ML
 // service, how many faces it found in each, and why a scan failed.
 func (s *server) getFaceScans(w http.ResponseWriter, r *http.Request) {
-	out := faceScansJSON{Scans: []faceScanJSON{}}
+	out := faceScansJSON{ServiceState: s.ML.Monitor.FaceState(), Scans: []faceScanJSON{}}
 	err := s.Pool.QueryRow(r.Context(), `SELECT count(*) FILTER (WHERE retry_at IS NULL),
   count(*) FILTER (WHERE retry_at IS NULL AND EXISTS(SELECT FROM photo_faces f WHERE f.photo_id=s.photo_id)),
   count(*) FILTER (WHERE retry_at IS NOT NULL) FROM face_scans s`).Scan(&out.Scanned, &out.WithFaces, &out.Failing)
@@ -219,4 +222,21 @@ func (s *server) getFaceScans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *server) getPhotoFaceScan(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	scan, err := ml.LookupPhotoFaceScan(r.Context(), s.Pool, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "photo not found")
+		return
+	}
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, scan)
 }

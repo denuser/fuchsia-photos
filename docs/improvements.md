@@ -29,7 +29,7 @@ Improvements after stages 0 to 6 of the [roadmap](roadmap.md). Numbers are stabl
 | 23 | [Sign in with OIDC](#23-sign-in-with-oidc) | Built; checked with Google on 2026-11-25 | Apple and Yandex ID |
 | 24 | [Two-factor sign-in (TOTP)](#24-two-factor-sign-in-totp) | Built; checked with an authenticator app on 2026-11-25 | The browser test does not cover it |
 | 25 | [Near-duplicates and bursts](#25-near-duplicates-and-bursts) | Step 1 built; not yet checked on the development stack | Check the page on the development stack; stacks in the timeline with the profile setting; the limits as settings; the burst check without the ML service |
-| 26 | [People](#26-people) | Built | Calibrate grouping on labelled portraits and check the page on the development stack |
+| 26 | [People](#26-people) | Built, reliability follow-up implemented | Calibrate grouping on labelled portraits and check the new diagnostics on a deployed instance |
 
 ## 1. Administration page
 
@@ -784,7 +784,7 @@ Questions that were asked (kept for the record):
 
 ## 26. People
 
-**Status:** built in the ML service, background queue, database, private API and People page. Grouping thresholds are provisional. The HTTP route was checked with real weights on one public photo and one synthetic image without faces.
+**Status:** built in the ML service, background queue, database, private API and People page. The reliability follow-up below is implemented. Grouping thresholds are provisional. The HTTP route was checked with real weights on one public photo and one synthetic image without faces.
 
 People is a private page of face groups from the owner's library. A group opens a photo grid, can be named or renamed, and can be merged with another group. The owner can move a face to a different or new group or ignore a wrong detection. A group represents a person the owner recognizes, with names entered by the owner.
 
@@ -794,3 +794,12 @@ People is a private page of face groups from the owner's library. A group opens 
 4. **Page and checks.** The page groups face occurrences by photo and shows a separate correction action for each face. Serve covers through an owner-checked route with private, non-cacheable responses. Shared albums, public links and administrator photo views never expose another account's people data. Test access across two accounts, a photo with no faces, simultaneous indexing and correction, reprocessing after a library-file edit, and trash, restore and purge. Add translations for all ten languages.
 
 Decided on 2026-11-26: run face inference in the existing optional ML service on a trusted home host. The NAS does not have to run inference.
+
+### Face scan reliability follow-up
+
+Implemented on 2026-11-27. These changes cover queue reliability and scan diagnostics.
+
+1. **Verify offline scheduling.** Finish checking the existing change that gates queue insertion on the last health result. Search indexing needs the configured embedding model. Face scans need a token and a supported face model, even if the search model differs. Test an empty configuration, an unreachable service, search only, and a return to service. Verify that River inserts no new ML jobs after the health check reports an outage. Previously recorded jobs age out of the hourly counter normally.
+2. **Handle outages during a scan.** Distinguish transport failures and temporary service responses from photo errors using typed errors. Pause the batch when `POST /faces` times out, loses its connection, is rate limited or receives a temporary gateway or availability response. Report authorization, capability and incompatible responses as service problems. These failures and worker cancellation leave the photo's scan record alone and stop the batch before another photo is sent. Keep photo errors, such as a missing preview or a 413 or 422 response, in the photo-level journal and retry them with the existing delay. Check health after an ambiguous inference failure before treating it as an outage. If health remains good and the same input repeatedly fails, make it wait for a retry so later photos can proceed. Test an outage after a successful health check, recovery of the same photo, and a rejected preview when the service stays up.
+3. **Make a photo's status inspectable.** Show face service availability in Logs → ML, including when search works and faces are disabled. Provide an administrator lookup by photo ID so the latest-50 view does not hide an older result. Reuse the worker's current eligibility rules and match scan records by the current source hash. Distinguish a photo waiting for a scan, a photo ineligible for scanning, a recorded error, and a completed scan with its face count, including zero.
+4. **Verify the preview and backfill path.** Use a fake ML service to assert that an existing ready RAW photo sends the bytes of its stored viewer preview to `/faces`. Check that a RAW + JPEG pair scans only the visible JPEG and that subsequent runs skip photos with a completed scan for the current file revision. When the test instance reconnects, compare one existing photo's journal result with the result on the same preview in isolation.

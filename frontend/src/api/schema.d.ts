@@ -1162,6 +1162,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ml/faces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The face scan state for a photo's current file (administrators only) */
+        get: operations["getPhotoFaceScan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/albums": {
         parameters: {
             query?: never;
@@ -2439,6 +2458,7 @@ export interface components {
             failedAt: string;
         };
         FaceScans: {
+            serviceState: components["schemas"]["MLState"];
             /**
              * Format: int64
              * @description Photos whose preview went to the ML service and came back
@@ -2466,6 +2486,17 @@ export interface components {
             /** @description Faces found, 0 if none or the scan failed */
             faces: number;
             /** @description Why the scan failed, empty on success */
+            error: string;
+        };
+        PhotoFaceScan: {
+            /** Format: int64 */
+            photoId: number;
+            name: string;
+            /** @enum {string} */
+            state: "waiting" | "ineligible" | "error" | "completed";
+            /** Format: date-time */
+            scannedAt: string | null;
+            faces: number;
             error: string;
         };
         PhotoIds: number[];
@@ -4420,6 +4451,30 @@ export interface operations {
                 };
             };
             403: components["responses"]["Error"];
+        };
+    };
+    getPhotoFaceScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scan state and any result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoFaceScan"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     listAlbums: {

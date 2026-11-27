@@ -544,6 +544,17 @@ const ko: typeof en = {
     ml: 'ML',
   },
   faceLog: {
+    service: '얼굴 인식',
+    serviceStates: {
+      available: '사용 가능',
+      unavailable: '사용 불가',
+      mismatch: '지원되지 않는 얼굴 모델',
+      disabled: '꺼짐',
+    },
+    photoId: '사진 ID',
+    lookup: '결과 찾기',
+    waiting: '스캔 대기 중',
+    ineligible: '스캔 대상이 아님',
     description: '얼굴 인식을 위해 미리보기를 ML 서비스로 보낸 사진을 최신순으로 보여 줍니다. 최근 50개입니다.',
     totals: '스캔함: {scanned}, 얼굴 있음: {withFaces}, 재시도 대기: {failing}',
     none: '아직 스캔이 없습니다',

@@ -1746,6 +1746,23 @@ paths:
                 $ref: "#/components/schemas/FaceScans"
         "403":
           $ref: "#/components/responses/Error"
+  /ml/faces/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      operationId: getPhotoFaceScan
+      summary: The face scan state for a photo's current file (administrators only)
+      responses:
+        "200":
+          description: The scan state and any result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotoFaceScan"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
   /albums:
     get:
       operationId: listAlbums
@@ -3664,8 +3681,10 @@ components:
           format: date-time
     FaceScans:
       type: object
-      required: [scanned, withFaces, failing, scans]
+      required: [serviceState, scanned, withFaces, failing, scans]
       properties:
+        serviceState:
+          $ref: "#/components/schemas/MLState"
         scanned:
           description: Photos whose preview went to the ML service and came back
           type: integer
@@ -3700,6 +3719,25 @@ components:
           type: integer
         error:
           description: Why the scan failed, empty on success
+          type: string
+    PhotoFaceScan:
+      type: object
+      required: [photoId, name, state, scannedAt, faces, error]
+      properties:
+        photoId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        state:
+          type: string
+          enum: [waiting, ineligible, error, completed]
+        scannedAt:
+          type: [string, "null"]
+          format: date-time
+        faces:
+          type: integer
+        error:
           type: string
     PhotoIds:
       type: array

@@ -544,6 +544,17 @@ const ja: typeof en = {
     ml: 'ML',
   },
   faceLog: {
+    service: '顔認識',
+    serviceStates: {
+      available: '利用可能',
+      unavailable: '利用できません',
+      mismatch: '非対応の顔認識モデル',
+      disabled: '無効',
+    },
+    photoId: '写真ID',
+    lookup: '結果を検索',
+    waiting: 'スキャン待ち',
+    ineligible: 'スキャン対象外',
     description: '顔認識のためにプレビューをMLサービスへ送った写真を新しい順に表示します。最新の50件です。',
     totals: 'スキャン済み：{scanned}、顔あり：{withFaces}、再試行待ち：{failing}',
     none: 'スキャンはまだありません',

@@ -21,6 +21,17 @@ import (
 // ErrModelMismatch means the service runs a model other than the configured one.
 var ErrModelMismatch = errors.New("the ML service runs another model")
 
+var errFacePreviewSize = errors.New("ML service: unsupported face preview size")
+
+type httpError struct {
+	method, path, status, detail string
+	code                         int
+}
+
+func (e *httpError) Error() string {
+	return fmt.Sprintf("ML service: %s %s: %s: %s", e.method, e.path, e.status, e.detail)
+}
+
 // Client calls the ML service over HTTP.
 type Client struct {
 	url   string
@@ -57,6 +68,10 @@ type FaceModel struct {
 	Dimensions int    `json:"dimensions"`
 }
 
+func (m *FaceModel) supported() bool {
+	return m != nil && m.Model != "" && m.Dimensions == 128
+}
+
 // DetectedFace contains normalized left, top, width and height coordinates and
 // a unit vector in the face model's embedding space.
 type DetectedFace struct {
@@ -66,11 +81,11 @@ type DetectedFace struct {
 
 // DetectFaces analyzes a viewer preview using the advertised face model.
 func (c *Client) DetectFaces(ctx context.Context, preview []byte, model FaceModel) ([]DetectedFace, error) {
-	if c.token == "" || model.Model == "" || model.Dimensions != 128 {
+	if c.token == "" || !model.supported() {
 		return nil, errors.New("ML service: face inference requires a token and a supported face model")
 	}
 	if len(preview) == 0 || len(preview) > 16<<20 {
-		return nil, errors.New("ML service: unsupported face preview size")
+		return nil, errFacePreviewSize
 	}
 	var result struct {
 		Model string         `json:"model"`
@@ -190,7 +205,10 @@ func (c *Client) do(ctx context.Context, method, path, contentType string, body 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("ML service: %s %s: %s: %s", method, path, resp.Status, strings.TrimSpace(string(detail)))
+		return &httpError{
+			method: method, path: path, status: resp.Status,
+			detail: strings.TrimSpace(string(detail)), code: resp.StatusCode,
+		}
 	}
 	if err := json.NewDecoder(resp.Body).Decode(into); err != nil {
 		return fmt.Errorf("ML service: %s %s: decode response: %w", method, path, err)

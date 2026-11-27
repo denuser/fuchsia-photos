@@ -544,6 +544,17 @@ const zh: typeof en = {
     ml: 'ML',
   },
   faceLog: {
+    service: '人脸识别',
+    serviceStates: {
+      available: '可用',
+      unavailable: '不可用',
+      mismatch: '不支持此人脸模型',
+      disabled: '已关闭',
+    },
+    photoId: '照片 ID',
+    lookup: '查找扫描结果',
+    waiting: '等待扫描',
+    ineligible: '此照片不在扫描范围内',
     description: '为识别人脸而将预览发送到 ML 服务的照片，最新的在前，显示最近 50 条。',
     totals: '已扫描：{scanned}，含人脸：{withFaces}，等待重试：{failing}',
     none: '还没有扫描记录',

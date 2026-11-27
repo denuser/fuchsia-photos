@@ -3,11 +3,15 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"sync"
 	"testing"
 
 	"github.com/magellanica-app/magellanica-photos/backend/internal/ml"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
 )
 
 func TestPeopleIndexAndCorrections(t *testing.T) {
@@ -86,5 +90,101 @@ func TestPeopleIndexAndCorrections(t *testing.T) {
 	}
 	if len(list(s.anna, path)) != 1 {
 		t.Fatal("restore lost face")
+	}
+}
+
+func TestFaceScanStatusAndBackfill(t *testing.T) {
+	s := setupSharing(t)
+	ctx := t.Context()
+	raw := s.anna.addPhoto("rotated.dng")
+	rejected := s.anna.addPhoto("landscape.png")
+	hidden := s.anna.addPhoto("rotated-preview-only.dng")
+	jpeg := s.anna.addPhoto("rotated.jpg")
+	for id, preview := range map[int64]string{raw: "standalone raw preview", rejected: "rejected preview", hidden: "hidden raw preview", jpeg: "paired jpeg preview"} {
+		markReady(t, s.e, id)
+		if err := storage.WriteFileAtomic(s.e.layout.Preview(id, storage.PreviewViewer, "webp"), []byte(preview)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.e.pool.Exec(ctx, "INSERT INTO photo_links(hidden_id,shown_id,kind) VALUES($1,$2,'raw')", hidden, jpeg); err != nil {
+		t.Fatal(err)
+	}
+	lookup := func(id int64, state string) ml.PhotoFaceScan {
+		t.Helper()
+		r := s.root.get("/api/v1/ml/faces/" + itoa(id))
+		wantStatus(t, r, http.StatusOK)
+		got := decode[ml.PhotoFaceScan](t, r)
+		if got.PhotoID != id || got.State != state {
+			t.Fatalf("scan for %d = %+v, want %s", id, got, state)
+		}
+		return got
+	}
+	wantStatus(t, s.anna.get("/api/v1/ml/faces/"+itoa(raw)), http.StatusForbidden)
+	wantStatus(t, s.root.get("/api/v1/ml/faces/999999"), http.StatusNotFound)
+	lookup(raw, "waiting")
+	lookup(hidden, "ineligible")
+
+	var mu sync.Mutex
+	var sent []string
+	offline := true
+	model := ml.FaceModel{Model: "face-test", Dimensions: 128}
+	service := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			json.NewEncoder(w).Encode(ml.Health{Faces: &model})
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+			http.Error(w, "cannot read preview", http.StatusBadRequest)
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		sent = append(sent, string(body))
+		if offline {
+			http.Error(w, "offline", http.StatusServiceUnavailable)
+			return
+		}
+		if string(body) == "rejected preview" {
+			http.Error(w, "cannot decode preview", http.StatusUnprocessableEntity)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"model": model.Model, "faces": []ml.DetectedFace{}})
+	}))
+	defer service.Close()
+	client := ml.NewClient(service.URL, "secret")
+	monitor := ml.NewMonitor(client, "")
+	monitor.Check(ctx)
+	worker := ml.FaceWorker{Client: client, Monitor: monitor, Pool: s.e.pool, Layout: s.e.layout}
+	run := func() {
+		t.Helper()
+		if err := worker.Work(ctx, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run()
+	lookup(raw, "waiting")
+	if monitor.FacesAvailable() {
+		t.Fatal("face scans still report available after the service failed")
+	}
+	mu.Lock()
+	offline = false
+	mu.Unlock()
+	monitor.Check(ctx)
+	run()
+	run()
+	if scan := lookup(raw, "completed"); scan.Faces != 0 || scan.ScannedAt == nil || scan.Error != "" {
+		t.Fatalf("zero-face scan = %+v", scan)
+	}
+	if scan := lookup(rejected, "error"); scan.Error == "" {
+		t.Fatal("the rejected preview has no recorded error")
+	}
+	lookup(jpeg, "completed")
+	lookup(hidden, "ineligible")
+	mu.Lock()
+	defer mu.Unlock()
+	if want := []string{"standalone raw preview", "standalone raw preview", "rejected preview", "paired jpeg preview"}; !slices.Equal(sent, want) {
+		t.Errorf("ML received %q, want %q", sent, want)
 	}
 }

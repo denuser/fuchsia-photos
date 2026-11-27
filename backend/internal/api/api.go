@@ -181,6 +181,7 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/search/status", s.authenticated(s.getSearchStatus))
 	mux.HandleFunc("GET /api/v1/ml", s.admin(s.getMLStatus))
 	mux.HandleFunc("GET /api/v1/ml/faces", s.admin(s.getFaceScans))
+	mux.HandleFunc("GET /api/v1/ml/faces/{id}", s.admin(s.getPhotoFaceScan))
 
 	mux.HandleFunc("GET /api/v1/albums", s.authenticated(s.listAlbums))
 	mux.HandleFunc("POST /api/v1/albums", s.authenticated(s.createAlbum))
