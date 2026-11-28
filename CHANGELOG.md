@@ -4,6 +4,7 @@ Changes in each release. Add changes under "Unreleased" as they are made; `make 
 
 ## Unreleased
 
+- The application holds less memory after heavy image work, such as hashing the previews of a whole library: the image limits glibc to two memory arenas (`MALLOC_ARENA_MAX=2`). On the NAS the process held 680 MiB without it and 120 MiB with it. `docker stats` also counts cached files; [Deployment](docs/deployment.md) shows how to see the process's own memory.
 - Background search indexing and face scans are queued only when the ML service reports the corresponding model is available. An offline or unconfigured service no longer adds empty runs to the queue. Runs interrupted by an outage before processing any photo are excluded from completed-job counts.
 - A service outage during face scanning leaves the photo queued for the next run. The ML log shows face recognition availability and can look up a photo's scan result by ID.
 

@@ -150,6 +150,11 @@ RUN --mount=type=bind,from=libraw,source=/out,target=/tmp/libraw \
         /tmp/libraw/libraw25_*.deb \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/ /usr/local/bin/
+# libvips allocates from several threads, and glibc gives each thread an arena
+# of its own that keeps freed memory. On the NAS on 2026-11-28 the process
+# held 680 MiB after the previews of a whole library were hashed; with two
+# arenas, 120 MiB while an upload of many photos was processed.
+ENV MALLOC_ARENA_MAX=2
 EXPOSE 8080
 CMD ["magellanica-photos", "serve"]
 
