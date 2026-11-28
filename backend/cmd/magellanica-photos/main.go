@@ -185,16 +185,24 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 			scanner.Register(workers)
 			libraries.Register(workers)
 			embedder.Register(workers)
+			river.AddWorker(workers, &ml.FaceWorker{Client: mlClient, Monitor: embedder.Monitor, Pool: pool, Layout: layout})
 			similarity.Register(workers)
 			copies.Register(workers)
 		},
 		Queues: map[string]river.QueueConfig{
 			ml.QueueML:      {MaxWorkers: 1},
+			"people":        {MaxWorkers: 1},
 			library.Queue:   {MaxWorkers: 1},
 			transcode.Queue: {MaxWorkers: 1},
 		},
-		PeriodicJobs: []*river.PeriodicJob{ml.PeriodicJob(), similar.PeriodicJob(), transcode.PeriodicJob(), library.PeriodicJob()},
-		Processed:    copies.Processed,
+		PeriodicJobs: []*river.PeriodicJob{
+			ml.PeriodicJob(embedder.Monitor),
+			ml.PeopleJob(embedder.Monitor),
+			similar.PeriodicJob(),
+			transcode.PeriodicJob(),
+			library.PeriodicJob(),
+		},
+		Processed: copies.Processed,
 	})
 	if err != nil {
 		return fmt.Errorf("create job client: %w", err)

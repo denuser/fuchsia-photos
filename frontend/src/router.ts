@@ -10,7 +10,7 @@ import FavoritesView from './views/FavoritesView.vue'
 import MemoriesView from './views/MemoriesView.vue'
 import ImportView from './views/ImportView.vue'
 import LibraryFoldersView from './views/LibraryFoldersView.vue'
-import ActivityView from './views/ActivityView.vue'
+import LogsView from './views/LogsView.vue'
 import LoginView from './views/LoginView.vue'
 import PublicAlbumView from './views/PublicAlbumView.vue'
 import ProfileView from './views/ProfileView.vue'
@@ -36,6 +36,7 @@ export const router = createRouter({
     { path: '/memories', component: MemoriesView },
     // Loaded when first opened, so that the map library stays out of the main bundle.
     { path: '/map', component: () => import('./views/MapView.vue') },
+    { path: '/people', component: () => import('./views/PeopleView.vue') },
     { path: '/similar', component: SimilarView },
     { path: '/archive', component: ArchiveView },
     { path: '/shared', component: SharedView },
@@ -46,7 +47,8 @@ export const router = createRouter({
     { path: '/import', component: ImportView, meta: { admin: true } },
     { path: '/library-folders', component: LibraryFoldersView, meta: { admin: true } },
     { path: '/users', component: UsersView, meta: { admin: true } },
-    { path: '/activity', component: ActivityView, meta: { admin: true } },
+    { path: '/logs', component: LogsView, meta: { admin: true } },
+    { path: '/activity', redirect: '/logs' },
     { path: '/admin', component: AdminView, meta: { admin: true } },
     { path: '/:rest(.*)*', redirect: '/' },
   ],

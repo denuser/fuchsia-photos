@@ -99,12 +99,16 @@ func (EmbedPhotosArgs) InsertOpts() river.InsertOpts {
 	}
 }
 
-// PeriodicJob starts a run every minute. Runs do nothing while the service is
-// unavailable.
-func PeriodicJob() *river.PeriodicJob {
+// PeriodicJob queues embedding every minute while the search model is available.
+func PeriodicJob(monitor *Monitor) *river.PeriodicJob {
 	return river.NewPeriodicJob(
 		river.PeriodicInterval(time.Minute),
-		func() (river.JobArgs, *river.InsertOpts) { return EmbedPhotosArgs{}, nil },
+		func() (river.JobArgs, *river.InsertOpts) {
+			if !monitor.Available() {
+				return nil, nil
+			}
+			return EmbedPhotosArgs{}, nil
+		},
 		&river.PeriodicJobOpts{RunOnStart: true},
 	)
 }
@@ -122,7 +126,13 @@ type embedWorker struct {
 func (w *embedWorker) Timeout(*river.Job[EmbedPhotosArgs]) time.Duration { return jobTimeout }
 
 func (w *embedWorker) Work(ctx context.Context, _ *river.Job[EmbedPhotosArgs]) error {
-	_, err := w.service.EmbedPending(ctx, runLength)
+	done, err := w.service.embedPending(ctx, runLength)
+	if errors.Is(err, ErrUnavailable) {
+		if done == 0 {
+			return river.MetadataSet(ctx, "ml_skipped", true)
+		}
+		return nil
+	}
 	return err
 }
 
@@ -131,8 +141,16 @@ func (w *embedWorker) Work(ctx context.Context, _ *river.Job[EmbedPhotosArgs]) e
 // many photos got a vector. A missing service is not an error: the photos wait
 // for the next run.
 func (s *Service) EmbedPending(ctx context.Context, limit time.Duration) (int, error) {
+	done, err := s.embedPending(ctx, limit)
+	if errors.Is(err, ErrUnavailable) {
+		err = nil
+	}
+	return done, err
+}
+
+func (s *Service) embedPending(ctx context.Context, limit time.Duration) (int, error) {
 	if s.Monitor == nil || !s.Monitor.Available() {
-		return 0, nil
+		return 0, ErrUnavailable
 	}
 	deadline := time.Now().Add(limit)
 	done := 0
@@ -161,7 +179,7 @@ func (s *Service) EmbedPending(ctx context.Context, limit time.Duration) (int, e
 			} else {
 				s.Monitor.Failed(err)
 			}
-			return done, nil
+			return done, ErrUnavailable
 		case err != nil:
 			return done, err
 		}

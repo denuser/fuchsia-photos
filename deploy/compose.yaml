@@ -44,6 +44,10 @@ services:
       OIDC_2_ISSUER: ${OIDC_2_ISSUER:-}
       OIDC_2_CLIENT_ID: ${OIDC_2_CLIENT_ID:-}
       OIDC_2_CLIENT_SECRET: ${OIDC_2_CLIENT_SECRET:-}
+      # Search by description, similar photos and people, off while ML_URL is empty.
+      # People also need ML_TOKEN. See "Search and people" in docs/deployment.md.
+      ML_URL: ${ML_URL:-}
+      ML_TOKEN: ${ML_TOKEN:-}
     # Docker keeps container logs forever unless told otherwise.
     logging:
       driver: json-file

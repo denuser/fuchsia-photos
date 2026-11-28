@@ -63,6 +63,7 @@ const navItems = computed(() => [
   { to: '/favorites', icon: 'fa-star', title: t('nav.favorites') },
   { to: '/shared', icon: 'fa-users', title: t('nav.shared') },
   { to: '/tags', icon: 'fa-tags', title: t('nav.tags') },
+  { to: '/people', icon: 'fa-users', title: t('people.title') },
   { to: '/similar', icon: 'fa-clone', title: t('nav.similar') },
   { to: '/archive', icon: 'fa-box-archive', title: t('nav.archive') },
   { to: '/trash', icon: 'fa-trash-can', title: t('nav.trash') },
@@ -174,7 +175,7 @@ window.addEventListener('beforeunload', (event) => {
           <v-list-item :subtitle="auth.isAdmin ? t('roles.admin') : t('roles.user')" :title="auth.user.login" />
           <v-divider />
           <v-list-item v-if="auth.isAdmin" to="/users" prepend-icon="fa-users" :title="t('users.title')" />
-          <v-list-item v-if="auth.isAdmin" to="/activity" prepend-icon="fa-clock-rotate-left" :title="t('activity.title')" />
+          <v-list-item v-if="auth.isAdmin" to="/logs" prepend-icon="fa-clock-rotate-left" :title="t('logs.title')" />
           <v-list-item v-if="auth.isAdmin" to="/import" prepend-icon="fa-file-import" :title="t('import.title')" />
           <v-list-item v-if="auth.isAdmin" to="/library-folders" prepend-icon="fa-folder-open" :title="t('library.title')" />
           <v-list-item v-if="auth.isAdmin" to="/admin" prepend-icon="fa-gear" :title="t('admin.title')" />

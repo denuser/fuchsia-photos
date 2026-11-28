@@ -129,6 +129,31 @@ Text search leaves out photos less similar to the query than a threshold the ser
 
 Once the service is up, the application finds it within 30 seconds and embeds all processed photos in the background. The administration page shows the progress. The service has no automated tests during the stage 7 spike; the backend tests use a fake service.
 
+### Face inference
+
+The existing ML service can optionally detect faces and compute face vectors on its host CPU. Enable it on a trusted home-network host with `ML_FACES=1` and an `ML_TOKEN`:
+
+```sh
+ML_TOKEN=<token> ML_FACES=1 make ml
+```
+
+`ML_FACES=1` makes `make ml` install the `faces` extra, and the service downloads both ONNX files with their licenses into the Hugging Face cache on its first start and refuses files whose SHA-256 differs from the table below. To run without internet, download the files yourself and set both paths instead; the paths take precedence over the download.
+
+| Model file | SHA-256 |
+|---|---|
+| [`face_detection_yunet_2023mar.onnx`](https://huggingface.co/opencv/face_detection_yunet/blob/main/face_detection_yunet_2023mar.onnx) | `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4` |
+| [`face_recognition_sface_2021dec.onnx`](https://huggingface.co/opencv/face_recognition_sface/blob/main/face_recognition_sface_2021dec.onnx) | `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79` |
+
+```sh
+ML_FACE_DETECTOR=/path/to/face_detection_yunet_2023mar.onnx \
+ML_FACE_RECOGNIZER=/path/to/face_recognition_sface_2021dec.onnx \
+ML_TOKEN=<token> make ml ML_UV_ARGS='--extra faces'
+```
+
+Without `ML_FACES` and the paths, `make ml` runs the existing text and image model alone. Keep the model licenses with weights downloaded by hand. [YuNet license](https://huggingface.co/opencv/face_detection_yunet/blob/main/LICENSE) and [SFace license](https://huggingface.co/opencv/face_recognition_sface/blob/main/LICENSE).
+
+Authenticated `GET /health` advertises a `faces` object when face inference is enabled. The authenticated `POST /faces` accepts one viewer preview up to 16 MiB. The application sends the stored WebP or JPEG, including for RAW photos. For RAW + JPEG pairs it scans the visible JPEG photo's viewer preview. It returns the face model identifier and a list of faces with normalized left, top, width and height coordinates and a 128-element unit vector. The identifier includes the weight hashes, OpenCV version and preprocessing revision. When the first pass (confidence 0.9) finds nothing, the service retries with enhanced contrast at confidence `ML_FACE_FALLBACK_SCORE` (default 0.6; 0 turns the retry off). If that also finds nothing and the long edge is under 1600 px, it retries again at twice the size. Logs → ML shows face recognition availability and the 50 most recent scans. Administrators can look up a specific photo by ID to see whether it is eligible, waiting, failed, or completed with a face count. Service outages pause scanning and leave the photo eligible for the next run. Frames and vectors are processed in memory. Configure the application with the same token and the home service URL. The scheduler queues a scan every minute while the last health check reports a supported face model and the application has an ML token. Scans include eligible photos already in the library. Each owner can browse and correct their groups under People even when the ML service is offline. See [improvement 26](improvements.md#26-people).
+
 ## Frontend
 
 | Task | Command |

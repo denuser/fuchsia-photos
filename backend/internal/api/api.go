@@ -144,6 +144,9 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/photos/events", s.authenticated(s.photoEvents))
 	mux.HandleFunc("GET /api/v1/photos/months", s.authenticated(s.countPhotoMonths))
 	mux.HandleFunc("GET /api/v1/photos/memories", s.authenticated(s.listMemories))
+	mux.HandleFunc("GET /api/v1/people/faces/{id}/thumbnail", s.authenticated(s.faceThumbnail))
+	mux.HandleFunc("GET /api/v1/people", s.authenticated(s.listPeople))
+	mux.HandleFunc("POST /api/v1/people", s.authenticated(s.editPeople))
 	mux.HandleFunc("GET /api/v1/similar", s.authenticated(s.listSimilar))
 	mux.HandleFunc("POST /api/v1/similar/dismiss", s.authenticated(s.dismissSimilar))
 	mux.HandleFunc("POST /api/v1/similar/resolve", s.authenticated(s.resolveSimilar))
@@ -177,6 +180,8 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/search", s.authenticated(s.searchPhotos))
 	mux.HandleFunc("GET /api/v1/search/status", s.authenticated(s.getSearchStatus))
 	mux.HandleFunc("GET /api/v1/ml", s.admin(s.getMLStatus))
+	mux.HandleFunc("GET /api/v1/ml/faces", s.admin(s.getFaceScans))
+	mux.HandleFunc("GET /api/v1/ml/faces/{id}", s.admin(s.getPhotoFaceScan))
 
 	mux.HandleFunc("GET /api/v1/albums", s.authenticated(s.listAlbums))
 	mux.HandleFunc("POST /api/v1/albums", s.authenticated(s.createAlbum))

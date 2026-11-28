@@ -144,6 +144,12 @@ func TestSearchWithoutService(t *testing.T) {
 
 	wantStatus(t, anna.get("/api/v1/ml"), http.StatusForbidden)
 	wantStatus(t, e.loggedIn("root").get("/api/v1/ml"), http.StatusOK)
+
+	wantStatus(t, anna.get("/api/v1/ml/faces"), http.StatusForbidden)
+	scans := decode[faceScansJSON](t, e.loggedIn("root").get("/api/v1/ml/faces"))
+	if scans.ServiceState != ml.StateDisabled || scans.Scanned != 0 || len(scans.Scans) != 0 {
+		t.Errorf("face scans = %+v, want none", scans)
+	}
 }
 
 func TestPurgeRemovesEmbeddings(t *testing.T) {

@@ -676,6 +676,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/people/faces/{id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["faceThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List private people or faces of one person, in pages of 100 */
+        get: operations["listPeople"];
+        put?: never;
+        /** Correct the current user's face groups */
+        post: operations["editPeople"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/similar": {
         parameters: {
             query?: never;
@@ -1103,6 +1137,42 @@ export interface paths {
         };
         /** The ML service, the embedding progress and the latest failures (administrators only) */
         get: operations["getMLStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ml/faces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The log of face scans, newest first (administrators only) */
+        get: operations["getFaceScans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ml/faces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** The face scan state for a photo's current file (administrators only) */
+        get: operations["getPhotoFaceScan"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1706,6 +1776,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        PersonItem: {
+            /** Format: int64 */
+            face: number;
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** Format: int64 */
+            photo: number;
+            version: number;
+            box: number[];
+        };
         QueueStats: {
             kinds: components["schemas"]["JobKindStats"][];
             /** @description The latest errors of jobs that failed or wait for another attempt, newest first, at most 10 */
@@ -2375,6 +2456,48 @@ export interface components {
             error: string;
             /** Format: date-time */
             failedAt: string;
+        };
+        FaceScans: {
+            serviceState: components["schemas"]["MLState"];
+            /**
+             * Format: int64
+             * @description Photos whose preview went to the ML service and came back
+             */
+            scanned: number;
+            /**
+             * Format: int64
+             * @description Scanned photos in which at least one face was found
+             */
+            withFaces: number;
+            /**
+             * Format: int64
+             * @description Photos whose scan failed and waits for a retry
+             */
+            failing: number;
+            /** @description The latest scans, newest first, at most 50 */
+            scans: components["schemas"]["FaceScan"][];
+        };
+        FaceScan: {
+            /** Format: int64 */
+            photoId: number;
+            name: string;
+            /** Format: date-time */
+            scannedAt: string;
+            /** @description Faces found, 0 if none or the scan failed */
+            faces: number;
+            /** @description Why the scan failed, empty on success */
+            error: string;
+        };
+        PhotoFaceScan: {
+            /** Format: int64 */
+            photoId: number;
+            name: string;
+            /** @enum {string} */
+            state: "waiting" | "ineligible" | "error" | "completed";
+            /** Format: date-time */
+            scannedAt: string | null;
+            faces: number;
+            error: string;
         };
         PhotoIds: number[];
         UploadResult: {
@@ -3615,6 +3738,83 @@ export interface operations {
             400: components["responses"]["Error"];
         };
     };
+    faceThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private JPEG face thumbnail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+        };
+    };
+    listPeople: {
+        parameters: {
+            query?: {
+                person?: number;
+                after?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Groups or face occurrences in ID order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonItem"][];
+                };
+            };
+        };
+    };
+    editPeople: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    action: "rename" | "merge" | "move" | "ignore";
+                    /** Format: int64 */
+                    person: number;
+                    /** Format: int64 */
+                    target?: number;
+                    /** Format: int64 */
+                    face?: number;
+                    name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listSimilar: {
         parameters: {
             query: {
@@ -4230,6 +4430,51 @@ export interface operations {
                 };
             };
             403: components["responses"]["Error"];
+        };
+    };
+    getFaceScans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The totals and the latest scans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FaceScans"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    getPhotoFaceScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scan state and any result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoFaceScan"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     listAlbums: {

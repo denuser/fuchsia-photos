@@ -49,8 +49,8 @@ func ReadQueueStats(ctx context.Context, pool *pgxpool.Pool) (QueueStats, error)
 			count(*) FILTER (WHERE state IN ('available', 'pending', 'scheduled')),
 			count(*) FILTER (WHERE state = 'running'),
 			count(*) FILTER (WHERE state = 'retryable'),
-			count(*) FILTER (WHERE state = 'completed' AND finalized_at > now() - interval '1 hour'),
-			count(*) FILTER (WHERE state = 'completed' AND finalized_at > now() - interval '1 day'),
+			count(*) FILTER (WHERE state = 'completed' AND NOT (metadata @> '{"ml_skipped":true}') AND finalized_at > now() - interval '1 hour'),
+			count(*) FILTER (WHERE state = 'completed' AND NOT (metadata @> '{"ml_skipped":true}') AND finalized_at > now() - interval '1 day'),
 			count(*) FILTER (WHERE state IN ('cancelled', 'discarded') AND finalized_at > now() - interval '1 day')
 		FROM river_job
 		GROUP BY kind
