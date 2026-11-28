@@ -8,6 +8,7 @@ import { apiError } from '../i18n/apiErrors'
 import { formatDuration } from '../lib/duration'
 import { rawFormats } from '../lib/rawFormats'
 import { useAuthStore } from '../stores/auth'
+import { useNoticesStore } from '../stores/notices'
 import { usePhotosStore } from '../stores/photos'
 import AppDialog from './AppDialog.vue'
 import AppFormGroup from './AppFormGroup.vue'
@@ -33,6 +34,8 @@ const emit = defineEmits<{
   tags: [photo: Photo]
   share: [photo: Photo]
   similar: [photo: Photo]
+  // The photo came back changed, such as turned, and replaces the one shown.
+  changed: [photo: Photo]
 }>()
 
 
@@ -117,6 +120,32 @@ const descriptionDraft = ref('')
 const descriptionSaving = ref(false)
 const descriptionError = ref('')
 
+// The owner turns a photo, with the versions hidden under it; the turned
+// previews come back at once. Videos and photos in the trash are not turned.
+const canRotate = computed(
+  () => canEditDescription.value && shown.value.id === props.photo.id && !isVideo(props.photo) && !props.photo.deletedAt,
+)
+const rotating = ref(false)
+const notices = useNoticesStore()
+
+async function rotate(degrees: 90 | 270) {
+  if (rotating.value) {
+    return
+  }
+  rotating.value = true
+  const { data, error } = await api.POST('/photos/{id}/rotate', {
+    params: { path: { id: props.photo.id } },
+    body: { degrees },
+  })
+  rotating.value = false
+  if (!data) {
+    notices.notify(apiError(error), 'error')
+    return
+  }
+  photosStore.merge([data])
+  emit('changed', data)
+}
+
 function editDescription() {
   descriptionDraft.value = description.value
   descriptionError.value = ''
@@ -177,6 +206,12 @@ const secondaryActions = computed<ViewerAction[]>(() => [
         click: () => (selectedVersion.value = selectedVersion.value === 'raw' ? null : 'raw'),
         active: selectedVersion.value === 'raw',
       }]
+    : []),
+  ...(canRotate.value
+    ? [
+        { key: 'rotate-left', icon: 'fa-rotate-left', text: t('viewer.rotateLeft'), click: () => rotate(270) },
+        { key: 'rotate-right', icon: 'fa-rotate-right', text: t('viewer.rotateRight'), click: () => rotate(90) },
+      ]
     : []),
   ...(canEditDescription.value ? [{ key: 'description', icon: 'fa-pen', text: t('viewer.editDescription'), click: editDescription }] : []),
   ...(props.canTag ? [{ key: 'tags', icon: 'fa-tag', text: t('browser.tags'), click: () => emit('tags', props.photo) }] : []),
@@ -300,9 +335,10 @@ const showOriginals = computed(() => auth.user?.viewerShowsOriginals ?? false)
 // originals are not downloaded again, and the viewer keeps the preview.
 const undecodable = reactive(new Set<string>())
 
-// The original of a video is no image, and can be gigabytes.
+// The original of a video is no image, and can be gigabytes. A turned photo
+// zooms into its preview, as the original is not turned.
 function canShowOriginal(photo: Photo) {
-  return !isVideo(photo) && !rawFormats.has(photo.mime) && !undecodable.has(photo.mime)
+  return !isVideo(photo) && !rawFormats.has(photo.mime) && !undecodable.has(photo.mime) && !photo.rotation
 }
 
 // A video plays in place of the photo once the user starts it: stepping
@@ -539,7 +575,10 @@ function loadOriginal() {
   )
 }
 
-const source = computed(() => (originalShown.value ? originalUrl(shown.value.id) : previewUrl(shown.value.id, 'viewer')))
+// The version changes when the previews are made again, such as after a turn.
+const source = computed(() =>
+  originalShown.value ? originalUrl(shown.value.id) : previewUrl(shown.value.id, 'viewer', shown.value.previewVersion),
+)
 
 // Loads the neighbours ahead of time, so that stepping through photos feels instant.
 watch(
@@ -547,7 +586,7 @@ watch(
   (neighbours) => {
     for (const photo of neighbours) {
       if (photo) {
-        new Image().src = previewUrl(photo.id, 'viewer')
+        new Image().src = previewUrl(photo.id, 'viewer', photo.previewVersion)
       }
     }
   },
@@ -660,8 +699,9 @@ watch(() => fit.value?.maxScale, () => {
   setView(scale, x, y)
 })
 
+// A turn shows the turned preview, as the original is not turned.
 watch(
-  () => shown.value.id,
+  () => [shown.value.id, shown.value.rotation],
   () => {
     originalShown.value = false
     naturalSize.value = null
@@ -932,7 +972,7 @@ onBeforeUnmount(() => {
         @transitionend="onSlideEnd"
       >
         <div v-if="previous" :key="previous.id" class="slide neighbour" :style="{ left: `calc(-100% - ${SLIDE_GAP}px)` }">
-          <img :src="previewUrl(previous.id, 'viewer')" alt="" class="image" draggable="false" />
+          <img :src="previewUrl(previous.id, 'viewer', previous.previewVersion)" alt="" class="image" draggable="false" />
         </div>
         <div v-if="video" class="slide" :style="{ paddingBottom: `${videoReserve}px` }">
           <template v-if="!unplayable">
@@ -940,7 +980,7 @@ onBeforeUnmount(() => {
               ref="videoElement"
               :key="shown.id"
               :src="videoSource"
-              :poster="previewUrl(shown.id, 'viewer')"
+              :poster="previewUrl(shown.id, 'viewer', shown.previewVersion)"
               :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
               class="image"
               data-testid="viewer-video"
@@ -960,7 +1000,7 @@ onBeforeUnmount(() => {
           </template>
           <template v-else>
             <img
-              :src="previewUrl(shown.id, 'viewer')"
+              :src="previewUrl(shown.id, 'viewer', shown.previewVersion)"
               :alt="shown.name"
               :style="fit ? { width: `${fit.width}px`, height: `${fit.height}px` } : undefined"
               class="image"
@@ -1005,7 +1045,7 @@ onBeforeUnmount(() => {
           />
         </div>
         <div v-if="next" :key="next.id" class="slide neighbour" :style="{ left: `calc(100% + ${SLIDE_GAP}px)` }">
-          <img :src="previewUrl(next.id, 'viewer')" alt="" class="image" draggable="false" />
+          <img :src="previewUrl(next.id, 'viewer', next.previewVersion)" alt="" class="image" draggable="false" />
         </div>
       </div>
     </div>

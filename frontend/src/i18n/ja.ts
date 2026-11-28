@@ -229,6 +229,8 @@ const ja: typeof en = {
     showRaw: 'RAW を表示',
     showPhoto: '写真を表示',
     originalVersion: 'オリジナル',
+    rotateLeft: '左に回転',
+    rotateRight: '右に回転',
     editDescription: '説明を編集',
     description: '説明',
     moreActions: 'その他の操作',
@@ -563,6 +565,7 @@ const ja: typeof en = {
     photo: '写真',
     result: '結果',
     found: '顔 {n} 件を検出',
+    unmatched: '回転後、一致なしで保持: {n}',
     noFaces: '顔は見つかりませんでした',
     failed: '失敗：{error}',
   },
@@ -695,6 +698,11 @@ const ja: typeof en = {
     videoHardware: '{device} のグラフィックスで H.264 コピーを作成',
     videoLowPower: '省電力エンコーダー',
     videoNoHardware: 'H.264 コピー用のグラフィックスがありません',
+    faces: '人物',
+    retryMinScore: '低コントラストの写真の顔に必要な最小信頼度',
+    retryMinScoreHint:
+      '写真ですぐに顔が見つからない場合、コントラストを強めてもう一度確認します。色あせたスキャンの顔も見つかりますが、花や葉を顔と誤ることもあります。この方法で見つかった顔は、この信頼度（0〜1）以上のときだけ人物のグループに入ります。変更すると顔がグループ分けし直されます。',
+    retryFloor: 'ML サービスはこのような顔を {floor} から報告します。',
     transcodeLabel: 'H.264 コピー',
     transcodeHint:
       'コピーにより、どのブラウザでも HEVC、VP9、AV1 の動画や写真の動きを 1080p・SDR で再生できます。ダウンロードはオリジナルのままです。',

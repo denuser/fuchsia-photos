@@ -229,6 +229,8 @@ const de: typeof en = {
     showRaw: 'RAW anzeigen',
     showPhoto: 'Foto anzeigen',
     originalVersion: 'Original',
+    rotateLeft: 'Nach links drehen',
+    rotateRight: 'Nach rechts drehen',
     editDescription: 'Beschreibung bearbeiten',
     description: 'Beschreibung',
     moreActions: 'Weitere Aktionen',
@@ -563,6 +565,7 @@ const de: typeof en = {
     photo: 'Foto',
     result: 'Ergebnis',
     found: '{n} Gesicht gefunden | {n} Gesichter gefunden',
+    unmatched: 'nach dem Drehen ohne Treffer behalten: {n}',
     noFaces: 'Keine Gesichter gefunden',
     failed: 'Fehlgeschlagen: {error}',
   },
@@ -695,6 +698,11 @@ const de: typeof en = {
     videoHardware: 'Die Grafik von {device} erstellt H.264-Kopien',
     videoLowPower: 'stromsparender Encoder',
     videoNoHardware: 'Keine Grafik für H.264-Kopien',
+    faces: 'Personen',
+    retryMinScore: 'Mindestsicherheit für Gesichter auf kontrastarmen Fotos',
+    retryMinScoreHint:
+      'Findet sich auf einem Foto nicht sofort ein Gesicht, wird es mit verstärktem Kontrast erneut geprüft. So werden Gesichter auf verblassten Scans gefunden, aber auch in Blumen und Blättern. So gefundene Gesichter kommen erst ab dieser Sicherheit (0 bis 1) in Personengruppen. Eine Änderung gruppiert die Gesichter neu.',
+    retryFloor: 'Der ML-Dienst meldet solche Gesichter ab {floor}.',
     transcodeLabel: 'H.264-Kopien',
     transcodeHint:
       'Kopien lassen jeden Browser HEVC-, VP9- und AV1-Videos und die Bewegung von Fotos abspielen, in 1080p und SDR. Downloads bleiben die Originale.',

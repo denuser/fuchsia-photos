@@ -646,6 +646,35 @@ const steps = {
       throw new Error('the viewer shows the location the user hid')
     }
   },
+  'the owner turns a photo in the viewer, the preview turns at once, and turns back': async () => {
+    // The second user has a copy of every fixture: open the administrator's own.
+    await page.goto(`${BASE}/all`)
+    const copies = page.getByLabel('landscape.webp', { exact: true })
+    await copies.first().waitFor()
+    let own = false
+    for (let i = 0; i < (await copies.count()) && !own; i++) {
+      await copies.nth(i).click()
+      await page.getByTestId('viewer-image').waitFor()
+      own = (await page.getByTestId('viewer-rotate-right-button').count()) > 0
+      if (!own) {
+        await page.keyboard.press('Escape')
+      }
+    }
+    if (!own) {
+      throw new Error('no copy of landscape.webp offers to rotate it')
+    }
+    const shape = (want) =>
+      waitFor(`a ${want} viewer preview`, (w) => {
+        const image = document.querySelector('[data-testid=viewer-image]')
+        return image?.complete && image.naturalWidth > 0 && (image.naturalWidth > image.naturalHeight) === (w === 'landscape')
+      }, want)
+    await shape('landscape')
+    await expectRequest('/rotate', () => page.getByTestId('viewer-rotate-right-button').click())
+    await shape('portrait')
+    await expectRequest('/rotate', () => page.getByTestId('viewer-rotate-left-button').click())
+    await shape('landscape')
+    await page.keyboard.press('Escape')
+  },
   'on a phone the menu opens over the page': async () => {
     await page.setViewportSize({ width: 375, height: 740 })
     try {

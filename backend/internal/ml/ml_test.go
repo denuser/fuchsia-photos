@@ -145,11 +145,12 @@ func TestMonitorFaceAvailability(t *testing.T) {
 		want  bool
 	}{
 		{name: "search only", model: testModel},
-		{name: "unsupported dimensions", model: testModel, faces: &FaceModel{Model: "faces@1", Dimensions: 64}},
-		{name: "faces enabled", model: testModel, faces: &FaceModel{Model: "faces@1", Dimensions: 128}, want: true},
-		{name: "search model mismatch", model: "other@1", faces: &FaceModel{Model: "faces@1", Dimensions: 128}, want: true},
+		{name: "unsupported dimensions", model: testModel, faces: &FaceModel{Model: "faces@1", Dimensions: 64, Scores: true}},
+		{name: "faces without scores", model: testModel, faces: &FaceModel{Model: "faces@1", Dimensions: 128}},
+		{name: "faces enabled", model: testModel, faces: &FaceModel{Model: "faces@1", Dimensions: 128, Scores: true}, want: true},
+		{name: "search model mismatch", model: "other@1", faces: &FaceModel{Model: "faces@1", Dimensions: 128, Scores: true}, want: true},
 		{name: "service goes down", down: true},
-		{name: "service comes back", model: testModel, faces: &FaceModel{Model: "faces@1", Dimensions: 128}, want: true},
+		{name: "service comes back", model: testModel, faces: &FaceModel{Model: "faces@1", Dimensions: 128, Scores: true}, want: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			fake.set(func(f *fakeService) { f.model, f.faces, f.down = tt.model, tt.faces, tt.down })
@@ -205,7 +206,7 @@ func TestMLPeriodicScheduling(t *testing.T) {
 			fake.set(func(f *fakeService) {
 				f.down, f.model = tt.down, tt.model
 				if tt.faces {
-					f.faces = &FaceModel{Model: "faces@1", Dimensions: 128}
+					f.faces = &FaceModel{Model: "faces@1", Dimensions: 128, Scores: true}
 				}
 			})
 			monitor.Check(ctx)

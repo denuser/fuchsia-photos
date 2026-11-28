@@ -108,7 +108,7 @@ func (q *Queries) GetPublicLink(ctx context.Context, token string) (GetPublicLin
 }
 
 const getPublicPhoto = `-- name: GetPublicPhoto :one
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, p.phash FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, p.phash, p.rotation, p.preview_rotation FROM album_photos ap JOIN photos p ON p.id = ap.photo_id
 WHERE ap.album_id = $1 AND p.id = $2
   AND p.deleted_at IS NULL AND p.status = 'ready'
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
@@ -158,6 +158,8 @@ func (q *Queries) GetPublicPhoto(ctx context.Context, arg GetPublicPhotoParams) 
 		&i.Longitude,
 		&i.SourcePath,
 		&i.Phash,
+		&i.Rotation,
+		&i.PreviewRotation,
 	)
 	return i, err
 }

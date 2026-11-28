@@ -916,6 +916,26 @@ export interface paths {
         patch: operations["updatePhoto"];
         trace?: never;
     };
+    "/photos/{id}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn one of the current user's photos clockwise, with the versions hidden under it
+         * @description The original is not changed. The previews turn at once and are made again from the original afterwards. The search vector, the hash for similar photos and the faces are made again from the turned preview. Videos cannot be rotated.
+         */
+        post: operations["rotatePhoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/photos/{id}/tags": {
         parameters: {
             query?: never;
@@ -1735,6 +1755,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/faces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which faces found by the ML service's contrast retry join people's groups (administrators only) */
+        get: operations["getFaceSettings"];
+        /** Change the least score of a face found by the contrast retry, and regroup every owner's faces (administrators only) */
+        put: operations["updateFaceSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/queue": {
         parameters: {
             query?: never;
@@ -1866,6 +1904,12 @@ export interface components {
         MetadataSettings: {
             /** @description Whether photos include where they were taken, for everyone who may see them */
             showLocation: boolean;
+        };
+        FaceSettings: {
+            /** @description The least detector score a face found only by the contrast retry needs to join a group. Faces under it keep no group; faces found by the first pass are not affected */
+            retryMinScore: number;
+            /** @description The least score the ML service reports for faces of its contrast retry. Null when the service has not answered or its retry is off */
+            retryFloor: number | null;
         };
         VideoSettings: {
             /**
@@ -2260,6 +2304,11 @@ export interface components {
             deletedAt: string | null;
             /** @description Changes when the previews are made again. Previews are cached for a long time, so their address carries it */
             previewVersion: number;
+            /**
+             * @description The owner's turn of the photo, clockwise in degrees, on top of the EXIF orientation. The previews, the width and the height show it; the original is not changed
+             * @enum {integer}
+             */
+            rotation: 0 | 90 | 180 | 270;
             /** @description The length of a video in seconds. Null for photos, and for videos not processed yet or that do not say */
             duration: number | null;
             /** @description Whether a motion photo or a Live Photo has a video to play from /photos/{id}/motion */
@@ -2498,6 +2547,8 @@ export interface components {
             scannedAt: string | null;
             faces: number;
             error: string;
+            /** @description Faces the owner placed or named that the scan after a rotation found no match for. They keep their group and their old vector */
+            unmatched: number;
         };
         PhotoIds: number[];
         UploadResult: {
@@ -4119,6 +4170,38 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    rotatePhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {integer} */
+                    degrees: 90 | 180 | 270;
+                };
+            };
+        };
+        responses: {
+            /** @description The turned photo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Photo"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
     getPhotoTags: {
         parameters: {
             query?: never;
@@ -5538,6 +5621,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VideoSettings"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    getFaceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FaceSettings"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    updateFaceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    retryMinScore: number;
+                };
+            };
+        };
+        responses: {
+            /** @description The saved settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FaceSettings"];
                 };
             };
             400: components["responses"]["Error"];

@@ -230,6 +230,8 @@ const pt: typeof en = {
     showRaw: 'Mostrar RAW',
     showPhoto: 'Mostrar a foto',
     originalVersion: 'Original',
+    rotateLeft: 'Girar para a esquerda',
+    rotateRight: 'Girar para a direita',
     editDescription: 'Editar a descrição',
     description: 'Descrição',
     moreActions: 'Mais ações',
@@ -564,6 +566,7 @@ const pt: typeof en = {
     photo: 'Foto',
     result: 'Resultado',
     found: '{n} rosto encontrado | {n} rostos encontrados',
+    unmatched: 'após girar, mantidos sem correspondência: {n}',
     noFaces: 'Nenhum rosto encontrado',
     failed: 'Falhou: {error}',
   },
@@ -696,6 +699,11 @@ const pt: typeof en = {
     videoHardware: 'A placa de vídeo {device} cria as cópias H.264',
     videoLowPower: 'codificador de baixo consumo',
     videoNoHardware: 'Nenhuma placa de vídeo para as cópias H.264',
+    faces: 'Pessoas',
+    retryMinScore: 'Confiança mínima para rostos em fotos de baixo contraste',
+    retryMinScoreHint:
+      'Se nenhum rosto for encontrado de imediato, a foto é verificada de novo com contraste reforçado. Assim aparecem rostos em digitalizações desbotadas, mas também em flores e folhas. Rostos encontrados assim só entram nos grupos de pessoas a partir desta confiança (de 0 a 1). Ao alterá-lo, os rostos são reagrupados.',
+    retryFloor: 'O serviço de ML informa esses rostos a partir de {floor}.',
     transcodeLabel: 'Cópias H.264',
     transcodeHint:
       'As cópias permitem que qualquer navegador reproduza vídeos HEVC, VP9 e AV1 e o movimento das fotos, em 1080p e SDR. Os downloads continuam sendo os originais.',

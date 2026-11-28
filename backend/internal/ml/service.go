@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
 
@@ -42,6 +43,8 @@ type Service struct {
 	Model   string
 	Layout  storage.Layout
 	Queries *store.Queries
+	// Jobs queues regroupings of faces. It is set once the job client exists.
+	Jobs *river.Client[pgx.Tx]
 }
 
 // EmbedText returns the vector of a search text, with the least similarity
@@ -190,6 +193,7 @@ func (s *Service) embedPending(ctx context.Context, limit time.Duration) (int, e
 func (s *Service) embedBatch(ctx context.Context, rows []store.ListPhotosToEmbedRow) (int, error) {
 	images := make([]Image, 0, len(rows))
 	ids := make([]int64, 0, len(rows))
+	versions := make([]int32, 0, len(rows))
 	for _, row := range rows {
 		data, err := os.ReadFile(s.Layout.Preview(row.ID, storage.PreviewViewer, row.PreviewFormat))
 		if err != nil {
@@ -198,6 +202,7 @@ func (s *Service) embedBatch(ctx context.Context, rows []store.ListPhotosToEmbed
 		}
 		images = append(images, Image{Name: fmt.Sprintf("%d.%s", row.ID, row.PreviewFormat), Data: data})
 		ids = append(ids, row.ID)
+		versions = append(versions, row.PreviewVersion)
 	}
 	if len(images) == 0 {
 		return 0, nil
@@ -221,7 +226,7 @@ func (s *Service) embedBatch(ctx context.Context, rows []store.ListPhotosToEmbed
 			continue
 		}
 		err := s.Queries.SaveEmbedding(ctx, store.SaveEmbeddingParams{
-			PhotoID: ids[i], Model: s.Model, Embedding: VectorText(result.Embedding),
+			PhotoID: ids[i], Model: s.Model, Embedding: VectorText(result.Embedding), PreviewVersion: versions[i],
 		})
 		if err != nil {
 			return done, fmt.Errorf("save embedding of photo %d: %w", ids[i], err)

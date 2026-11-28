@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { api, type MetadataSettings, type PreviewSettings, type SignInOptions, type SignInSettings, type VideoSettings } from '../api/client'
+import { api, type FaceSettings, type MetadataSettings, type PreviewSettings, type SignInOptions, type SignInSettings, type VideoSettings } from '../api/client'
 import { apiError } from '../i18n/apiErrors'
 import AppFormGroup from '../components/AppFormGroup.vue'
 import AppPageHeader from '../components/AppPageHeader.vue'
@@ -20,6 +20,9 @@ const notices = useNoticesStore()
 const settings = ref<PreviewSettings | null>(null)
 const metadata = ref<MetadataSettings | null>(null)
 const video = ref<VideoSettings | null>(null)
+const faces = ref<FaceSettings | null>(null)
+// Saving the face setting regroups every owner's faces, so it is sent only when it changed.
+const savedRetryMinScore = ref(0)
 const signIn = ref<SignInSettings | null>(null)
 const signInOptions = ref<SignInOptions | null>(null)
 
@@ -43,9 +46,15 @@ const rules = {
   viewerEdge: [range(1024, 4096)],
 }
 
+const retryScoreRule = (value: unknown) => {
+  const n = Number(value)
+  const min = faces.value?.retryFloor ?? 0.01
+  return (value !== '' && n >= min && n < 1) || t('admin.range', { min, max: 0.99 })
+}
+
 const valid = computed(() => {
   const s = settings.value
-  if (!s) {
+  if (!s || !faces.value || retryScoreRule(faces.value.retryMinScore) !== true) {
     return false
   }
   const checks: [unknown, (value: unknown) => true | string][] = [
@@ -59,14 +68,15 @@ const valid = computed(() => {
 })
 
 onMounted(async () => {
-  const [previews, meta, videos, signing, options] = await Promise.all([
+  const [previews, meta, videos, signing, options, face] = await Promise.all([
     api.GET('/settings/previews'),
     api.GET('/settings/metadata'),
     api.GET('/settings/video'),
     api.GET('/settings/sign-in'),
     api.GET('/auth/options'),
+    api.GET('/settings/faces'),
   ])
-  const failure = previews.error ?? meta.error ?? videos.error ?? signing.error ?? options.error
+  const failure = previews.error ?? meta.error ?? videos.error ?? signing.error ?? options.error ?? face.error
   if (failure) {
     error.value = apiError(failure)
     return
@@ -76,18 +86,24 @@ onMounted(async () => {
   video.value = videos.data!
   signIn.value = signing.data!
   signInOptions.value = options.data!
+  faces.value = face.data!
+  savedRetryMinScore.value = face.data!.retryMinScore
 })
 
 async function save() {
   saving.value = true
-  const [previews, meta, videos, signing] = await Promise.all([
+  const retryMinScore = Number(faces.value!.retryMinScore)
+  const [previews, meta, videos, signing, face] = await Promise.all([
     api.PUT('/settings/previews', { body: settings.value! }),
     api.PUT('/settings/metadata', { body: metadata.value! }),
     api.PUT('/settings/video', { body: { transcode: video.value!.transcode } }),
     api.PUT('/settings/sign-in', { body: signIn.value! }),
+    retryMinScore === savedRetryMinScore.value
+      ? Promise.resolve({ data: faces.value!, error: undefined })
+      : api.PUT('/settings/faces', { body: { retryMinScore } }),
   ])
   saving.value = false
-  const failure = previews.error ?? meta.error ?? videos.error ?? signing.error
+  const failure = previews.error ?? meta.error ?? videos.error ?? signing.error ?? face.error
   error.value = failure ? apiError(failure) : ''
   if (previews.data) {
     settings.value = previews.data
@@ -101,7 +117,11 @@ async function save() {
   if (signing.data) {
     signIn.value = signing.data
   }
-  if (previews.data && meta.data && videos.data && signing.data) {
+  if (face.data) {
+    faces.value = face.data
+    savedRetryMinScore.value = face.data.retryMinScore
+  }
+  if (previews.data && meta.data && videos.data && signing.data && face.data) {
     notices.notify(t('admin.saved'))
   }
 }
@@ -114,7 +134,7 @@ async function save() {
 
       <v-alert v-if="error" type="error" density="compact" class="mb-4" :title="error" />
 
-      <v-form v-if="settings && metadata && video && signIn && signInOptions" class="settings" @submit.prevent="save">
+      <v-form v-if="settings && metadata && video && faces && signIn && signInOptions" class="settings" @submit.prevent="save">
         <h2 class="mb-2">{{ t('admin.previews') }}</h2>
         <v-alert
           type="info"
@@ -226,6 +246,21 @@ async function save() {
             persistent-hint
             density="compact"
             data-testid="transcode"
+          />
+        </AppFormGroup>
+
+        <h2 class="mb-2">{{ t('admin.faces') }}</h2>
+        <AppFormGroup v-slot="field" :label="t('admin.retryMinScore')" required>
+          <v-text-field
+            v-bind="field"
+            v-model.number="faces.retryMinScore"
+            :rules="[retryScoreRule]"
+            type="number"
+            step="0.05"
+            data-testid="retry-min-score"
+            :hint="t('admin.retryMinScoreHint') + (faces.retryFloor ? ' ' + t('admin.retryFloor', { floor: faces.retryFloor }) : '')"
+            persistent-hint
+            density="compact"
           />
         </AppFormGroup>
 

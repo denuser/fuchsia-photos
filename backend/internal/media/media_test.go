@@ -150,3 +150,32 @@ func TestValidateSettings(t *testing.T) {
 		})
 	}
 }
+
+func TestRotatePreviews(t *testing.T) {
+	previews, err := Render(filepath.Join("testdata", "landscape.jpg"), DefaultSettings())
+	if err != nil {
+		t.Fatal(err)
+	}
+	turned, err := RotatePreviews(previews.Viewer.Data, 90, DefaultSettings())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if turned.Viewer.Width != previews.Viewer.Height || turned.Viewer.Height != previews.Viewer.Width {
+		t.Fatalf("turned viewer %dx%d from %dx%d", turned.Viewer.Width, turned.Viewer.Height, previews.Viewer.Width, previews.Viewer.Height)
+	}
+	settings := DefaultSettings()
+	settings.Rotation = 270
+	rendered, err := Render(filepath.Join("testdata", "landscape.jpg"), settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rendered.Viewer.Width >= rendered.Viewer.Height {
+		t.Errorf("render turned by 270 is %dx%d", rendered.Viewer.Width, rendered.Viewer.Height)
+	}
+	if w, h := RotatedSize(800, 600, 90); w != 600 || h != 800 {
+		t.Errorf("RotatedSize = %dx%d", w, h)
+	}
+	if _, err := RotatePreviews(previews.Viewer.Data, 45, DefaultSettings()); err == nil {
+		t.Error("a turn of 45 degrees was accepted")
+	}
+}

@@ -68,6 +68,22 @@ type AppPassword struct {
 	LastUsedAt *time.Time
 }
 
+type FaceScan struct {
+	PhotoID   int64
+	Model     string
+	RetryAt   *time.Time
+	Sha256    []byte
+	ScannedAt time.Time
+	Error     *string
+	Rescan    bool
+}
+
+type FaceSetting struct {
+	ID             int16
+	RetryMinScore  float32
+	RegroupPending bool
+}
+
 type ImportFile struct {
 	RunID int64
 	Path  string
@@ -135,6 +151,12 @@ type MetadataSetting struct {
 	ShowLocation bool
 }
 
+type Person struct {
+	ID      int64
+	OwnerID int64
+	Name    string
+}
+
 type Photo struct {
 	ID                int64
 	OwnerID           int64
@@ -171,6 +193,8 @@ type Photo struct {
 	Longitude         *float64
 	SourcePath        *string
 	Phash             *int64
+	Rotation          int16
+	PreviewRotation   int16
 }
 
 type PhotoArchive struct {
@@ -192,6 +216,18 @@ type PhotoEmbeddingFailure struct {
 	Attempts int32
 	Error    string
 	FailedAt time.Time
+}
+
+type PhotoFace struct {
+	ID        int64
+	PhotoID   int64
+	PersonID  *int64
+	Box       []float32
+	Embedding interface{}
+	Score     *float32
+	Retry     bool
+	Manual    bool
+	Unmatched bool
 }
 
 type PhotoFavorite struct {
@@ -337,6 +373,16 @@ type UserIdentity struct {
 type VideoSetting struct {
 	ID        int16
 	Transcode string
+}
+
+type VisiblePhotoFace struct {
+	ID        int64
+	PhotoID   int64
+	PersonID  *int64
+	Box       []float32
+	Embedding interface{}
+	OwnerID   int64
+	Model     string
 }
 
 type WebdavAlbum struct {

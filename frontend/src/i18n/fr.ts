@@ -230,6 +230,8 @@ const fr: typeof en = {
     showRaw: 'Afficher le RAW',
     showPhoto: 'Afficher la photo',
     originalVersion: 'Original',
+    rotateLeft: 'Faire pivoter à gauche',
+    rotateRight: 'Faire pivoter à droite',
     editDescription: 'Modifier la description',
     description: 'Description',
     moreActions: 'Plus d’actions',
@@ -564,6 +566,7 @@ const fr: typeof en = {
     photo: 'Photo',
     result: 'Résultat',
     found: '{n} visage trouvé | {n} visages trouvés',
+    unmatched: 'après rotation, conservés sans correspondance : {n}',
     noFaces: 'Aucun visage trouvé',
     failed: 'Échec : {error}',
   },
@@ -696,6 +699,11 @@ const fr: typeof en = {
     videoHardware: 'La carte graphique {device} crée les copies H.264',
     videoLowPower: 'encodeur basse consommation',
     videoNoHardware: 'Pas de carte graphique pour les copies H.264',
+    faces: 'Personnes',
+    retryMinScore: 'Confiance minimale pour les visages sur les photos peu contrastées',
+    retryMinScoreHint:
+      "Si aucun visage n'est trouvé tout de suite, la photo est examinée à nouveau avec un contraste renforcé. Cela trouve des visages sur les scans délavés, mais aussi dans les fleurs et les feuilles. Les visages trouvés ainsi ne rejoignent les groupes de personnes qu'à partir de cette confiance (de 0 à 1). Le modifier regroupe les visages.",
+    retryFloor: 'Le service ML signale ces visages à partir de {floor}.',
     transcodeLabel: 'Copies H.264',
     transcodeHint:
       'Les copies permettent à tout navigateur de lire les vidéos HEVC, VP9 et AV1 et l’animation des photos, en 1080p et en SDR. Les téléchargements restent les originaux.',

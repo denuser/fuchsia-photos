@@ -1494,6 +1494,37 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /photos/{id}/rotate:
+    post:
+      operationId: rotatePhoto
+      summary: Turn one of the current user's photos clockwise, with the versions hidden under it
+      description: The original is not changed. The previews turn at once and are made again from the original afterwards. The search vector, the hash for similar photos and the faces are made again from the turned preview. Videos cannot be rotated.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [degrees]
+              properties:
+                degrees:
+                  type: integer
+                  enum: [90, 180, 270]
+      responses:
+        "200":
+          description: The turned photo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Photo"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
   /photos/{id}/tags:
     get:
       operationId: getPhotoTags
@@ -2579,6 +2610,45 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /settings/faces:
+    get:
+      operationId: getFaceSettings
+      summary: Which faces found by the ML service's contrast retry join people's groups (administrators only)
+      responses:
+        "200":
+          description: The current settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FaceSettings"
+        "403":
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: updateFaceSettings
+      summary: Change the least score of a face found by the contrast retry, and regroup every owner's faces (administrators only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [retryMinScore]
+              properties:
+                retryMinScore:
+                  type: number
+                  exclusiveMinimum: 0
+                  exclusiveMaximum: 1
+      responses:
+        "200":
+          description: The saved settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FaceSettings"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
   /queue:
     get:
       operationId: getQueue
@@ -2797,6 +2867,16 @@ components:
         showLocation:
           description: Whether photos include where they were taken, for everyone who may see them
           type: boolean
+    FaceSettings:
+      type: object
+      required: [retryMinScore, retryFloor]
+      properties:
+        retryMinScore:
+          description: The least detector score a face found only by the contrast retry needs to join a group. Faces under it keep no group; faces found by the first pass are not affected
+          type: number
+        retryFloor:
+          description: The least score the ML service reports for faces of its contrast retry. Null when the service has not answered or its retry is off
+          type: [number, "null"]
     VideoSettings:
       type: object
       required: [transcode, hardware]
@@ -3321,7 +3401,7 @@ components:
     Photo:
       type: object
       description: A photo or a video, which the MIME type tells apart
-      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, duration, hasMotion, hasRaw, hiddenUnder, videoCopy, hdr, description, camera, location]
+      required: [id, ownerId, status, name, mime, size, width, height, takenAt, sortAt, createdAt, deletedAt, previewVersion, rotation, duration, hasMotion, hasRaw, hiddenUnder, videoCopy, hdr, description, camera, location]
       properties:
         id:
           type: integer
@@ -3359,6 +3439,10 @@ components:
         previewVersion:
           description: Changes when the previews are made again. Previews are cached for a long time, so their address carries it
           type: integer
+        rotation:
+          description: The owner's turn of the photo, clockwise in degrees, on top of the EXIF orientation. The previews, the width and the height show it; the original is not changed
+          type: integer
+          enum: [0, 90, 180, 270]
         duration:
           description: The length of a video in seconds. Null for photos, and for videos not processed yet or that do not say
           type: [number, "null"]
@@ -3722,7 +3806,7 @@ components:
           type: string
     PhotoFaceScan:
       type: object
-      required: [photoId, name, state, scannedAt, faces, error]
+      required: [photoId, name, state, scannedAt, faces, error, unmatched]
       properties:
         photoId:
           type: integer
@@ -3739,6 +3823,9 @@ components:
           type: integer
         error:
           type: string
+        unmatched:
+          description: Faces the owner placed or named that the scan after a rotation found no match for. They keep their group and their old vector
+          type: integer
     PhotoIds:
       type: array
       minItems: 1

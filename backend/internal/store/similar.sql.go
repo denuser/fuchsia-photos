@@ -120,7 +120,7 @@ func (q *Queries) FindSimilarCandidates(ctx context.Context, arg FindSimilarCand
 }
 
 const listLibraryPhotosByIDs = `-- name: ListLibraryPhotosByIDs :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, p.phash
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, p.phash, p.rotation, p.preview_rotation
 FROM photos p
 WHERE p.id = ANY ($1::bigint[])
   AND p.owner_id = $2
@@ -181,6 +181,8 @@ func (q *Queries) ListLibraryPhotosByIDs(ctx context.Context, arg ListLibraryPho
 			&i.Longitude,
 			&i.SourcePath,
 			&i.Phash,
+			&i.Rotation,
+			&i.PreviewRotation,
 		); err != nil {
 			return nil, err
 		}
@@ -243,10 +245,11 @@ func (q *Queries) ListPhotosToCheck(ctx context.Context, arg ListPhotosToCheckPa
 }
 
 const listPhotosToHash = `-- name: ListPhotosToHash :many
-SELECT p.id, p.preview_format::text AS preview_format
+SELECT p.id, p.preview_format::text AS preview_format, p.preview_version
 FROM photos p
 WHERE p.status = 'ready'
   AND p.purged_at IS NULL
+  AND p.preview_rotation = p.rotation
   AND p.phash IS NULL
   AND p.preview_format IS NOT NULL
   AND p.mime LIKE 'image/%'
@@ -261,8 +264,9 @@ type ListPhotosToHashParams struct {
 }
 
 type ListPhotosToHashRow struct {
-	ID            int64
-	PreviewFormat string
+	ID             int64
+	PreviewFormat  string
+	PreviewVersion int32
 }
 
 // Photos whose viewer preview has not been hashed yet, oldest first.
@@ -275,7 +279,7 @@ func (q *Queries) ListPhotosToHash(ctx context.Context, arg ListPhotosToHashPara
 	var items []ListPhotosToHashRow
 	for rows.Next() {
 		var i ListPhotosToHashRow
-		if err := rows.Scan(&i.ID, &i.PreviewFormat); err != nil {
+		if err := rows.Scan(&i.ID, &i.PreviewFormat, &i.PreviewVersion); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -395,16 +399,21 @@ func (q *Queries) MovePhotoMemberships(ctx context.Context, arg MovePhotoMembers
 }
 
 const savePerceptualHash = `-- name: SavePerceptualHash :exec
-UPDATE photos SET phash = $1 WHERE id = $2 AND purged_at IS NULL
+UPDATE photos SET phash = $1
+WHERE id = $2 AND purged_at IS NULL
+  AND ($3::integer IS NULL OR preview_version = $3::integer)
 `
 
 type SavePerceptualHashParams struct {
-	Phash *int64
-	ID    int64
+	Phash          *int64
+	ID             int64
+	PreviewVersion *int32
 }
 
+// A version, when given, keeps the hash only for the previews it was made
+// from, so that a photo turned meanwhile is hashed again.
 func (q *Queries) SavePerceptualHash(ctx context.Context, arg SavePerceptualHashParams) error {
-	_, err := q.db.Exec(ctx, savePerceptualHash, arg.Phash, arg.ID)
+	_, err := q.db.Exec(ctx, savePerceptualHash, arg.Phash, arg.ID, arg.PreviewVersion)
 	return err
 }
 

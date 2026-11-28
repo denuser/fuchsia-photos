@@ -167,6 +167,7 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("POST /api/v1/photos/archive", s.authenticated(s.changeArchive))
 	mux.HandleFunc("GET /api/v1/photos/{id}", s.authenticated(s.getPhoto))
 	mux.HandleFunc("PATCH /api/v1/photos/{id}", s.authenticated(s.updatePhoto))
+	mux.HandleFunc("POST /api/v1/photos/{id}/rotate", s.authenticated(s.rotatePhoto))
 	mux.HandleFunc("GET /api/v1/photos/{id}/tags", s.authenticated(s.getPhotoTags))
 	mux.HandleFunc("GET /api/v1/photos/{id}/sharing", s.authenticated(s.getPhotoSharing))
 	mux.HandleFunc("GET /api/v1/photos/{id}/previews/{kind}", s.authenticated(s.getPreview))
@@ -224,6 +225,8 @@ func NewHandler(deps Deps) http.Handler {
 	mux.HandleFunc("PUT /api/v1/settings/sign-in", s.admin(s.updateSignInSettings))
 	mux.HandleFunc("GET /api/v1/settings/video", s.admin(s.getVideoSettings))
 	mux.HandleFunc("PUT /api/v1/settings/video", s.admin(s.updateVideoSettings))
+	mux.HandleFunc("GET /api/v1/settings/faces", s.admin(s.getFaceSettings))
+	mux.HandleFunc("PUT /api/v1/settings/faces", s.admin(s.updateFaceSettings))
 
 	mux.HandleFunc("GET /api/v1/queue", s.admin(s.getQueue))
 	mux.HandleFunc("GET /api/v1/queue/events", s.admin(s.queueEvents))

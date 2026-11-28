@@ -1,9 +1,10 @@
 -- Photos whose viewer preview has not been hashed yet, oldest first.
 -- name: ListPhotosToHash :many
-SELECT p.id, p.preview_format::text AS preview_format
+SELECT p.id, p.preview_format::text AS preview_format, p.preview_version
 FROM photos p
 WHERE p.status = 'ready'
   AND p.purged_at IS NULL
+  AND p.preview_rotation = p.rotation
   AND p.phash IS NULL
   AND p.preview_format IS NOT NULL
   AND p.mime LIKE 'image/%'
@@ -11,8 +12,12 @@ WHERE p.status = 'ready'
 ORDER BY p.id
 LIMIT @max_rows;
 
+-- A version, when given, keeps the hash only for the previews it was made
+-- from, so that a photo turned meanwhile is hashed again.
 -- name: SavePerceptualHash :exec
-UPDATE photos SET phash = @phash WHERE id = @id AND purged_at IS NULL;
+UPDATE photos SET phash = @phash
+WHERE id = @id AND purged_at IS NULL
+  AND (sqlc.narg(preview_version)::integer IS NULL OR preview_version = sqlc.narg(preview_version)::integer);
 
 -- Photos with a vector that the search has not looked at since the vector was
 -- made. Hidden photos, the trash and videos are left out.

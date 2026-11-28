@@ -163,7 +163,8 @@ func (s *Service) hashPending(ctx context.Context, deadline time.Time) error {
 				slog.Debug("hash photo", "photo", row.ID, "error", err)
 				continue
 			}
-			if err := queries.SavePerceptualHash(ctx, store.SavePerceptualHashParams{ID: row.ID, Phash: int64Ptr(hash)}); err != nil {
+			version := row.PreviewVersion
+			if err := queries.SavePerceptualHash(ctx, store.SavePerceptualHashParams{ID: row.ID, Phash: int64Ptr(hash), PreviewVersion: &version}); err != nil {
 				return fmt.Errorf("save hash of photo %d: %w", row.ID, err)
 			}
 		}

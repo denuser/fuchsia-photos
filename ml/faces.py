@@ -106,7 +106,7 @@ class FaceInference:
 
         results = []
         with self._lock:
-            bgr, detections = self._detect(bgr)
+            bgr, detections, retry = self._detect(bgr)
             if detections is None:
                 return results
             for face in sorted(detections, key=lambda row: row[-1], reverse=True)[:MAX_FACES]:
@@ -128,6 +128,8 @@ class FaceInference:
                         (bottom - top) / bgr.shape[0],
                     ],
                     "embedding": (vector / norm).tolist(),
+                    "score": float(face[-1]),
+                    "retry": retry,
                 })
         return results
 
@@ -137,11 +139,17 @@ class FaceInference:
         self._detector.setInputSize((width, height))
         return self._detector.detect(bgr)[1]
 
+    @property
+    def retry_floor(self) -> float | None:
+        """The least score of a face found by the contrast retry, or None if it is off."""
+        return self._fallback_score if 0 < self._fallback_score < 0.9 else None
+
     def _detect(self, bgr):
-        """Return the image the faces were found on, and the detections (or None)."""
+        """Return the image the faces were found on, the detections (or None),
+        and whether they come from the contrast retry."""
         found = self._run(bgr, 0.9)
-        if found is not None or not 0 < self._fallback_score < 0.9:
-            return bgr, found
+        if found is not None or self.retry_floor is None:
+            return bgr, found, False
         cv2 = self._cv2
         lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
@@ -149,9 +157,9 @@ class FaceInference:
         enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
         found = self._run(enhanced, self._fallback_score)
         if found is not None:
-            return enhanced, found
+            return enhanced, found, True
         height, width = enhanced.shape[:2]
         if max(width, height) < FALLBACK_UPSCALE_BELOW:
             enlarged = cv2.resize(enhanced, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-            return enlarged, self._run(enlarged, self._fallback_score)
-        return enhanced, None
+            return enlarged, self._run(enlarged, self._fallback_score), True
+        return enhanced, None, True

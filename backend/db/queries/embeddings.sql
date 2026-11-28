@@ -1,10 +1,12 @@
 -- Processed photos that have no vector for the model and have not failed too
 -- often, oldest first. The ML job works through them in batches.
+-- A photo whose preview files are not turned yet waits for them.
 -- name: ListPhotosToEmbed :many
-SELECT p.id, p.preview_format::text AS preview_format
+SELECT p.id, p.preview_format::text AS preview_format, p.preview_version
 FROM photos p
 WHERE p.status = 'ready'
   AND p.purged_at IS NULL
+  AND p.preview_rotation = p.rotation
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND p.preview_format IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM photo_embeddings e WHERE e.photo_id = p.id AND e.model = @model)
@@ -15,7 +17,8 @@ ORDER BY p.id
 LIMIT @max_rows;
 
 -- The vector arrives as text, such as '[0.1,0.2]', so that no Go type for
--- pgvector is needed.
+-- pgvector is needed. It is kept only if the previews are still the ones it
+-- was made from: a photo turned meanwhile is embedded again.
 -- name: SaveEmbedding :exec
 WITH failure_cleared AS (
     DELETE FROM photo_embedding_failures f WHERE f.photo_id = @photo_id AND f.model = @model
@@ -23,7 +26,7 @@ WITH failure_cleared AS (
 INSERT INTO photo_embeddings (photo_id, model, embedding)
 SELECT p.id, @model, CAST(@embedding::text AS halfvec)
 FROM photos p
-WHERE p.id = @photo_id AND p.purged_at IS NULL
+WHERE p.id = @photo_id AND p.purged_at IS NULL AND p.preview_version = @preview_version
 ON CONFLICT (photo_id, model) DO UPDATE SET embedding = EXCLUDED.embedding, created_at = now();
 
 -- name: RecordEmbeddingFailure :exec

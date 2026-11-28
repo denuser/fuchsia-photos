@@ -101,10 +101,11 @@ func (q *Queries) ListEmbeddingFailures(ctx context.Context, arg ListEmbeddingFa
 }
 
 const listPhotosToEmbed = `-- name: ListPhotosToEmbed :many
-SELECT p.id, p.preview_format::text AS preview_format
+SELECT p.id, p.preview_format::text AS preview_format, p.preview_version
 FROM photos p
 WHERE p.status = 'ready'
   AND p.purged_at IS NULL
+  AND p.preview_rotation = p.rotation
   AND NOT EXISTS (SELECT 1 FROM photo_links l WHERE l.hidden_id = p.id)
   AND p.preview_format IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM photo_embeddings e WHERE e.photo_id = p.id AND e.model = $1)
@@ -123,12 +124,14 @@ type ListPhotosToEmbedParams struct {
 }
 
 type ListPhotosToEmbedRow struct {
-	ID            int64
-	PreviewFormat string
+	ID             int64
+	PreviewFormat  string
+	PreviewVersion int32
 }
 
 // Processed photos that have no vector for the model and have not failed too
 // often, oldest first. The ML job works through them in batches.
+// A photo whose preview files are not turned yet waits for them.
 func (q *Queries) ListPhotosToEmbed(ctx context.Context, arg ListPhotosToEmbedParams) ([]ListPhotosToEmbedRow, error) {
 	rows, err := q.db.Query(ctx, listPhotosToEmbed,
 		arg.Model,
@@ -143,7 +146,7 @@ func (q *Queries) ListPhotosToEmbed(ctx context.Context, arg ListPhotosToEmbedPa
 	var items []ListPhotosToEmbedRow
 	for rows.Next() {
 		var i ListPhotosToEmbedRow
-		if err := rows.Scan(&i.ID, &i.PreviewFormat); err != nil {
+		if err := rows.Scan(&i.ID, &i.PreviewFormat, &i.PreviewVersion); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -179,25 +182,32 @@ WITH failure_cleared AS (
 INSERT INTO photo_embeddings (photo_id, model, embedding)
 SELECT p.id, $1, CAST($2::text AS halfvec)
 FROM photos p
-WHERE p.id = $3 AND p.purged_at IS NULL
+WHERE p.id = $3 AND p.purged_at IS NULL AND p.preview_version = $4
 ON CONFLICT (photo_id, model) DO UPDATE SET embedding = EXCLUDED.embedding, created_at = now()
 `
 
 type SaveEmbeddingParams struct {
-	Model     string
-	Embedding string
-	PhotoID   int64
+	Model          string
+	Embedding      string
+	PhotoID        int64
+	PreviewVersion int32
 }
 
 // The vector arrives as text, such as '[0.1,0.2]', so that no Go type for
-// pgvector is needed.
+// pgvector is needed. It is kept only if the previews are still the ones it
+// was made from: a photo turned meanwhile is embedded again.
 func (q *Queries) SaveEmbedding(ctx context.Context, arg SaveEmbeddingParams) error {
-	_, err := q.db.Exec(ctx, saveEmbedding, arg.Model, arg.Embedding, arg.PhotoID)
+	_, err := q.db.Exec(ctx, saveEmbedding,
+		arg.Model,
+		arg.Embedding,
+		arg.PhotoID,
+		arg.PreviewVersion,
+	)
 	return err
 }
 
 const searchPhotosByVector = `-- name: SearchPhotosByVector :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, p.phash, (e.embedding <=> CAST($1::text AS halfvec))::float8 AS distance
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, p.phash, p.rotation, p.preview_rotation, (e.embedding <=> CAST($1::text AS halfvec))::float8 AS distance
 FROM photo_embeddings e
 JOIN photos p ON p.id = e.photo_id
 WHERE e.model = $2
@@ -278,6 +288,8 @@ func (q *Queries) SearchPhotosByVector(ctx context.Context, arg SearchPhotosByVe
 			&i.Photo.Longitude,
 			&i.Photo.SourcePath,
 			&i.Photo.Phash,
+			&i.Photo.Rotation,
+			&i.Photo.PreviewRotation,
 			&i.Distance,
 		); err != nil {
 			return nil, err
@@ -291,7 +303,7 @@ func (q *Queries) SearchPhotosByVector(ctx context.Context, arg SearchPhotosByVe
 }
 
 const searchSimilarPhotos = `-- name: SearchSimilarPhotos :many
-SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, p.phash, (e.embedding <=> s.embedding)::float8 AS distance
+SELECT p.id, p.owner_id, p.sha256, p.mime, p.size, p.width, p.height, p.taken_at, p.exif, p.status, p.error, p.visibility, p.created_at, p.deleted_at, p.original_name, p.preview_format, p.sort_at, p.updated_at, p.purged_at, p.camera, p.lens, p.preview_version, p.duration, p.has_motion, p.content_identifier, p.video_copy, p.imported_latitude, p.imported_longitude, p.description, p.hdr, p.has_raw, p.latitude, p.longitude, p.source_path, p.phash, p.rotation, p.preview_rotation, (e.embedding <=> s.embedding)::float8 AS distance
 FROM photo_embeddings s
 JOIN photo_embeddings e ON e.model = s.model AND e.photo_id <> s.photo_id
 JOIN photos p ON p.id = e.photo_id
@@ -368,6 +380,8 @@ func (q *Queries) SearchSimilarPhotos(ctx context.Context, arg SearchSimilarPhot
 			&i.Photo.Longitude,
 			&i.Photo.SourcePath,
 			&i.Photo.Phash,
+			&i.Photo.Rotation,
+			&i.Photo.PreviewRotation,
 			&i.Distance,
 		); err != nil {
 			return nil, err

@@ -118,7 +118,8 @@ onMounted(() => run(loadGroups))
       </div>
     </div>
     <PhotoViewer v-if="viewing" :photo="viewing" :photos="[viewing]" :can-tag="false" :can-manage="false"
-      :can-find-similar="false" :can-archive="false" :paused="false" @close="viewing = undefined" />
+      :can-find-similar="false" :can-archive="false" :paused="false" @close="viewing = undefined"
+      @changed="viewing = $event" />
   </div>
 </template>
 

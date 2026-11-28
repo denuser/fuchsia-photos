@@ -66,10 +66,16 @@ type Health struct {
 type FaceModel struct {
 	Model      string `json:"model"`
 	Dimensions int    `json:"dimensions"`
+	// RetryFloor is the least score of a face the contrast retry reports, nil
+	// when the retry is off or the service is older.
+	RetryFloor *float64 `json:"retryFloor,omitempty"`
+	// Scores means each face carries score and retry. A service without them
+	// is not used, as the retry setting could not apply to its faces.
+	Scores bool `json:"scores"`
 }
 
 func (m *FaceModel) supported() bool {
-	return m != nil && m.Model != "" && m.Dimensions == 128
+	return m != nil && m.Model != "" && m.Dimensions == 128 && m.Scores
 }
 
 // DetectedFace contains normalized left, top, width and height coordinates and
@@ -77,6 +83,10 @@ func (m *FaceModel) supported() bool {
 type DetectedFace struct {
 	Box       []float64 `json:"box"`
 	Embedding []float32 `json:"embedding"`
+	// Score is the detector's confidence; an older service leaves it out.
+	Score *float32 `json:"score"`
+	// Retry means only the contrast retry found the face.
+	Retry bool `json:"retry"`
 }
 
 // DetectFaces analyzes a viewer preview using the advertised face model.

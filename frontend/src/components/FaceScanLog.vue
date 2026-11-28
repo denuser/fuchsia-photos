@@ -82,6 +82,7 @@ onUnmounted(() => clearInterval(timer));
           <template v-else>{{ t("faceLog.noFaces") }}</template>
           <template v-if="lookup.scannedAt"> · {{ formatDateTime(lookup.scannedAt) }}</template>
         </template>
+        <template v-if="lookup.unmatched"> · {{ t("faceLog.unmatched", { n: lookup.unmatched }) }}</template>
       </p>
       <EmptyState
         v-if="log.scans.length === 0"

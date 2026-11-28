@@ -95,7 +95,13 @@ DIMENSIONS = text_features("photo").shape[-1]
 async def health() -> dict:
     status = {"model": MODEL_ID, "dimensions": DIMENSIONS, "device": DEVICE, "minSimilarity": MIN_SIMILARITY_FOR_MODEL}
     if face_inference is not None:
-        status["faces"] = {"model": face_inference.model, "dimensions": FACE_DIMENSIONS}
+        status["faces"] = {
+            "model": face_inference.model,
+            "dimensions": FACE_DIMENSIONS,
+            "retryFloor": face_inference.retry_floor,
+            # The application needs score and retry on every face.
+            "scores": True,
+        }
     return status
 
 

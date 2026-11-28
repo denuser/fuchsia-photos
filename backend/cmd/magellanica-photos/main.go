@@ -186,6 +186,7 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 			libraries.Register(workers)
 			embedder.Register(workers)
 			river.AddWorker(workers, &ml.FaceWorker{Client: mlClient, Monitor: embedder.Monitor, Pool: pool, Layout: layout})
+			river.AddWorker(workers, &ml.RegroupWorker{Pool: pool})
 			similarity.Register(workers)
 			copies.Register(workers)
 		},
@@ -209,6 +210,10 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 	}
 	ingester.Jobs = jobClient
 	copies.Jobs = jobClient
+	embedder.Jobs = jobClient
+	if err := ml.RegroupPending(ctx, pool, jobClient); err != nil {
+		return fmt.Errorf("queue face regrouping: %w", err)
+	}
 	if err := jobClient.Start(ctx); err != nil {
 		return fmt.Errorf("start jobs: %w", err)
 	}

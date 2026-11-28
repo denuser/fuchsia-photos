@@ -476,3 +476,41 @@ func TestPurgeAndUploadOfTheSameFile(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderPreviewsKeepsTheRotation(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	data, err := os.ReadFile(filepath.Join("..", "media", "testdata", "landscape.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.ingest.Ingest(ctx, e.owner, bytes.NewReader(data), "landscape.jpg", ingest.PriorityInteractive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo := waitForStatus(t, e, res.Photo.ID, "ready")
+	if _, err := e.pool.Exec(ctx, "UPDATE photos SET rotation=90 WHERE id=$1", photo.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.ingest.Jobs.Insert(ctx, jobs.RenderPreviewsArgs{PhotoID: photo.ID}, nil); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for photo.PreviewVersion == 0 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+		if photo, err = e.queries.GetPhoto(ctx, photo.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if photo.PreviewRotation != 90 || *photo.Width != 600 || *photo.Height != 800 {
+		t.Fatalf("preview rotation %d, size %dx%d, want 90 and 600x800", photo.PreviewRotation, *photo.Width, *photo.Height)
+	}
+	image, err := vips.NewImageFromFile(e.layout.Preview(photo.ID, storage.PreviewViewer, *photo.PreviewFormat))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer image.Close()
+	if image.Width() >= image.Height() {
+		t.Errorf("viewer preview %dx%d is not upright after a turn of 90", image.Width(), image.Height())
+	}
+}

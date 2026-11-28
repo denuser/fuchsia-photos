@@ -229,6 +229,8 @@ export default {
     showRaw: 'Show RAW',
     showPhoto: 'Show the photo',
     originalVersion: 'Original',
+    rotateLeft: 'Rotate left',
+    rotateRight: 'Rotate right',
     editDescription: 'Edit the description',
     description: 'Description',
     moreActions: 'More actions',
@@ -564,6 +566,7 @@ export default {
     photo: 'Photo',
     result: 'Result',
     found: '{n} face found | {n} faces found',
+    unmatched: 'after rotation, kept without a match: {n}',
     noFaces: 'No faces found',
     failed: 'Failed: {error}',
   },
@@ -696,6 +699,11 @@ export default {
     videoHardware: 'Graphics on {device} make H.264 copies',
     videoLowPower: 'low-power encoder',
     videoNoHardware: 'No graphics for H.264 copies',
+    faces: 'People',
+    retryMinScore: 'Least confidence for faces on low-contrast photos',
+    retryMinScoreHint:
+      "Old and film photos are checked again with stretched contrast when no face is found at once. That finds faces on faded scans, and also in flowers and leaves. Faces found this way join people's groups only from this confidence (0 to 1). Changing it regroups the faces.",
+    retryFloor: 'The ML service reports these faces from {floor}.',
     transcodeLabel: 'H.264 copies',
     transcodeHint:
       'Copies let every browser play HEVC, VP9 and AV1 videos and the motion of photos, at 1080p and in SDR. Downloads stay the originals.',

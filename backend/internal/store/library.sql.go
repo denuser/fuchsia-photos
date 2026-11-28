@@ -540,7 +540,7 @@ SET sha256 = $1,
     video_copy = NULL,
     updated_at = now()
 WHERE id = $4 AND purged_at IS NULL
-RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path, phash
+RETURNING id, owner_id, sha256, mime, size, width, height, taken_at, exif, status, error, visibility, created_at, deleted_at, original_name, preview_format, sort_at, updated_at, purged_at, camera, lens, preview_version, duration, has_motion, content_identifier, video_copy, imported_latitude, imported_longitude, description, hdr, has_raw, latitude, longitude, source_path, phash, rotation, preview_rotation
 `
 
 type ReplacePhotoFileParams struct {
@@ -597,6 +597,8 @@ func (q *Queries) ReplacePhotoFile(ctx context.Context, arg ReplacePhotoFilePara
 		&i.Longitude,
 		&i.SourcePath,
 		&i.Phash,
+		&i.Rotation,
+		&i.PreviewRotation,
 	)
 	return i, err
 }

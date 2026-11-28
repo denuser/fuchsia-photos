@@ -1,13 +1,16 @@
 package api
 
 import (
+	"context"
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/media"
+	"github.com/magellanica-app/magellanica-photos/backend/internal/ml"
 	"github.com/magellanica-app/magellanica-photos/backend/internal/storage"
 )
 
@@ -101,7 +104,8 @@ func (s *server) editPeople(w http.ResponseWriter, r *http.Request) {
 			if edit.Target == 0 || edit.Target == edit.Person {
 				return errPeopleEdit
 			}
-			_, err := tx.Exec(ctx, "UPDATE photo_faces SET person_id=$1 WHERE person_id=$2", edit.Target, edit.Person)
+			// The owner has confirmed both groups, so regrouping keeps them.
+			_, err := tx.Exec(ctx, "UPDATE photo_faces SET person_id=$1, manual=true WHERE person_id IN ($1,$2)", edit.Target, edit.Person)
 			if err != nil {
 				return err
 			}
@@ -117,7 +121,7 @@ func (s *server) editPeople(w http.ResponseWriter, r *http.Request) {
 				}
 				target = edit.Target
 			}
-			return tx.QueryRow(ctx, `UPDATE photo_faces SET person_id=$1 WHERE id=$2 AND person_id=$3 AND EXISTS(SELECT FROM visible_photo_faces WHERE id=$2 AND owner_id=$4) RETURNING id`, target, edit.Face, edit.Person, owner).Scan(&id)
+			return tx.QueryRow(ctx, `UPDATE photo_faces SET person_id=$1, manual=true WHERE id=$2 AND person_id=$3 AND EXISTS(SELECT FROM visible_photo_faces WHERE id=$2 AND owner_id=$4) RETURNING id`, target, edit.Face, edit.Person, owner).Scan(&id)
 		default:
 			return errPeopleEdit
 		}
@@ -163,4 +167,55 @@ func (s *server) faceThumbnail(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Write(data)
+}
+
+type faceSettingsJSON struct {
+	RetryMinScore float64 `json:"retryMinScore"`
+	// RetryFloor is the least score the ML service reports for faces found
+	// by its contrast retry, null when unknown or the retry is off.
+	RetryFloor *float64 `json:"retryFloor"`
+}
+
+func (s *server) faceSettings(ctx context.Context) (faceSettingsJSON, error) {
+	score, err := ml.RetryMinScore(ctx, s.Pool)
+	settings := faceSettingsJSON{RetryMinScore: math.Round(score*100) / 100}
+	if s.ML != nil && s.ML.Monitor != nil {
+		settings.RetryFloor = s.ML.Monitor.RetryFloor()
+	}
+	return settings, err
+}
+
+func (s *server) getFaceSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.faceSettings(r.Context())
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, settings)
+}
+
+// updateFaceSettings saves the setting and regroups every owner's faces, so
+// that faces it leaves out or brings back move at once.
+func (s *server) updateFaceSettings(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RetryMinScore float64 `json:"retryMinScore"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.RetryMinScore <= 0 || req.RetryMinScore >= 1 {
+		writeError(w, http.StatusBadRequest, "retryMinScore must be between 0 and 1")
+		return
+	}
+	if _, err := s.Pool.Exec(r.Context(), "UPDATE face_settings SET retry_min_score=$1", req.RetryMinScore); err != nil {
+		internalError(w, r, err)
+		return
+	}
+	if s.ML != nil && s.ML.Jobs != nil {
+		if err := ml.RegroupAll(r.Context(), s.Pool, s.ML.Jobs); err != nil {
+			internalError(w, r, err)
+			return
+		}
+	}
+	s.getFaceSettings(w, r)
 }

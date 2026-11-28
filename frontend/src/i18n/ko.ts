@@ -229,6 +229,8 @@ const ko: typeof en = {
     showRaw: 'RAW 표시',
     showPhoto: '사진 표시',
     originalVersion: '원본',
+    rotateLeft: '왼쪽으로 회전',
+    rotateRight: '오른쪽으로 회전',
     editDescription: '설명 편집',
     description: '설명',
     moreActions: '더 보기',
@@ -563,6 +565,7 @@ const ko: typeof en = {
     photo: '사진',
     result: '결과',
     found: '얼굴 {n}개 발견',
+    unmatched: '회전 후 일치 없이 유지: {n}',
     noFaces: '얼굴을 찾지 못함',
     failed: '실패: {error}',
   },
@@ -695,6 +698,11 @@ const ko: typeof en = {
     videoHardware: '{device} 그래픽으로 H.264 사본 생성',
     videoLowPower: '저전력 인코더',
     videoNoHardware: 'H.264 사본용 그래픽 없음',
+    faces: '인물',
+    retryMinScore: '대비가 낮은 사진 속 얼굴의 최소 신뢰도',
+    retryMinScoreHint:
+      '사진에서 얼굴을 바로 찾지 못하면 대비를 높여 한 번 더 확인합니다. 바랜 스캔에서도 얼굴을 찾지만 꽃이나 잎을 얼굴로 잘못 찾기도 합니다. 이렇게 찾은 얼굴은 이 신뢰도(0~1) 이상일 때만 인물 그룹에 들어갑니다. 변경하면 얼굴을 다시 그룹으로 나눕니다.',
+    retryFloor: 'ML 서비스는 이런 얼굴을 {floor}부터 보고합니다.',
     transcodeLabel: 'H.264 사본',
     transcodeHint:
       '사본이 있으면 모든 브라우저에서 HEVC, VP9, AV1 동영상과 사진의 움직임을 1080p, SDR로 재생할 수 있습니다. 다운로드는 원본 그대로입니다.',

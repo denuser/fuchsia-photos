@@ -374,6 +374,7 @@ defineExpose({ clearSelection, say })
       :paused="dialogOpen"
       @close="opened = null"
       @navigate="opened = $event"
+      @changed="opened = $event"
       @trash="trashOpened"
       @archive="archiveOpened"
       @tags="openViewerTags"

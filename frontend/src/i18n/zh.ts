@@ -229,6 +229,8 @@ const zh: typeof en = {
     showRaw: '显示 RAW',
     showPhoto: '显示照片',
     originalVersion: '原图',
+    rotateLeft: '向左旋转',
+    rotateRight: '向右旋转',
     editDescription: '编辑描述',
     description: '描述',
     moreActions: '更多操作',
@@ -563,6 +565,7 @@ const zh: typeof en = {
     photo: '照片',
     result: '结果',
     found: '发现 {n} 张人脸',
+    unmatched: '旋转后未匹配但保留：{n}',
     noFaces: '未发现人脸',
     failed: '失败：{error}',
   },
@@ -695,6 +698,11 @@ const zh: typeof en = {
     videoHardware: '由 {device} 显卡生成 H.264 副本',
     videoLowPower: '低功耗编码器',
     videoNoHardware: '没有可用于 H.264 副本的显卡',
+    faces: '人物',
+    retryMinScore: '低对比度照片中人脸的最低置信度',
+    retryMinScoreHint:
+      '如果照片中没有立即找到人脸，会以增强的对比度再检查一次。这样能在褪色的扫描件中找到人脸，但也会在花和树叶中误找到人脸。这样找到的人脸只有达到此置信度（0 到 1）才会加入人物分组。更改后会重新分组人脸。',
+    retryFloor: '机器学习服务报告的此类人脸从 {floor} 起。',
     transcodeLabel: 'H.264 副本',
     transcodeHint:
       '有了副本，任何浏览器都能以 1080p、SDR 播放 HEVC、VP9 和 AV1 视频以及照片的动态效果。下载的仍是原始文件。',

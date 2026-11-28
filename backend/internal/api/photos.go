@@ -55,6 +55,9 @@ type photoJSON struct {
 	DeletedAt *time.Time `json:"deletedAt"`
 	// Previews are cached for a long time, so their address carries it.
 	PreviewVersion int32 `json:"previewVersion"`
+	// Rotation is the owner's turn of the photo, clockwise in degrees; the
+	// previews show it, the original does not.
+	Rotation int16 `json:"rotation"`
 	// The length of a video in seconds, null for photos.
 	Duration *float64 `json:"duration"`
 	// Whether a motion photo or a Live Photo has a video to play.
@@ -119,6 +122,7 @@ func toPhotoJSON(p store.Photo, showLocation bool) photoJSON {
 		Mime:           p.Mime,
 		Size:           p.Size,
 		Width:          p.Width,
+		Rotation:       p.Rotation,
 		Height:         p.Height,
 		TakenAt:        p.TakenAt,
 		SortAt:         p.SortAt,

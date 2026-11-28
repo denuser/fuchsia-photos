@@ -51,7 +51,7 @@ func TestDetectFaces(t *testing.T) {
 				}
 				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(string(response)))}, nil
 			})
-			faces, err := client.DetectFaces(t.Context(), []byte("preview"), FaceModel{Model: "face@1", Dimensions: 128})
+			faces, err := client.DetectFaces(t.Context(), []byte("preview"), FaceModel{Model: "face@1", Dimensions: 128, Scores: true})
 			if (err != nil) != tt.err {
 				t.Fatalf("DetectFaces returned %v, want error %v", err, tt.err)
 			}

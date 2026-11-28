@@ -89,6 +89,11 @@ func (w *processPhotoWorker) Work(ctx context.Context, job *river.Job[ProcessPho
 		}
 		return river.JobSnooze(unavailableWait)
 	}
+	if errors.Is(err, errRotationChanged) {
+		// Turned meanwhile: render again with the new turn, without using up
+		// an attempt.
+		return river.JobSnooze(0)
+	}
 	var unreadable *unreadableError
 	if errors.As(err, &unreadable) {
 		// Retrying cannot repair a broken file.
@@ -126,6 +131,10 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo, rep
 		GridEdge:    int(stored.GridEdge),
 		ViewerEdge:  int(stored.ViewerEdge),
 	}
+	// The owner's turn applies to photos; a video's poster stays as filmed.
+	if !video {
+		settings.Rotation = int(photo.Rotation)
+	}
 
 	var (
 		previews      media.Previews
@@ -152,43 +161,62 @@ func (w *processPhotoWorker) process(ctx context.Context, photo store.Photo, rep
 			}
 			return &unreadableError{err}
 		}
+		width, height = media.RotatedSize(width, height, settings.Rotation)
 		if !storage.IsRAW(photo.Mime) {
 			hasMotion = w.extractMotion(ctx, photo.ID, path, meta.MotionTag)
 		}
 	}
 
 	format := stored.Format
-	for _, p := range []struct {
-		kind    string
-		preview media.Preview
-	}{
-		{storage.PreviewViewer, previews.Viewer},
-		{storage.PreviewGrid, previews.Grid},
-	} {
-		if err := storage.WriteFileAtomic(w.layout.Preview(photo.ID, p.kind, format), p.preview.Data); err != nil {
-			return fmt.Errorf("write %s preview: %w", p.kind, err)
-		}
-	}
-
 	bump := int32(0)
 	if replacesPreviews {
 		bump = 1
 	}
 	w32, h32 := int32(width), int32(height)
-	err = w.queries.MarkPhotoReady(ctx, store.MarkPhotoReadyParams{
-		ID:            photo.ID,
-		Width:         &w32,
-		Height:        &h32,
-		TakenAt:       meta.TakenAt,
-		Exif:          meta.Tags,
-		PreviewFormat: &format,
-		Duration:      duration,
-		Hdr:           hdr,
-		HasMotion:     hasMotion,
-		BumpVersion:   bump,
+	// The files and the turn they were made with are saved under the photo's
+	// lock, so a rotation that came meanwhile is not lost or applied twice.
+	err = pgx.BeginFunc(ctx, w.pool, func(tx pgx.Tx) error {
+		if err := LockPhoto(ctx, tx, photo.ID); err != nil {
+			return err
+		}
+		var current int16
+		if err := tx.QueryRow(ctx, "SELECT rotation FROM photos WHERE id=$1", photo.ID).Scan(&current); err != nil {
+			return fmt.Errorf("read rotation: %w", err)
+		}
+		if !video && int(current) != settings.Rotation {
+			return errRotationChanged
+		}
+		for _, p := range []struct {
+			kind    string
+			preview media.Preview
+		}{
+			{storage.PreviewViewer, previews.Viewer},
+			{storage.PreviewGrid, previews.Grid},
+		} {
+			if err := storage.WriteFileAtomic(w.layout.Preview(photo.ID, p.kind, format), p.preview.Data); err != nil {
+				return fmt.Errorf("write %s preview: %w", p.kind, err)
+			}
+		}
+		err := w.queries.WithTx(tx).MarkPhotoReady(ctx, store.MarkPhotoReadyParams{
+			ID:            photo.ID,
+			Width:         &w32,
+			Height:        &h32,
+			TakenAt:       meta.TakenAt,
+			Exif:          meta.Tags,
+			PreviewFormat: &format,
+			Duration:      duration,
+			Hdr:           hdr,
+			HasMotion:     hasMotion,
+			BumpVersion:   bump,
+		})
+		if err != nil {
+			return fmt.Errorf("update photo: %w", err)
+		}
+		_, err = tx.Exec(ctx, "UPDATE photos SET preview_rotation=$2 WHERE id=$1", photo.ID, settings.Rotation)
+		return err
 	})
 	if err != nil {
-		return fmt.Errorf("update photo: %w", err)
+		return err
 	}
 	// The hash lets the search for similar photos tell a copy from another shot.
 	// A photo without one is hashed later by that search.
@@ -544,6 +572,9 @@ func (w *renderPreviewsWorker) Work(ctx context.Context, job *river.Job[RenderPr
 	if errors.Is(err, errOriginalUnavailable) {
 		return nil // The next run finds it again.
 	}
+	if errors.Is(err, errRotationChanged) {
+		return river.JobSnooze(0) // Turned meanwhile: render the new turn.
+	}
 	var unreadable *unreadableError
 	if errors.As(err, &unreadable) || err != nil && job.Attempt >= job.MaxAttempts {
 		// Such as an original missing after a restore: the photo shows its error.
@@ -827,4 +858,19 @@ func NewClient(pool *pgxpool.Pool, cfg Config) (*river.Client[pgx.Tx], error) {
 // NewInsertClient returns a client that only queues jobs.
 func NewInsertClient(pool *pgxpool.Pool) (*river.Client[pgx.Tx], error) {
 	return river.NewClient(riverpgxv5.New(pool), &river.Config{})
+}
+
+// errRotationChanged means the owner turned the photo while its previews were
+// being made; the job runs again with the new turn.
+var errRotationChanged = errors.New("the photo was turned while its previews were made")
+
+// photoLockClass is the first key of a photo's advisory lock. The one-key
+// form of pg_advisory_xact_lock holds owner ids elsewhere.
+const photoLockClass = 27
+
+// LockPhoto holds the photo's lock until the transaction ends. Writing preview
+// files and turning them take it.
+func LockPhoto(ctx context.Context, tx pgx.Tx, photoID int64) error {
+	_, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1, $2)", photoLockClass, int32(photoID))
+	return err
 }

@@ -48,7 +48,8 @@ type FaceWorker struct {
 
 const faceScanEligible = `p.status='ready' AND p.deleted_at IS NULL AND p.purged_at IS NULL
    AND p.preview_format IS NOT NULL AND p.mime NOT LIKE 'video/%'
-   AND NOT EXISTS(SELECT FROM photo_links WHERE hidden_id=p.id)`
+   AND NOT EXISTS(SELECT FROM photo_links WHERE hidden_id=p.id)
+   AND p.preview_rotation = p.rotation`
 
 type PhotoFaceScan struct {
 	PhotoID   int64      `json:"photoId"`
@@ -57,6 +58,9 @@ type PhotoFaceScan struct {
 	ScannedAt *time.Time `json:"scannedAt"`
 	Faces     int32      `json:"faces"`
 	Error     string     `json:"error"`
+	// Unmatched counts faces the owner placed or named that the scan after a
+	// rotation found no match for; they keep their old vector.
+	Unmatched int32 `json:"unmatched"`
 }
 
 // LookupPhotoFaceScan reports scan status for the photo's current file.
@@ -64,12 +68,13 @@ func LookupPhotoFaceScan(ctx context.Context, pool *pgxpool.Pool, photoID int64)
 	var scan PhotoFaceScan
 	err := pool.QueryRow(ctx, `SELECT p.id,p.original_name,
    CASE WHEN NOT (`+faceScanEligible+`) THEN 'ineligible'
-        WHEN s.photo_id IS NULL THEN 'waiting'
+        WHEN s.photo_id IS NULL OR s.rescan THEN 'waiting'
         WHEN s.retry_at IS NOT NULL THEN 'error'
         ELSE 'completed' END,
-   s.scanned_at,(SELECT count(*) FROM photo_faces f WHERE f.photo_id=s.photo_id)::int,coalesce(s.error,'')
+   s.scanned_at,(SELECT count(*) FROM photo_faces f WHERE f.photo_id=s.photo_id)::int,coalesce(s.error,''),
+   (SELECT count(*) FROM photo_faces f WHERE f.photo_id=s.photo_id AND f.unmatched)::int
    FROM photos p LEFT JOIN face_scans s ON s.photo_id=p.id AND s.sha256=p.sha256
-   WHERE p.id=$1`, photoID).Scan(&scan.PhotoID, &scan.Name, &scan.State, &scan.ScannedAt, &scan.Faces, &scan.Error)
+   WHERE p.id=$1`, photoID).Scan(&scan.PhotoID, &scan.Name, &scan.State, &scan.ScannedAt, &scan.Faces, &scan.Error, &scan.Unmatched)
 	return scan, err
 }
 
@@ -125,10 +130,13 @@ func (w *FaceWorker) Work(ctx context.Context, job *river.Job[FaceScanArgs]) err
 		var id, owner int64
 		var hash []byte
 		var format string
-		err = w.Pool.QueryRow(ctx, `SELECT p.id,p.owner_id,p.sha256,p.preview_format FROM photos p
+		var version int32
+		err = w.Pool.QueryRow(ctx, `SELECT p.id,p.owner_id,p.sha256,p.preview_format,p.preview_version FROM photos p
    WHERE `+faceScanEligible+`
-   AND NOT EXISTS(SELECT FROM face_scans s WHERE s.photo_id=p.id AND s.sha256=p.sha256
-   AND (s.retry_at IS NULL OR (s.model=$1 AND s.retry_at>now()))) ORDER BY p.id LIMIT 1`, health.Faces.Model).Scan(&id, &owner, &hash, &format)
+   AND (NOT EXISTS(SELECT FROM face_scans s WHERE s.photo_id=p.id AND s.sha256=p.sha256
+   AND (s.retry_at IS NULL OR (s.model=$1 AND s.retry_at>now())))
+   OR EXISTS(SELECT FROM face_scans s WHERE s.photo_id=p.id AND s.sha256=p.sha256 AND s.rescan))
+   ORDER BY p.id LIMIT 1`, health.Faces.Model).Scan(&id, &owner, &hash, &format, &version)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
@@ -155,12 +163,22 @@ func (w *FaceWorker) Work(ctx context.Context, job *river.Job[FaceScanArgs]) err
 				return err
 			}
 			var current int64
-			err := tx.QueryRow(ctx, `SELECT p.id FROM photos p WHERE p.id=$1 AND p.owner_id=$2 AND p.sha256=$3 AND `+faceScanEligible+` FOR UPDATE`, id, owner, hash).Scan(&current)
+			// A photo turned while its preview was with the service is
+			// scanned again from the turned preview.
+			err := tx.QueryRow(ctx, `SELECT p.id FROM photos p WHERE p.id=$1 AND p.owner_id=$2 AND p.sha256=$3 AND p.preview_version=$4 AND `+faceScanEligible+` FOR UPDATE`, id, owner, hash, version).Scan(&current)
 			if errors.Is(err, pgx.ErrNoRows) {
 				return nil
 			}
 			if err != nil {
 				return err
+			}
+			var rescan bool
+			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT FROM face_scans WHERE photo_id=$1 AND sha256=$2 AND rescan)", id, hash).Scan(&rescan); err != nil {
+				return err
+			}
+			if rescan {
+				processed = true
+				return rescanFaces(ctx, tx, owner, health.Faces.Model, id, faces, scanErr)
 			}
 			var complete bool
 			if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT FROM face_scans WHERE photo_id=$1 AND sha256=$2 AND retry_at IS NULL)", id, hash).Scan(&complete); err != nil || complete {
@@ -178,22 +196,18 @@ func (w *FaceWorker) Work(ctx context.Context, job *river.Job[FaceScanArgs]) err
 			if _, err = tx.Exec(ctx, "INSERT INTO face_scans(photo_id,model,sha256) VALUES($1,$2,$3)", id, health.Faces.Model, hash); err != nil {
 				return err
 			}
+			minScore, err := RetryMinScore(ctx, tx)
+			if err != nil {
+				return err
+			}
 			for _, face := range faces {
 				vector := VectorText(face.Embedding)
-				var person int64
-				// Match the oldest visible face of each group. An uncertain match starts a new group.
-				err := tx.QueryRow(ctx, `WITH anchors AS (SELECT DISTINCT ON (person_id) person_id,embedding FROM visible_photo_faces
-        WHERE owner_id=$1 AND model=$2 AND person_id IS NOT NULL ORDER BY person_id,id),
-        ranked AS (SELECT person_id,embedding <=> $3::halfvec AS distance FROM anchors ORDER BY distance LIMIT 2),
-        nearest AS (SELECT *,lead(distance) OVER(ORDER BY distance) AS second FROM ranked ORDER BY distance LIMIT 1)
-        SELECT person_id FROM nearest WHERE distance<0.45 AND (second IS NULL OR second-distance>0.06)`, owner, health.Faces.Model, vector).Scan(&person)
-				if errors.Is(err, pgx.ErrNoRows) {
-					err = tx.QueryRow(ctx, "INSERT INTO people(owner_id) VALUES($1) RETURNING id", owner).Scan(&person)
-				}
+				person, err := groupFor(ctx, tx, owner, health.Faces.Model, id, vector, face, minScore)
 				if err != nil {
 					return err
 				}
-				if _, err = tx.Exec(ctx, "INSERT INTO photo_faces(photo_id,person_id,box,embedding) VALUES($1,$2,$3,$4::halfvec)", id, person, face.Box, vector); err != nil {
+				if _, err = tx.Exec(ctx, "INSERT INTO photo_faces(photo_id,person_id,box,embedding,score,retry) VALUES($1,$2,$3,$4::halfvec,$5,$6)",
+					id, person, face.Box, vector, face.Score, face.Retry); err != nil {
 					return err
 				}
 			}

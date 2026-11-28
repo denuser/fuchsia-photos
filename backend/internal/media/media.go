@@ -43,6 +43,10 @@ type Settings struct {
 	JPEGQuality int
 	GridEdge    int
 	ViewerEdge  int
+	// Rotation turns photo previews clockwise by 0, 90, 180 or 270 degrees,
+	// on top of the EXIF orientation. It is the owner's choice for one photo,
+	// not a stored setting, and video posters leave it at 0.
+	Rotation int
 }
 
 // DefaultSettings returns the settings chosen from the benchmark. A new database
@@ -163,6 +167,14 @@ func render(data []byte, settings Settings) (Previews, error) {
 // renderFrom encodes the viewer preview, already resized, and makes the grid
 // preview from it.
 func renderFrom(viewerImage *vips.ImageRef, settings Settings) (Previews, error) {
+	if settings.Rotation != 0 {
+		turned, err := rotated(viewerImage, settings.Rotation)
+		if err != nil {
+			return Previews{}, err
+		}
+		defer turned.Close()
+		viewerImage = turned
+	}
 	viewer, err := encode(viewerImage, settings)
 	if err != nil {
 		return Previews{}, fmt.Errorf("encode viewer preview: %w", err)
@@ -248,4 +260,54 @@ func FaceThumbnail(path string, box []float32) ([]byte, error) {
 	}
 	data, _, err := image.ExportJpeg(&vips.JpegExportParams{Quality: 82, StripMetadata: true})
 	return data, err
+}
+
+// RotatedSize returns the size of an upright photo turned by rotation degrees.
+func RotatedSize(width, height, rotation int) (int, int) {
+	if rotation == 90 || rotation == 270 {
+		return height, width
+	}
+	return width, height
+}
+
+// rotated returns the image turned clockwise. A thumbnail is read from its
+// file in one pass, and a turn reads it out of order, so its pixels, already
+// in sRGB, are copied into memory first.
+func rotated(image *vips.ImageRef, degrees int) (*vips.ImageRef, error) {
+	var angle vips.Angle
+	switch degrees {
+	case 90:
+		angle = vips.Angle90
+	case 180:
+		angle = vips.Angle180
+	case 270:
+		angle = vips.Angle270
+	default:
+		return nil, fmt.Errorf("rotation must be 0, 90, 180 or 270, not %d", degrees)
+	}
+	pixels, err := image.ToBytes()
+	if err != nil {
+		return nil, fmt.Errorf("read pixels: %w", err)
+	}
+	turned, err := vips.NewImageFromMemory(pixels, image.Width(), image.Height(), image.Bands(), image.BandFormat(), image.Interpretation())
+	if err != nil {
+		return nil, fmt.Errorf("copy pixels: %w", err)
+	}
+	if err := turned.Rotate(angle); err != nil {
+		turned.Close()
+		return nil, fmt.Errorf("rotate: %w", err)
+	}
+	return turned, nil
+}
+
+// RotatePreviews turns an existing viewer preview clockwise by degrees and
+// makes both previews from it, without decoding the original again.
+func RotatePreviews(viewer []byte, degrees int, settings Settings) (Previews, error) {
+	image, err := vips.NewImageFromBuffer(viewer)
+	if err != nil {
+		return Previews{}, fmt.Errorf("load viewer preview: %w", err)
+	}
+	defer image.Close()
+	settings.Rotation = degrees
+	return renderFrom(image, settings)
 }

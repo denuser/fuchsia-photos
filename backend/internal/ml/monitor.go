@@ -43,6 +43,7 @@ type Monitor struct {
 	mu          sync.Mutex
 	status      Status
 	faceState   State
+	retryFloor  *float64
 	onAvailable func()
 }
 
@@ -89,6 +90,14 @@ func (m *Monitor) Available() bool {
 // face model. Face inference can run independently of the search model.
 func (m *Monitor) FacesAvailable() bool {
 	return m.FaceState() == StateAvailable
+}
+
+// RetryFloor is the least score of a face the contrast retry reported at the
+// last successful health check, nil if unknown or the retry is off.
+func (m *Monitor) RetryFloor() *float64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.retryFloor
 }
 
 // FaceState is the last known state of face inference, independent of search.
@@ -147,6 +156,11 @@ func (m *Monitor) Check(ctx context.Context) Status {
 		faceState = StateAvailable
 	case err == nil:
 		faceState = StateMismatch
+	}
+	if err == nil && health.Faces != nil {
+		m.mu.Lock()
+		m.retryFloor = health.Faces.RetryFloor
+		m.mu.Unlock()
 	}
 	m.set(next, &faceState)
 	return next

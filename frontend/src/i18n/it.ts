@@ -230,6 +230,8 @@ const it: typeof en = {
     showRaw: 'Mostra RAW',
     showPhoto: 'Mostra la foto',
     originalVersion: 'Originale',
+    rotateLeft: 'Ruota a sinistra',
+    rotateRight: 'Ruota a destra',
     editDescription: 'Modifica la descrizione',
     description: 'Descrizione',
     moreActions: 'Altre azioni',
@@ -564,6 +566,7 @@ const it: typeof en = {
     photo: 'Foto',
     result: 'Risultato',
     found: '{n} volto trovato | {n} volti trovati',
+    unmatched: 'dopo la rotazione, mantenuti senza corrispondenza: {n}',
     noFaces: 'Nessun volto trovato',
     failed: 'Non riuscita: {error}',
   },
@@ -696,6 +699,11 @@ const it: typeof en = {
     videoHardware: 'La grafica {device} crea le copie H.264',
     videoLowPower: 'encoder a basso consumo',
     videoNoHardware: 'Nessuna grafica per le copie H.264',
+    faces: 'Persone',
+    retryMinScore: 'Affidabilità minima per i volti su foto a basso contrasto',
+    retryMinScoreHint:
+      'Se in una foto non si trova subito un volto, viene riesaminata con contrasto aumentato. Così si trovano volti su scansioni sbiadite, ma anche in fiori e foglie. I volti trovati in questo modo entrano nei gruppi di persone solo da questa affidabilità (da 0 a 1). Modificarlo raggruppa di nuovo i volti.',
+    retryFloor: 'Il servizio ML segnala questi volti da {floor}.',
     transcodeLabel: 'Copie H.264',
     transcodeHint:
       'Le copie permettono a ogni browser di riprodurre video HEVC, VP9 e AV1 e il movimento delle foto, a 1080p e in SDR. I download restano gli originali.',

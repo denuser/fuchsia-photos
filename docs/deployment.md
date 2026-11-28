@@ -206,7 +206,7 @@ Start the service on that machine with a token, and with `ML_FACES=1` for People
 ML_TOKEN=<token> ML_FACES=1 make ml
 ```
 
-The first start downloads the models from Hugging Face, about 1.5 GB for search and 40 MB for faces. Then set `ML_URL` to the service's address, such as `http://mac.local:8090`, and `ML_TOKEN` to the same token for the application, in `.env` or in the TrueNAS YAML under `app` → `environment`, and restart it. The application finds the service within 30 seconds. The administration page shows the progress of search, and People fill in from the photos already in the library.
+The first start downloads the models from Hugging Face, about 1.5 GB for search and 40 MB for faces. Then set `ML_URL` to the service's address, such as `http://mac.local:8090`, and `ML_TOKEN` to the same token for the application, in `.env` or in the TrueNAS YAML under `app` → `environment`, and restart it. The application finds the service within 30 seconds. The administration page shows the progress of search, and People fill in from the photos already in the library. Old and faded photos where no face is found at once are checked again with stretched contrast, which also finds faces in flowers and leaves; such faces join People only from the confidence set under People on the administration page (0.75 by default, lower it for a library of film scans). Update the ML service together with the application: People pause until it reports face scores.
 
 The token travels over plain HTTP, and face vectors are biometric data, so keep the service on the home network.
 
